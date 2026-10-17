@@ -1,0 +1,398 @@
+// =====================================================================
+// Mapstar Prisma Schema
+// ---------------------------------------------------------------------
+// Dev sandbox: SQLite (works out of the box for the demo).
+// Production: PostgreSQL on Supabase — switch provider + DATABASE_URL.
+//
+// To switch to Supabase:
+//   1. Change `provider = "sqlite"` → `provider = "postgresql"`
+//   2. Set DATABASE_URL to your Supabase pooled connection string
+//   3. Run `bun run db:push`
+//   4. Run the SQL in /supabase/schema.sql to enable PostGIS + spatial indexes
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Swap to "postgresql" when connecting Supabase.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// Users & auth
+// ---------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String?  @unique
+  fullName     String?
+  role         UserRole @default(TENANT)
+  ninVerified  Boolean  @default(false)
+  bvnVerified  Boolean  @default(false)
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  landlord      Landlord?
+  agent         Agent?
+  reviewsGiven  Review[]      @relation("ReviewAuthor")
+  savedSearches SavedSearch[]
+  reports       Report[]      @relation("ReportAuthor")
+  referrals     Referral[]
+
+  @@index([role])
+}
+
+enum UserRole {
+  TENANT
+  LANDLORD
+  AGENT
+  ADMIN
+}
+
+// ---------------------------------------------------------------------
+// Landlords (property owners)
+// ---------------------------------------------------------------------
+
+model Landlord {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id])
+  cacNumber          String?
+  idType             String?
+  idNumber           String?
+  utilityBillUrl     String?
+  isAnchor           Boolean   @default(false)
+  verifiedAt         DateTime?
+  listingsCount      Int       @default(0)
+  successfulTenancies Int      @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  properties Property[]
+
+  @@index([isAnchor])
+}
+
+// ---------------------------------------------------------------------
+// Agents (Mapstar-Verified, fee-capped)
+// ---------------------------------------------------------------------
+
+model Agent {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id])
+  licenseNumber       String?
+  backgroundCheck     Boolean   @default(false)
+  referencesCount     Int       @default(0)
+  verifiedAt          DateTime?
+  verificationExpires DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  properties Property[]
+}
+
+// ---------------------------------------------------------------------
+// Properties (physical buildings) — geo-located
+// ---------------------------------------------------------------------
+
+model Property {
+  id               String       @id @default(cuid())
+  landlordId       String?
+  agentId          String?
+  landlord         Landlord?    @relation(fields: [landlordId], references: [id])
+  agent            Agent?       @relation(fields: [agentId], references: [id])
+  title            String
+  description      String
+  propertyType     PropertyType
+  city             String
+  state            String
+  area             String
+  address          String
+  latitude         Float
+  longitude        Float
+  geoText          String?
+  bedrooms         Int          @default(0)
+  bathrooms        Int          @default(0)
+  toilets          Int          @default(0)
+  parkingSpaces    Int          @default(0)
+  furnished        Boolean      @default(false)
+  hasBorehole      Boolean      @default(false)
+  hasPrepaidMeter  Boolean      @default(false)
+  hasInsideToilet  Boolean      @default(true)
+  hasCCTV          Boolean      @default(false)
+  hasGenerator     Boolean      @default(false)
+  hasWiFi          Boolean      @default(false)
+  titleDocument    String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  listings Listing[]
+  reviews  Review[]
+  reports  Report[]
+
+  @@index([city, area])
+  @@index([landlordId])
+  @@index([agentId])
+}
+
+enum PropertyType {
+  SELF_CONTAINED
+  ROOM_PARLOUR
+  MINI_FLAT
+  ONE_BEDROOM_FLAT
+  TWO_BEDROOM_FLAT
+  THREE_BEDROOM_FLAT
+  DUPLEX
+  BOYS_QUARTER
+  TERRACE
+}
+
+// ---------------------------------------------------------------------
+// Listings (rental availability on a property)
+// ---------------------------------------------------------------------
+
+model Listing {
+  id                  String        @id @default(cuid())
+  propertyId          String
+  property            Property      @relation(fields: [propertyId], references: [id])
+  status              ListingStatus @default(AVAILABLE)
+  annualRent          Int
+  cautionFee          Int           @default(0)
+  legalFee            Int           @default(0)
+  agentFeeCap         Int           @default(0)
+  availableFrom       DateTime      @default(now())
+  vacatingDate        DateTime?
+  comingSoon          Boolean       @default(false)
+  featured            Boolean       @default(false)
+  featuredUntil       DateTime?
+  physicallyVerified  Boolean       @default(false)
+  lastVerifiedAt      DateTime?
+  photoCount          Int           @default(0)
+  has360Tour          Boolean       @default(false)
+  hasVideoWalkthrough Boolean       @default(false)
+  photoUrlsJson       String
+  videoUrl            String?
+  tour360Url          String?
+  fairPriceBadge      Boolean       @default(false)
+  inspectionCount     Int           @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  transactions Transaction[]
+  agreements   Agreement[]
+
+  @@index([status])
+  @@index([featured])
+  @@index([comingSoon])
+}
+
+enum ListingStatus {
+  AVAILABLE
+  COMING_SOON
+  UNDER_INSPECTION
+  RECENTLY_LET
+  VERIFIED
+  DELISTED
+}
+
+// ---------------------------------------------------------------------
+// FeeConfig — admin-regulated fee caps (the headline feature)
+// ---------------------------------------------------------------------
+
+model FeeConfig {
+  id                         String   @id @default(cuid())
+  successFeePercent          Float    @default(3.0)
+  agentFeeCapPercent         Float    @default(5.0)
+  tenantServiceFeeNaira      Int      @default(3000)
+  agreementFeeNaira          Int      @default(3000)
+  featuredBoost7DayNaira     Int      @default(5000)
+  featuredBoost14DayNaira    Int      @default(12000)
+  verifiedAgentAnnualNaira   Int      @default(10000)
+  referralBountyNaira        Int      @default(1000)
+  fairPriceTolerancePercent  Float    @default(10.0)
+  stampDutyPercent           Float    @default(0.78)
+  firstAgreementFreePerLandlord Boolean @default(true)
+  firstTimeLandlordListingCap Int     @default(2)
+  updatedAt                  DateTime @updatedAt
+  updatedBy                  String?
+}
+
+// ---------------------------------------------------------------------
+// Transactions (escrow flow)
+// ---------------------------------------------------------------------
+
+model Transaction {
+  id            String        @id @default(cuid())
+  listingId     String
+  listing       Listing       @relation(fields: [listingId], references: [id])
+  tenantUserId  String
+  amountNaira   Int
+  type          TransactionType
+  paystackRef   String?       @unique
+  flutterwaveRef String?      @unique
+  escrowStatus  EscrowStatus  @default(PENDING)
+  releasedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([listingId])
+  @@index([tenantUserId])
+}
+
+enum TransactionType {
+  DEPOSIT
+  RENT
+  CAUTION
+  STAMP_DUTY
+  SERVICE_FEE
+  AGREEMENT_FEE
+  REFUND
+}
+
+enum EscrowStatus {
+  PENDING
+  HELD
+  RELEASED
+  REFUNDED
+  DISPUTED
+}
+
+// ---------------------------------------------------------------------
+// Agreements (e-sign + stamp duty)
+// ---------------------------------------------------------------------
+
+model Agreement {
+  id              String          @id @default(cuid())
+  listingId       String
+  listing         Listing         @relation(fields: [listingId], references: [id])
+  tenantUserId    String
+  landlordUserId  String
+  annualRentNaira Int
+  durationMonths  Int             @default(12)
+  cautionNaira    Int
+  noticeMonths    Int             @default(6)
+  stateTemplate   String
+  pdfUrl          String?
+  yousignRef      String?
+  tenantSignedAt  DateTime?
+  landlordSignedAt DateTime?
+  stampDutyReceiptId String?
+  stampedAt       DateTime?
+  status          AgreementStatus @default(DRAFT)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+enum AgreementStatus {
+  DRAFT
+  AWAITING_SIGNATURES
+  SIGNED
+  STAMP_PENDING
+  STAMPED
+  EXECUTED
+  VOIDED
+}
+
+model StampDutyReceipt {
+  id            String    @id @default(cuid())
+  agreementId   String?   @unique
+  firasRef      String?
+  amountNaira   Int
+  receiptUrl    String?
+  uploadedAt    DateTime?
+  validatedAt   DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+// ---------------------------------------------------------------------
+// Reviews (two-way: tenant ↔ landlord)
+// ---------------------------------------------------------------------
+
+model Review {
+  id           String   @id @default(cuid())
+  authorId     String
+  author       User     @relation("ReviewAuthor", fields: [authorId], references: [id])
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id])
+  rating       Int
+  comment      String
+  isAnonymous  Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([propertyId])
+}
+
+// ---------------------------------------------------------------------
+// Referral — "Refer a Lodge" bounty
+// ---------------------------------------------------------------------
+
+model Referral {
+  id              String        @id @default(cuid())
+  referrerId      String
+  referrer        User          @relation(fields: [referrerId], references: [id])
+  flaggedLat      Float
+  flaggedLng      Float
+  flaggedAddress  String
+  flaggedPhotoUrl String?
+  status          ReferralStatus @default(SUBMITTED)
+  bountyPaidNaira Int?
+  resolvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+}
+
+enum ReferralStatus {
+  SUBMITTED
+  VERIFIED
+  ONBOARDED
+  REJECTED
+  PAID
+}
+
+// ---------------------------------------------------------------------
+// Reports (community moderation)
+// ---------------------------------------------------------------------
+
+model Report {
+  id         String       @id @default(cuid())
+  reporterId String
+  reporter   User         @relation("ReportAuthor", fields: [reporterId], references: [id])
+  propertyId String
+  property   Property     @relation(fields: [propertyId], references: [id])
+  reason     String
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+}
+
+enum ReportStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+// ---------------------------------------------------------------------
+// Saved searches (push alerts when new matching pin drops)
+// ---------------------------------------------------------------------
+
+model SavedSearch {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+  name         String
+  filtersJson  String
+  alertChannel AlertChannel @default(WHATSAPP)
+  createdAt    DateTime     @default(now())
+}
+
+enum AlertChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+  NONE
+}
