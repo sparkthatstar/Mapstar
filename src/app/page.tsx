@@ -1,16 +1,22 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { Map as MapIcon, List, SlidersHorizontal, Plus, Search, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import MapView from '@/components/mapstar/map-view'
 import ListingCard from '@/components/mapstar/listing-card'
 import ListingDetail from '@/components/mapstar/listing-detail'
 import FilterPanel, { DEFAULT_FILTERS, FilterState } from '@/components/mapstar/filter-panel'
 import { MockListing, formatNaira } from '@/lib/mock-data'
 import { MOCK_LISTINGS as listings } from '@/lib/mock-data'
+
+// THIS IS THE FIX - load map only in browser
+const MapView = dynamic(() => import('@/components/mapstar/map-view'), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-slate-100 animate-pulse" />,
+})
 
 type ViewMode = 'map' | 'list'
 
