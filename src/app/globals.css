@@ -125,6 +125,21 @@
 .leaflet-container {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   background: #E8EAED;
+  z-index: 0 !important;
+}
+
+/* Ensure all modals, sheets, and popovers render above leaflet layers */
+[data-slot="dialog-overlay"],
+[data-slot="sheet-overlay"],
+[data-slot="alert-dialog-overlay"] {
+  z-index: 9998 !important;
+}
+
+[data-slot="dialog-content"],
+[data-slot="sheet-content"],
+[data-slot="alert-dialog-content"],
+[data-slot="dropdown-menu-content"] {
+  z-index: 9999 !important;
 }
 
 .leaflet-popup-content-wrapper {

@@ -45,13 +45,13 @@ export default function MapView({
   }, [])
 
   return (
-    <div ref={containerRef} className="relative h-full w-full">
+    <div ref={containerRef} className="relative h-full w-full z-0 isolate">
       <MapContainer
         center={center}
         zoom={zoom}
         scrollWheelZoom
-        className="h-full w-full"
-        style={{ background: '#E8EAED' }}
+        className="h-full w-full z-0"
+        style={{ background: '#E8EAED', zIndex: 0 }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
