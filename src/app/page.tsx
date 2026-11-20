@@ -2,20 +2,32 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Map as MapIcon, List, SlidersHorizontal, Plus, Search, Star } from 'lucide-react'
+import { Map as MapIcon, List, SlidersHorizontal, Search, Star, LogIn, LogOut, User as UserIcon, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import ListingCard from '@/components/mapstar/listing-card'
 import ListingDetail from '@/components/mapstar/listing-detail'
 import FilterPanel, { DEFAULT_FILTERS, FilterState } from '@/components/mapstar/filter-panel'
+import LoginSignupDialog, { AuthedUser } from '@/components/mapstar/login-signup-dialog'
 import { MockListing, formatNaira } from '@/lib/mock-data'
-import { MOCK_LISTINGS as listings } from '@/lib/mock-data'
 
-// THIS IS THE FIX - load map only in browser
+// MapView uses react-leaflet which assumes `window` exists.
+// Disable SSR so it only renders on the client.
 const MapView = dynamic(() => import('@/components/mapstar/map-view'), {
   ssr: false,
-  loading: () => <div className="h-full w-full bg-slate-100 animate-pulse" />,
+  loading: () => (
+    <div className="h-full w-full flex items-center justify-center bg-slate-100 text-sm text-slate-500">
+      Loading map…
+    </div>
+  ),
 })
 
 type ViewMode = 'map' | 'list'
@@ -35,6 +47,12 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [fees, setFees] = useState<any>(null)
 
+  // User auth state
+  const [user, setUser] = useState<AuthedUser | null>(null)
+  const [authOpen, setAuthOpen] = useState(false)
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
+
+  // Load fee config (admin-regulated) for the listing detail fee breakdown
   useEffect(() => {
     fetch('/api/fees', { cache: 'no-store' })
       .then((r) => r.json())
@@ -42,6 +60,23 @@ export default function Home() {
       .catch(() => {})
   }, [])
 
+  // Load current user (if any) on mount
+  useEffect(() => {
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => setUser(d.user ?? null))
+      .catch(() => setUser(null))
+  }, [])
+
+  async function handleLogout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } finally {
+      setUser(null)
+    }
+  }
+
+  // Filtered listings (mock data — swap for /api/listings in production)
   const filtered = useMemo(() => {
     let r = listings.filter((l) => {
       if (activeCity && l.city !== activeCity) return false
@@ -80,6 +115,7 @@ export default function Home() {
     [selectedId, filtered]
   )
 
+  // Computed fees for the selected listing
   const computedFees = useMemo(() => {
     if (!selected || !fees) return null
     const successFee = Math.round((selected.annualRent * fees.successFeePercent) / 100)
@@ -125,8 +161,10 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
+      {/* Top header */}
       <header className="shrink-0 bg-white border-b border-slate-200 px-3 py-2 sm:px-4 sm:py-3">
         <div className="flex items-center justify-between gap-2 sm:gap-3">
+          {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
             <div className="relative h-8 w-8 flex items-center justify-center">
               <svg viewBox="0 0 32 32" className="h-8 w-8">
@@ -145,6 +183,7 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Search bar */}
           <div className="flex-1 relative max-w-md">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <Input
@@ -155,6 +194,7 @@ export default function Home() {
             />
           </div>
 
+          {/* Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
             <Button
               variant="outline"
@@ -165,13 +205,59 @@ export default function Home() {
               <SlidersHorizontal className="h-4 w-4 sm:mr-1.5" />
               <span className="hidden sm:inline">Filters</span>
             </Button>
-            <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700">
-              <Plus className="h-4 w-4 sm:mr-1.5" />
-              <span className="hidden sm:inline">List lodge</span>
-            </Button>
+
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 pr-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-semibold text-white">
+                      {(user.fullName || user.email || '?').charAt(0).toUpperCase()}
+                    </span>
+                    <span className="hidden sm:inline max-w-[100px] truncate text-xs">
+                      {user.fullName || user.email}
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-xs">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-slate-900 truncate">
+                        {user.fullName || 'Unnamed user'}
+                      </span>
+                      <span className="text-slate-500 font-normal truncate">{user.email}</span>
+                      <span className="mt-1 inline-flex w-fit items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                        {user.role.charAt(0) + user.role.slice(1).toLowerCase()}
+                      </span>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-xs" disabled>
+                    <UserIcon className="h-3.5 w-3.5 mr-2" /> My saved lodges
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" disabled>
+                    <Star className="h-3.5 w-3.5 mr-2" /> Saved searches
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-xs text-red-600 focus:text-red-700" onClick={handleLogout}>
+                    <LogOut className="h-3.5 w-3.5 mr-2" /> Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button
+                size="sm"
+                className="h-9 bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => { setAuthMode('login'); setAuthOpen(true) }}
+              >
+                <LogIn className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">Log in</span>
+              </Button>
+            )}
           </div>
         </div>
 
+        {/* City selector + counts */}
         <div className="flex items-center gap-2 mt-2 overflow-x-auto pb-1">
           <div className="flex items-center gap-1 shrink-0">
             <button
@@ -203,6 +289,7 @@ export default function Home() {
         </div>
       </header>
 
+      {/* View toggle — sticky just below header */}
       <div className="shrink-0 bg-white border-b border-slate-200 px-3 py-1.5 flex items-center justify-between">
         <div className="text-xs text-slate-600">
           <span className="font-semibold text-slate-900">{filtered.length}</span> lodges match
@@ -227,6 +314,7 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Main body */}
       <main className="flex-1 min-h-0 relative">
         {view === 'map' ? (
           <div className="absolute inset-0 flex">
@@ -239,6 +327,7 @@ export default function Home() {
                 zoom={13}
               />
             </div>
+            {/* Right-side list rail on desktop */}
             <aside className="hidden lg:block w-96 border-l border-slate-200 bg-white overflow-y-auto">
               <div className="p-3 space-y-2">
                 <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold px-1">
@@ -262,6 +351,7 @@ export default function Home() {
         ) : (
           <div className="absolute inset-0 overflow-y-auto bg-slate-50">
             <div className="max-w-3xl mx-auto p-3 sm:p-4 space-y-2.5">
+              {/* Featured carousel */}
               {filtered.some((l) => l.featured) && (
                 <section className="mb-2">
                   <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 px-1">
@@ -302,6 +392,7 @@ export default function Home() {
         )}
       </main>
 
+      {/* Drawables */}
       <FilterPanel
         open={filterOpen}
         onOpenChange={setFilterOpen}
@@ -314,6 +405,12 @@ export default function Home() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         fees={computedFees}
+      />
+      <LoginSignupDialog
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        defaultMode={authMode}
+        onAuthed={(u) => setUser(u)}
       />
     </div>
   )
@@ -331,3 +428,6 @@ function EmptyState({ onReset }: { onReset: () => void }) {
     </div>
   )
 }
+
+// Inline import of mock listings for client-side filtering
+import { MOCK_LISTINGS as listings } from '@/lib/mock-data'
