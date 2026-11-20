@@ -17,6 +17,7 @@ import {
   Sparkles,
   AlertCircle,
   ArrowLeft,
+  Shield,
 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -132,9 +133,12 @@ export default function LoginPage() {
                 <Label htmlFor="password" className="block text-xs font-medium text-slate-700">
                   Password
                 </Label>
-                <span className="text-xs text-emerald-600 hover:underline cursor-pointer">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-emerald-600 hover:text-emerald-500 hover:underline cursor-pointer"
+                >
                   Forgot password?
-                </span>
+                </Link>
               </div>
               <div className="mt-1 relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -174,7 +178,7 @@ export default function LoginPage() {
                 <Sparkles className="h-3.5 w-3.5 text-amber-500" /> 1-Click Demo Accounts:
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 disabled={loading}
@@ -182,8 +186,8 @@ export default function LoginPage() {
                 className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 p-2 text-center transition"
               >
                 <User className="h-4 w-4 text-emerald-600 mb-1" />
-                <span className="text-xs font-semibold text-slate-800">Tenant</span>
-                <span className="text-[10px] text-slate-400">Chinedu</span>
+                <span className="text-[11px] font-semibold text-slate-800">Tenant</span>
+                <span className="text-[9px] text-slate-400">Chinedu</span>
               </button>
 
               <button
@@ -193,8 +197,8 @@ export default function LoginPage() {
                 className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 p-2 text-center transition"
               >
                 <Home className="h-4 w-4 text-teal-600 mb-1" />
-                <span className="text-xs font-semibold text-slate-800">Landlord</span>
-                <span className="text-[10px] text-slate-400">Chief Emeka</span>
+                <span className="text-[11px] font-semibold text-slate-800">Landlord</span>
+                <span className="text-[9px] text-slate-400">Chief Emeka</span>
               </button>
 
               <button
@@ -204,9 +208,29 @@ export default function LoginPage() {
                 className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 p-2 text-center transition"
               >
                 <CheckCircle className="h-4 w-4 text-blue-600 mb-1" />
-                <span className="text-xs font-semibold text-slate-800">Agent</span>
-                <span className="text-[10px] text-slate-400">Amaka</span>
+                <span className="text-[11px] font-semibold text-slate-800">Agent</span>
+                <span className="text-[9px] text-slate-400">Amaka</span>
               </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => loginDemo('admin@mapstar.ng', 'mapstar2026')}
+                className="flex flex-col items-center justify-center rounded-lg border border-purple-200 bg-purple-50/50 hover:bg-purple-100/60 hover:border-purple-300 p-2 text-center transition"
+              >
+                <Shield className="h-4 w-4 text-purple-600 mb-1" />
+                <span className="text-[11px] font-semibold text-purple-900">Admin</span>
+                <span className="text-[9px] text-purple-500">Super Admin</span>
+              </button>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-center">
+              <Link
+                href="/admin"
+                className="inline-flex items-center text-xs text-slate-500 hover:text-emerald-700 font-medium transition"
+              >
+                <Shield className="h-3.5 w-3.5 mr-1 text-slate-400" /> Open Admin Governance Portal →
+              </Link>
             </div>
           </div>
         </div>

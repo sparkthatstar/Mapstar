@@ -5,6 +5,11 @@ import {
   USER_COOKIE_NAME,
   USER_COOKIE_OPTIONS,
 } from '@/lib/user-auth'
+import {
+  createSessionCookie as createAdminSessionCookie,
+  ADMIN_COOKIE_NAME,
+  ADMIN_COOKIE_OPTIONS,
+} from '@/lib/admin-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +43,12 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({ ok: true, user })
 
     response.cookies.set(USER_COOKIE_NAME, sessionCookie, USER_COOKIE_OPTIONS)
+
+    // If user is ADMIN, also grant full admin portal access seamlessly
+    if (user.role === 'ADMIN') {
+      const adminCookie = createAdminSessionCookie(user.email)
+      response.cookies.set(ADMIN_COOKIE_NAME, adminCookie, ADMIN_COOKIE_OPTIONS)
+    }
 
     return response
   } catch (error: any) {

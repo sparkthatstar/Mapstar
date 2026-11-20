@@ -29,7 +29,16 @@ interface StoredUser extends AuthedUser {
   createdAt: string
 }
 
+interface PasswordResetRecord {
+  email: string
+  code: string // 6-digit verification code
+  token: string // URL reset token
+  expiresAt: number
+  createdAt: string
+}
+
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+const RESET_TOKEN_TTL_MS = 15 * 60 * 1000 // 15 minutes
 
 function getSecret(): string {
   return process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || 'mapstar-user-session-secret-2026'
@@ -159,6 +168,8 @@ const SEED_USERS: StoredUser[] = [
 
 const DATA_DIR = path.join(process.cwd(), '.data')
 const USERS_FILE = path.join(DATA_DIR, 'users.json')
+const RESET_TOKENS_FILE = path.join(DATA_DIR, 'reset-tokens.json')
+const OUTBOX_LOG_FILE = path.join(DATA_DIR, 'email-outbox.log')
 
 function readUsers(): StoredUser[] {
   try {
@@ -189,6 +200,42 @@ function writeUsers(users: StoredUser[]): void {
   }
 }
 
+function readResetTokens(): PasswordResetRecord[] {
+  try {
+    if (!fs.existsSync(RESET_TOKENS_FILE)) return []
+    const content = fs.readFileSync(RESET_TOKENS_FILE, 'utf8')
+    const parsed = JSON.parse(content)
+    if (Array.isArray(parsed)) {
+      // Filter expired tokens
+      return parsed.filter((r) => r.expiresAt > Date.now())
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+function writeResetTokens(tokens: PasswordResetRecord[]): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
+    fs.writeFileSync(RESET_TOKENS_FILE, JSON.stringify(tokens, null, 2), 'utf8')
+  } catch (err) {
+    console.error('Failed to write reset tokens file:', err)
+  }
+}
+
+function logOutboxEmail(to: string, subject: string, body: string) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
+    const entry = `[${new Date().toISOString()}] TO: ${to} | SUBJECT: ${subject}\n${body}\n----------------------------------------\n`
+    fs.appendFileSync(OUTBOX_LOG_FILE, entry, 'utf8')
+  } catch {}
+}
+
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
   const normalized = email.trim().toLowerCase()
   const users = readUsers()
@@ -200,7 +247,7 @@ export async function registerUser(data: {
   password: string
   fullName: string
   phone?: string
-  role?: 'TENANT' | 'LANDLORD' | 'AGENT'
+  role?: 'TENANT' | 'LANDLORD' | 'AGENT' | 'ADMIN'
 }): Promise<AuthedUser> {
   const normalizedEmail = data.email.trim().toLowerCase()
   const users = readUsers()
@@ -235,6 +282,109 @@ export async function authenticateUser(email: string, password: string): Promise
 
   const isMatch = verifyPassword(password, user.passwordHash)
   if (!isMatch) return null
+
+  const { passwordHash: _, ...authed } = user
+  return authed
+}
+
+export async function listAllUsers(): Promise<AuthedUser[]> {
+  const users = readUsers()
+  return users.map(({ passwordHash: _, ...u }) => u)
+}
+
+// ---------------------------------------------------------------------
+// Password Reset (Forgot Password) Management
+// ---------------------------------------------------------------------
+
+export async function createPasswordResetRequest(email: string): Promise<{
+  code: string
+  token: string
+  expiresAt: number
+}> {
+  const normalizedEmail = email.trim().toLowerCase()
+  const user = await findUserByEmail(normalizedEmail)
+
+  if (!user) {
+    throw new Error('No account found with this email address')
+  }
+
+  // 6-digit numeric verification code (e.g., 482910)
+  const code = Math.floor(100000 + Math.random() * 900000).toString()
+  // URL token (e.g. for reset links)
+  const token = randomBytes(24).toString('hex')
+  const expiresAt = Date.now() + RESET_TOKEN_TTL_MS
+
+  const tokens = readResetTokens().filter((t) => t.email !== normalizedEmail)
+  tokens.push({
+    email: normalizedEmail,
+    code,
+    token,
+    expiresAt,
+    createdAt: new Date().toISOString(),
+  })
+  writeResetTokens(tokens)
+
+  // Log to outbox (simulating email delivery or SMTP)
+  const subject = 'Reset Your Mapstar Password'
+  const message = `Hello ${user.fullName || 'Mapstar User'},\n\nYour 6-digit password reset code is: ${code}\nAlternatively, use token: ${token}\nThis code expires in 15 minutes.`
+  logOutboxEmail(normalizedEmail, subject, message)
+
+  return { code, token, expiresAt }
+}
+
+export async function verifyResetCode(email: string, codeOrToken: string): Promise<boolean> {
+  const normalizedEmail = email.trim().toLowerCase()
+  const trimmed = codeOrToken.trim()
+  const tokens = readResetTokens()
+
+  const match = tokens.find(
+    (t) =>
+      t.email === normalizedEmail &&
+      (t.code === trimmed || t.token === trimmed) &&
+      t.expiresAt > Date.now()
+  )
+
+  return !!match
+}
+
+export async function resetPasswordWithCode(
+  email: string,
+  codeOrToken: string,
+  newPassword: string
+): Promise<AuthedUser> {
+  const normalizedEmail = email.trim().toLowerCase()
+  const trimmed = codeOrToken.trim()
+  const tokens = readResetTokens()
+
+  const matchIndex = tokens.findIndex(
+    (t) =>
+      t.email === normalizedEmail &&
+      (t.code === trimmed || t.token === trimmed) &&
+      t.expiresAt > Date.now()
+  )
+
+  if (matchIndex === -1) {
+    throw new Error('Invalid or expired reset code. Please request a new one.')
+  }
+
+  if (newPassword.length < 6) {
+    throw new Error('New password must be at least 6 characters.')
+  }
+
+  const users = readUsers()
+  const user = users.find((u) => u.email.toLowerCase() === normalizedEmail)
+
+  if (!user) {
+    throw new Error('User not found.')
+  }
+
+  // Update password
+  user.passwordHash = hashPassword(newPassword)
+  writeUsers(users)
+
+  // Invalidate used reset token
+  tokens.splice(matchIndex, 1)
+  writeResetTokens(tokens)
 
   const { passwordHash: _, ...authed } = user
   return authed

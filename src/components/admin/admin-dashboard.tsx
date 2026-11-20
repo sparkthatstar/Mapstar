@@ -456,8 +456,53 @@ function FeeToggle({ label, checked, onChange }: { label: string; checked: boole
 
 function ListingsTab() {
   const [filter, setFilter] = useState<string>('all')
+  const [listings, setListings] = useState<MockListing[]>(MOCK_LISTINGS)
 
-  const filtered = MOCK_LISTINGS.filter((l) => {
+  function toggleVerify(id: string) {
+    setListings((prev) =>
+      prev.map((l) => {
+        if (l.id === id) {
+          const next = !l.physicallyVerified
+          toast(next ? 'Marked physically verified' : 'Verification removed', {
+            description: l.title,
+          })
+          return { ...l, physicallyVerified: next }
+        }
+        return l
+      })
+    )
+  }
+
+  function toggleFeatured(id: string) {
+    setListings((prev) =>
+      prev.map((l) => {
+        if (l.id === id) {
+          const next = !l.featured
+          toast(next ? 'Listing boosted as Featured' : 'Featured boost removed', {
+            description: l.title,
+          })
+          return { ...l, featured: next }
+        }
+        return l
+      })
+    )
+  }
+
+  function delist(id: string) {
+    setListings((prev) =>
+      prev.map((l) => {
+        if (l.id === id) {
+          toast.error('Listing delisted from public view', {
+            description: l.title,
+          })
+          return { ...l, status: 'DELISTED' as any }
+        }
+        return l
+      })
+    )
+  }
+
+  const filtered = listings.filter((l) => {
     if (filter === 'all') return true
     if (filter === 'featured') return l.featured
     if (filter === 'verified') return l.physicallyVerified
@@ -474,11 +519,11 @@ function ListingsTab() {
 
         <div className="flex flex-wrap gap-1 mt-4 mb-4">
           {[
-            { id: 'all', label: `All (${MOCK_LISTINGS.length})` },
-            { id: 'unverified', label: `Pending verification (${MOCK_LISTINGS.filter((l) => !l.physicallyVerified).length})` },
-            { id: 'verified', label: `Verified (${MOCK_LISTINGS.filter((l) => l.physicallyVerified).length})` },
-            { id: 'featured', label: `Featured (${MOCK_LISTINGS.filter((l) => l.featured).length})` },
-            { id: 'coming_soon', label: `Coming soon (${MOCK_LISTINGS.filter((l) => l.comingSoon).length})` },
+            { id: 'all', label: `All (${listings.length})` },
+            { id: 'unverified', label: `Pending verification (${listings.filter((l) => !l.physicallyVerified).length})` },
+            { id: 'verified', label: `Verified (${listings.filter((l) => l.physicallyVerified).length})` },
+            { id: 'featured', label: `Featured (${listings.filter((l) => l.featured).length})` },
+            { id: 'coming_soon', label: `Coming soon (${listings.filter((l) => l.comingSoon).length})` },
           ].map((f) => (
             <button
               key={f.id}
@@ -529,13 +574,33 @@ function ListingsTab() {
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     <div className="inline-flex gap-1">
-                      <Button size="sm" variant="ghost" className="h-7 text-[10px]" title="Mark physically verified">
-                        <Shield className="h-3 w-3" />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className={`h-7 text-[10px] ${l.physicallyVerified ? 'text-red-600 font-semibold' : 'text-slate-600'}`}
+                        title="Toggle physically verified"
+                        onClick={() => toggleVerify(l.id)}
+                      >
+                        <Shield className="h-3 w-3 mr-0.5" />
+                        <span className="hidden sm:inline">{l.physicallyVerified ? 'Verified' : 'Verify'}</span>
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-[10px]" title="Toggle featured">
-                        <Star className="h-3 w-3" />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className={`h-7 text-[10px] ${l.featured ? 'text-cyan-600 font-semibold' : 'text-slate-600'}`}
+                        title="Toggle featured"
+                        onClick={() => toggleFeatured(l.id)}
+                      >
+                        <Star className="h-3 w-3 mr-0.5" />
+                        <span className="hidden sm:inline">{l.featured ? 'Boosted' : 'Feature'}</span>
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-[10px] text-red-600 hover:text-red-700" title="Delist">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-[10px] text-red-600 hover:text-red-700"
+                        title="Delist"
+                        onClick={() => delist(l.id)}
+                      >
                         <Flag className="h-3 w-3" />
                       </Button>
                     </div>
@@ -545,10 +610,6 @@ function ListingsTab() {
             </tbody>
           </table>
         </div>
-
-        <p className="text-[10px] text-slate-500 mt-3">
-          Action buttons are wired to UI only in this sandbox. In production they call <code className="bg-slate-100 px-1 rounded">PATCH /api/admin/listings/[id]</code> with audit logging.
-        </p>
       </div>
     </ScrollArea>
   )
@@ -561,6 +622,7 @@ function StatusPill({ status }: { status: string }) {
     UNDER_INSPECTION: { label: 'Inspection', cls: 'bg-blue-100 text-blue-700' },
     RECENTLY_LET: { label: 'Recently let', cls: 'bg-slate-100 text-slate-600' },
     VERIFIED: { label: 'Verified', cls: 'bg-red-100 text-red-700' },
+    DELISTED: { label: 'Delisted', cls: 'bg-red-200 text-red-900' },
   }
   const m = map[status] || map.AVAILABLE
   return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${m.cls}`}>{m.label}</span>
@@ -569,15 +631,41 @@ function StatusPill({ status }: { status: string }) {
 /* ---------------- Users ---------------- */
 
 function UsersTab() {
-  const mockUsers = [
-    { id: 'u1', name: 'Mrs. Okoro', email: 'okoro@example.com', role: 'LANDLORD', city: 'Owerri', listings: 3, verified: true, joined: '2 weeks ago' },
-    { id: 'u2', name: 'Mr. Eze', email: 'eze@example.com', role: 'LANDLORD', city: 'Enugu', listings: 2, verified: true, joined: '1 month ago' },
-    { id: 'u3', name: 'Chidinma N.', email: 'chidinma@example.com', role: 'TENANT', city: 'Owerri', listings: 0, verified: true, joined: '3 days ago' },
-    { id: 'u4', name: 'Emeka O.', email: 'emeka@example.com', role: 'TENANT', city: 'Enugu', listings: 0, verified: true, joined: '5 days ago' },
-    { id: 'u5', name: 'Agent Johnson', email: 'johnson@properties.ng', role: 'AGENT', city: 'Owerri', listings: 4, verified: true, joined: '1 week ago' },
-    { id: 'u6', name: 'Agent Blessing', email: 'blessing@homes.ng', role: 'AGENT', city: 'Enugu', listings: 3, verified: false, joined: '2 days ago' },
-    { id: 'u7', name: 'Unknown', email: 'suspicious@temp.com', role: 'LANDLORD', city: 'Owerri', listings: 1, verified: false, joined: '1 hour ago' },
-  ]
+  const [users, setUsers] = useState([
+    { id: 'u1', name: 'Mrs. Okoro', email: 'okoro@example.com', role: 'LANDLORD', city: 'Owerri', listings: 3, verified: true, status: 'ACTIVE', joined: '2 weeks ago' },
+    { id: 'u2', name: 'Mr. Eze', email: 'eze@example.com', role: 'LANDLORD', city: 'Enugu', listings: 2, verified: true, status: 'ACTIVE', joined: '1 month ago' },
+    { id: 'u3', name: 'Chidinma N.', email: 'chidinma@example.com', role: 'TENANT', city: 'Owerri', listings: 0, verified: true, status: 'ACTIVE', joined: '3 days ago' },
+    { id: 'u4', name: 'Emeka O.', email: 'emeka@example.com', role: 'TENANT', city: 'Enugu', listings: 0, verified: true, status: 'ACTIVE', joined: '5 days ago' },
+    { id: 'u5', name: 'Agent Johnson', email: 'johnson@properties.ng', role: 'AGENT', city: 'Owerri', listings: 4, verified: true, status: 'ACTIVE', joined: '1 week ago' },
+    { id: 'u6', name: 'Agent Blessing', email: 'blessing@homes.ng', role: 'AGENT', city: 'Enugu', listings: 3, verified: false, status: 'ACTIVE', joined: '2 days ago' },
+    { id: 'u7', name: 'Unknown User', email: 'suspicious@temp.com', role: 'LANDLORD', city: 'Owerri', listings: 1, verified: false, status: 'ACTIVE', joined: '1 hour ago' },
+  ])
+
+  function approveKYC(id: string) {
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === id) {
+          toast.success(`Approved verification for ${u.name}`)
+          return { ...u, verified: true }
+        }
+        return u
+      })
+    )
+  }
+
+  function toggleSuspend(id: string) {
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === id) {
+          const next = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED'
+          if (next === 'SUSPENDED') toast.error(`Suspended account ${u.email}`)
+          else toast.success(`Reactivated account ${u.email}`)
+          return { ...u, status: next }
+        }
+        return u
+      })
+    )
+  }
 
   return (
     <ScrollArea className="h-[calc(100vh-120px)]">
@@ -586,10 +674,10 @@ function UsersTab() {
         <p className="text-sm text-slate-500 mt-1">View and moderate landlords, agents, and tenants.</p>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 mb-5">
-          <StatCard label="Total users" value={String(mockUsers.length)} icon={<Users className="h-4 w-4" />} accent="bg-slate-100 text-slate-700" />
-          <StatCard label="Landlords" value={String(mockUsers.filter((u) => u.role === 'LANDLORD').length)} icon={<Building className="h-4 w-4" />} accent="bg-emerald-50 text-emerald-700" />
-          <StatCard label="Agents" value={String(mockUsers.filter((u) => u.role === 'AGENT').length)} icon={<Shield className="h-4 w-4" />} accent="bg-blue-50 text-blue-700" />
-          <StatCard label="Pending KYC" value={String(mockUsers.filter((u) => !u.verified).length)} icon={<Flag className="h-4 w-4" />} accent="bg-amber-50 text-amber-700" />
+          <StatCard label="Total users" value={String(users.length)} icon={<Users className="h-4 w-4" />} accent="bg-slate-100 text-slate-700" />
+          <StatCard label="Landlords" value={String(users.filter((u) => u.role === 'LANDLORD').length)} icon={<Building className="h-4 w-4" />} accent="bg-emerald-50 text-emerald-700" />
+          <StatCard label="Agents" value={String(users.filter((u) => u.role === 'AGENT').length)} icon={<Shield className="h-4 w-4" />} accent="bg-blue-50 text-blue-700" />
+          <StatCard label="Pending KYC" value={String(users.filter((u) => !u.verified).length)} icon={<Flag className="h-4 w-4" />} accent="bg-amber-50 text-amber-700" />
         </div>
 
         <div className="rounded-lg border border-slate-200 overflow-hidden">
@@ -601,12 +689,12 @@ function UsersTab() {
                 <th className="px-3 py-2 font-semibold hidden sm:table-cell">City</th>
                 <th className="px-3 py-2 font-semibold text-center">Listings</th>
                 <th className="px-3 py-2 font-semibold">KYC</th>
-                <th className="px-3 py-2 font-semibold hidden sm:table-cell">Joined</th>
+                <th className="px-3 py-2 font-semibold hidden sm:table-cell">Status</th>
                 <th className="px-3 py-2 font-semibold text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {mockUsers.map((u) => (
+              {users.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2.5">
                     <div className="font-medium text-slate-900">{u.name}</div>
@@ -628,16 +716,27 @@ function UsersTab() {
                       <Badge variant="outline" className="border-amber-300 text-amber-700">Pending</Badge>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 hidden sm:table-cell text-xs text-slate-500">{u.joined}</td>
+                  <td className="px-3 py-2.5 hidden sm:table-cell">
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${u.status === 'SUSPENDED' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {u.status}
+                    </span>
+                  </td>
                   <td className="px-3 py-2.5 text-right">
-                    <Button size="sm" variant="ghost" className="h-7 text-[10px]">View</Button>
-                    {u.role === 'LANDLORD' && !u.verified && (
-                      <Button size="sm" variant="ghost" className="h-7 text-[10px] text-emerald-700">Approve KYC</Button>
-                    )}
-                    {u.role === 'AGENT' && !u.verified && (
-                      <Button size="sm" variant="ghost" className="h-7 text-[10px] text-emerald-700">Approve</Button>
-                    )}
-                    <Button size="sm" variant="ghost" className="h-7 text-[10px] text-red-600">Suspend</Button>
+                    <div className="inline-flex gap-1">
+                      {!u.verified && (
+                        <Button size="sm" variant="ghost" className="h-7 text-[10px] text-emerald-700 hover:text-emerald-800" onClick={() => approveKYC(u.id)}>
+                          Approve KYC
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className={`h-7 text-[10px] ${u.status === 'SUSPENDED' ? 'text-emerald-700' : 'text-red-600 hover:text-red-700'}`}
+                        onClick={() => toggleSuspend(u.id)}
+                      >
+                        {u.status === 'SUSPENDED' ? 'Reactivate' : 'Suspend'}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -652,12 +751,48 @@ function UsersTab() {
 /* ---------------- Reports ---------------- */
 
 function ReportsTab() {
-  const reports = [
+  const [reports, setReports] = useState([
     { id: 'r1', property: 'Self-con near IMSU main gate', reason: 'Fake photos — actual lodge is much smaller', reporter: 'Chidinma N.', status: 'OPEN', createdAt: '2 hours ago' },
     { id: 'r2', property: '2-Bedroom flat in Independence Layout', reason: 'Landlord asked for inspection fee outside app', reporter: 'Emeka O.', status: 'OPEN', createdAt: '5 hours ago' },
     { id: 'r3', property: 'Room & parlour near Relief Market', reason: 'Listed twice by different agents', reporter: 'Anonymous', status: 'UNDER_REVIEW', createdAt: '1 day ago' },
     { id: 'r4', property: '3-Bedroom flat in Aladinma', reason: 'Price changed after inspection', reporter: 'Anonymous', status: 'RESOLVED', createdAt: '3 days ago' },
-  ]
+  ])
+
+  function markInvestigating(id: string) {
+    setReports((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          toast('Report marked Under Investigation')
+          return { ...r, status: 'UNDER_REVIEW' }
+        }
+        return r
+      })
+    )
+  }
+
+  function resolveReport(id: string) {
+    setReports((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          toast.success('Report resolved and closed')
+          return { ...r, status: 'RESOLVED' }
+        }
+        return r
+      })
+    )
+  }
+
+  function dismissReport(id: string) {
+    setReports((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          toast('Report dismissed')
+          return { ...r, status: 'RESOLVED' }
+        }
+        return r
+      })
+    )
+  }
 
   return (
     <ScrollArea className="h-[calc(100vh-120px)]">
@@ -692,12 +827,14 @@ function ReportsTab() {
                 <p className="text-[10px] text-slate-500 mt-1">Reported by: {r.reporter}</p>
               </div>
               <div className="flex flex-col gap-1 shrink-0">
-                {r.status !== 'RESOLVED' && (
+                {r.status !== 'RESOLVED' ? (
                   <>
-                    <Button size="sm" variant="outline" className="h-7 text-[10px]">Investigate</Button>
-                    <Button size="sm" variant="outline" className="h-7 text-[10px] text-red-600 hover:text-red-700">Delist</Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-[10px] text-slate-500">Dismiss</Button>
+                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => markInvestigating(r.id)}>Investigate</Button>
+                    <Button size="sm" variant="outline" className="h-7 text-[10px] text-emerald-700 hover:text-emerald-800" onClick={() => resolveReport(r.id)}>Resolve</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-[10px] text-slate-500" onClick={() => dismissReport(r.id)}>Dismiss</Button>
                   </>
+                ) : (
+                  <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Resolved</span>
                 )}
               </div>
             </div>

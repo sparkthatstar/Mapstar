@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Map as MapIcon, List, SlidersHorizontal, Search, Star, LogIn, LogOut, User as UserIcon, UserPlus, ChevronDown } from 'lucide-react'
+import Link from 'next/link'
+import { Map as MapIcon, List, SlidersHorizontal, Search, Star, LogIn, LogOut, User as UserIcon, UserPlus, ChevronDown, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -238,8 +239,18 @@ export default function Home() {
                   <DropdownMenuItem className="text-xs" disabled>
                     <Star className="h-3.5 w-3.5 mr-2" /> Saved searches
                   </DropdownMenuItem>
+                  {user.role === 'ADMIN' && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild className="text-xs text-purple-700 font-semibold focus:text-purple-800 focus:bg-purple-50 cursor-pointer">
+                        <Link href="/admin">
+                          <Shield className="h-3.5 w-3.5 mr-2 text-purple-600" /> Admin Control Portal
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-xs text-red-600 focus:text-red-700" onClick={handleLogout}>
+                  <DropdownMenuItem className="text-xs text-red-600 focus:text-red-700 cursor-pointer" onClick={handleLogout}>
                     <LogOut className="h-3.5 w-3.5 mr-2" /> Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
