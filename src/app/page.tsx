@@ -247,20 +247,20 @@ export default function Home() {
             ) : (
               <div className="flex items-center gap-1.5">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-9 text-xs text-slate-700 hover:text-emerald-700 hover:bg-slate-100"
+                  className="h-9 px-2.5 sm:px-3 text-xs font-medium text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 border-slate-300"
                   onClick={() => { setAuthMode('login'); setAuthOpen(true) }}
                 >
-                  <LogIn className="h-3.5 w-3.5 sm:mr-1.5" />
-                  <span className="hidden sm:inline">Log in</span>
+                  <LogIn className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                  <span>Log in</span>
                 </Button>
                 <Button
                   size="sm"
-                  className="h-9 bg-emerald-600 hover:bg-emerald-700 text-xs font-medium text-white shadow-sm"
+                  className="h-9 px-2.5 sm:px-3 bg-emerald-600 hover:bg-emerald-700 text-xs font-medium text-white shadow-sm"
                   onClick={() => { setAuthMode('signup'); setAuthOpen(true) }}
                 >
-                  <UserPlus className="h-3.5 w-3.5 sm:mr-1.5" />
+                  <UserPlus className="h-3.5 w-3.5 mr-1" />
                   <span>Sign up</span>
                 </Button>
               </div>
