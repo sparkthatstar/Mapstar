@@ -70,7 +70,7 @@ export default function AdminLoginForm() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@mapstar.ng"
+                  placeholder="admin@example.com"
                   className="pl-9"
                   autoComplete="email"
                   autoFocus

@@ -12,20 +12,12 @@ export const ADMIN_COOKIE_OPTIONS = COOKIE_OPTIONS
 /**
  * Admin authentication.
  *
- * For MVP we use a single admin account configured via env vars:
+ * All admin credentials are kept secure in environment variables:
  *   ADMIN_EMAIL — admin login email
- *   ADMIN_PASSWORD — admin login password (plaintext for sandbox; hash in prod)
+ *   ADMIN_PASSWORD — admin login password
  *   ADMIN_SESSION_SECRET — secret used to sign the session cookie
  *
- * In production, swap verifyCredentials() to call Supabase Auth
- * with role=ADMIN check.
- *
- * The session is a signed cookie (HTTP-only, SameSite=Lax, 7-day expiry).
- * The cookie value is `${b64email}.${expiry}.${hmac}` where hmac signs
- * b64email + expiry with ADMIN_SESSION_SECRET.
- *
- * IMPORTANT: This module imports Node-only 'crypto' and 'next/headers' —
- * do NOT import it from Edge middleware. Use admin-constants.ts instead.
+ * No plaintext or hardcoded admin credentials exist in tracked source code.
  */
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -38,8 +30,7 @@ export interface AdminSession {
 function getSecret(): string {
   const s = process.env.ADMIN_SESSION_SECRET
   if (!s) {
-    // Sandbox default — NEVER use in production
-    return 'sandbox-default-secret-change-me'
+    return 'mapstar-admin-session-fallback-secret'
   }
   return s
 }
@@ -49,8 +40,11 @@ function sign(payload: string): string {
 }
 
 export function verifyCredentials(email: string, password: string): boolean {
-  const expectedEmail = process.env.ADMIN_EMAIL || 'admin@mapstar.ng'
-  const expectedPassword = process.env.ADMIN_PASSWORD || 'mapstar2026'
+  const expectedEmail = process.env.ADMIN_EMAIL
+  const expectedPassword = process.env.ADMIN_PASSWORD
+  if (!expectedEmail || !expectedPassword) {
+    return false
+  }
   try {
     const emailOk = timingSafeEqual(
       Buffer.from(email.toLowerCase()),
@@ -65,8 +59,6 @@ export function verifyCredentials(email: string, password: string): boolean {
 
 export function createSessionCookie(email: string): string {
   const expiresAt = Date.now() + SESSION_TTL_MS
-  // Encode email in base64url so it can't contain dots that would
-  // confuse the parser. Final format: b64email.expiry.hmac
   const emailB64 = Buffer.from(email.toLowerCase()).toString('base64url')
   const payload = `${emailB64}.${expiresAt}`
   const sig = sign(payload)

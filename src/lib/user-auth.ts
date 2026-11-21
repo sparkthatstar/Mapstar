@@ -41,7 +41,7 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000 // 15 minutes
 
 function getSecret(): string {
-  return process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || 'mapstar-user-session-secret-2026'
+  return process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || 'mapstar-user-session-fallback-secret'
 }
 
 function sign(payload: string): string {
@@ -153,17 +153,6 @@ const SEED_USERS: StoredUser[] = [
     passwordHash: hashPassword('password123'),
     createdAt: new Date().toISOString(),
   },
-  {
-    id: 'user_admin_01',
-    email: 'admin@mapstar.ng',
-    fullName: 'Mapstar Super Admin',
-    phone: '08000000000',
-    role: 'ADMIN',
-    ninVerified: true,
-    bvnVerified: true,
-    passwordHash: hashPassword('mapstar2026'),
-    createdAt: new Date().toISOString(),
-  },
 ]
 
 const DATA_DIR = path.join(process.cwd(), '.data')
@@ -171,21 +160,55 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json')
 const RESET_TOKENS_FILE = path.join(DATA_DIR, 'reset-tokens.json')
 const OUTBOX_LOG_FILE = path.join(DATA_DIR, 'email-outbox.log')
 
+function getAdminUser(): StoredUser | null {
+  const email = process.env.ADMIN_EMAIL
+  const password = process.env.ADMIN_PASSWORD
+  if (!email || !password) return null
+
+  return {
+    id: 'user_admin_01',
+    email: email.trim().toLowerCase(),
+    fullName: process.env.ADMIN_NAME || 'Admin',
+    phone: '08000000000',
+    role: 'ADMIN',
+    ninVerified: true,
+    bvnVerified: true,
+    passwordHash: hashPassword(password),
+    createdAt: new Date().toISOString(),
+  }
+}
+
 function readUsers(): StoredUser[] {
   try {
+    let list: StoredUser[] = []
     if (!fs.existsSync(USERS_FILE)) {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true })
       }
-      fs.writeFileSync(USERS_FILE, JSON.stringify(SEED_USERS, null, 2), 'utf8')
-      return SEED_USERS
+      list = [...SEED_USERS]
+    } else {
+      const content = fs.readFileSync(USERS_FILE, 'utf8')
+      const parsed = JSON.parse(content)
+      list = Array.isArray(parsed) ? parsed : [...SEED_USERS]
     }
-    const content = fs.readFileSync(USERS_FILE, 'utf8')
-    const parsed = JSON.parse(content)
-    if (Array.isArray(parsed)) return parsed
-    return SEED_USERS
+
+    // Dynamically inject/sync configured admin from environment variables
+    const adminUser = getAdminUser()
+    if (adminUser) {
+      const adminIdx = list.findIndex((u) => u.role === 'ADMIN' || u.email.toLowerCase() === adminUser.email)
+      if (adminIdx >= 0) {
+        list[adminIdx] = adminUser
+      } else {
+        list.push(adminUser)
+      }
+    }
+
+    return list
   } catch {
-    return SEED_USERS
+    const fallback = [...SEED_USERS]
+    const adminUser = getAdminUser()
+    if (adminUser) fallback.push(adminUser)
+    return fallback
   }
 }
 
@@ -276,6 +299,29 @@ export async function registerUser(data: {
 }
 
 export async function authenticateUser(email: string, password: string): Promise<AuthedUser | null> {
+  const normalizedEmail = email.trim().toLowerCase()
+
+  // First check if credentials match the securely configured admin in environment variables
+  const adminEmail = process.env.ADMIN_EMAIL
+  const adminPassword = process.env.ADMIN_PASSWORD
+  if (
+    adminEmail &&
+    adminPassword &&
+    normalizedEmail === adminEmail.trim().toLowerCase() &&
+    password === adminPassword
+  ) {
+    return {
+      id: 'user_admin_01',
+      email: adminEmail.trim().toLowerCase(),
+      fullName: process.env.ADMIN_NAME || 'Admin',
+      phone: '08000000000',
+      role: 'ADMIN',
+      ninVerified: true,
+      bvnVerified: true,
+      avatarUrl: null,
+    }
+  }
+
   const user = await findUserByEmail(email)
   if (!user) return null
 

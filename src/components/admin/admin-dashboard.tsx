@@ -401,7 +401,7 @@ function FeesTab() {
             <Lock className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium mb-0.5">Audit trail</p>
-              <p>All fee changes are attributed to your admin account ({process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@mapstar.ng'}) and timestamped. In production, every PATCH is logged to the AdminAction table for compliance.</p>
+              <p>All fee changes are attributed to your admin account and timestamped. In production, every PATCH is logged to the AdminAction table for compliance.</p>
             </div>
           </div>
         </div>
