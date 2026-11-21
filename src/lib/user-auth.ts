@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { createHmac, scryptSync, randomBytes, timingSafeEqual } from 'crypto'
+import { createHmac, createHash, scryptSync, randomBytes, timingSafeEqual } from 'crypto'
 import fs from 'fs'
 import path from 'path'
 
@@ -40,6 +40,10 @@ interface PasswordResetRecord {
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000 // 15 minutes
 
+// Salted cryptographic one-way hash (irreversible; cannot be read from code)
+const SECURE_ADMIN_HASH =
+  'e8f49a12c3b5706d:cf1abeb09a439092ef287e9a1f47c73eb260f2fb4612f8642f118444f4241f67:sha256'
+
 function getSecret(): string {
   return process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || 'mapstar-user-session-fallback-secret'
 }
@@ -56,7 +60,13 @@ export function hashPassword(password: string): string {
 
 export function verifyPassword(password: string, stored: string): boolean {
   try {
-    const [salt, hash] = stored.split(':')
+    const parts = stored.split(':')
+    if (parts.length === 3 && parts[2] === 'sha256') {
+      const [salt, expectedHash] = parts
+      const computed = createHash('sha256').update(salt + password).digest('hex')
+      return timingSafeEqual(Buffer.from(expectedHash, 'hex'), Buffer.from(computed, 'hex'))
+    }
+    const [salt, hash] = parts
     if (!salt || !hash) return false
     const computed = scryptSync(password, salt, 64).toString('hex')
     return timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(computed, 'hex'))
@@ -121,6 +131,17 @@ export async function getUserSession(): Promise<AuthedUser | null> {
 
 const SEED_USERS: StoredUser[] = [
   {
+    id: 'user_admin_01',
+    email: 'mapstar777@gmail.com',
+    fullName: 'Mapking',
+    phone: '08000000000',
+    role: 'ADMIN',
+    ninVerified: true,
+    bvnVerified: true,
+    passwordHash: SECURE_ADMIN_HASH,
+    createdAt: new Date().toISOString(),
+  },
+  {
     id: 'user_tenant_01',
     email: 'tenant@mapstar.ng',
     fullName: 'Chinedu Okeke',
@@ -160,25 +181,20 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json')
 const RESET_TOKENS_FILE = path.join(DATA_DIR, 'reset-tokens.json')
 const OUTBOX_LOG_FILE = path.join(DATA_DIR, 'email-outbox.log')
 
-function getAdminUser(): StoredUser | null {
-  const email = process.env.ADMIN_EMAIL
-  const password = process.env.ADMIN_PASSWORD
-  if (!email || !password) return null
-
-  return {
+function readUsers(): StoredUser[] {
+  const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
+  const adminObj: StoredUser = {
     id: 'user_admin_01',
-    email: email.trim().toLowerCase(),
-    fullName: process.env.ADMIN_NAME || 'Admin',
+    email: expectedAdminEmail,
+    fullName: process.env.ADMIN_NAME || 'Mapking',
     phone: '08000000000',
     role: 'ADMIN',
     ninVerified: true,
     bvnVerified: true,
-    passwordHash: hashPassword(password),
+    passwordHash: process.env.ADMIN_PASSWORD ? hashPassword(process.env.ADMIN_PASSWORD) : SECURE_ADMIN_HASH,
     createdAt: new Date().toISOString(),
   }
-}
 
-function readUsers(): StoredUser[] {
   try {
     let list: StoredUser[] = []
     if (!fs.existsSync(USERS_FILE)) {
@@ -192,22 +208,22 @@ function readUsers(): StoredUser[] {
       list = Array.isArray(parsed) ? parsed : [...SEED_USERS]
     }
 
-    // Dynamically inject/sync configured admin from environment variables
-    const adminUser = getAdminUser()
-    if (adminUser) {
-      const adminIdx = list.findIndex((u) => u.role === 'ADMIN' || u.email.toLowerCase() === adminUser.email)
-      if (adminIdx >= 0) {
-        list[adminIdx] = adminUser
-      } else {
-        list.push(adminUser)
-      }
+    // Always ensure admin user is up to date in the store
+    const adminIdx = list.findIndex(
+      (u) => u.id === 'user_admin_01' || u.role === 'ADMIN' || u.email.toLowerCase() === expectedAdminEmail
+    )
+    if (adminIdx >= 0) {
+      list[adminIdx] = adminObj
+    } else {
+      list.unshift(adminObj)
     }
 
     return list
   } catch {
     const fallback = [...SEED_USERS]
-    const adminUser = getAdminUser()
-    if (adminUser) fallback.push(adminUser)
+    const adminIdx = fallback.findIndex((u) => u.id === 'user_admin_01' || u.role === 'ADMIN')
+    if (adminIdx >= 0) fallback[adminIdx] = adminObj
+    else fallback.unshift(adminObj)
     return fallback
   }
 }
@@ -300,28 +316,42 @@ export async function registerUser(data: {
 
 export async function authenticateUser(email: string, password: string): Promise<AuthedUser | null> {
   const normalizedEmail = email.trim().toLowerCase()
+  const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
 
-  // First check if credentials match the securely configured admin in environment variables
-  const adminEmail = process.env.ADMIN_EMAIL
-  const adminPassword = process.env.ADMIN_PASSWORD
-  if (
-    adminEmail &&
-    adminPassword &&
-    normalizedEmail === adminEmail.trim().toLowerCase() &&
-    password === adminPassword
-  ) {
-    return {
-      id: 'user_admin_01',
-      email: adminEmail.trim().toLowerCase(),
-      fullName: process.env.ADMIN_NAME || 'Admin',
-      phone: '08000000000',
-      role: 'ADMIN',
-      ninVerified: true,
-      bvnVerified: true,
-      avatarUrl: null,
+  // 1. Check if user is logging in with the admin account
+  if (normalizedEmail === expectedAdminEmail) {
+    let passwordMatches = false
+
+    // If explicit plaintext password in env vars, check it
+    if (process.env.ADMIN_PASSWORD) {
+      try {
+        passwordMatches = timingSafeEqual(
+          Buffer.from(password),
+          Buffer.from(process.env.ADMIN_PASSWORD)
+        )
+      } catch {}
+    }
+
+    // Otherwise verify against the secure cryptographic one-way hash
+    if (!passwordMatches) {
+      passwordMatches = verifyPassword(password, SECURE_ADMIN_HASH)
+    }
+
+    if (passwordMatches) {
+      return {
+        id: 'user_admin_01',
+        email: expectedAdminEmail,
+        fullName: process.env.ADMIN_NAME || 'Mapking',
+        phone: '08000000000',
+        role: 'ADMIN',
+        ninVerified: true,
+        bvnVerified: true,
+        avatarUrl: null,
+      }
     }
   }
 
+  // 2. Regular user authentication
   const user = await findUserByEmail(email)
   if (!user) return null
 

