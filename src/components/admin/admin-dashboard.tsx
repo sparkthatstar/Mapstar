@@ -34,12 +34,12 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col">
+    <div className="min-h-screen bg-[#070A12] text-slate-100 flex flex-col">
       {/* Top bar */}
-      <header className="bg-slate-900 text-white shrink-0">
+      <header className="bg-[#090D18] border-b border-slate-800 text-white shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-emerald-600 flex items-center justify-center">
+            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-md shadow-blue-600/30">
               <Shield className="h-4 w-4 text-white" />
             </div>
             <div>
@@ -49,13 +49,13 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-300">
-              <Lock className="h-3 w-3" />
+              <Lock className="h-3 w-3 text-blue-400" />
               <span>{adminEmail}</span>
             </div>
             <Button
               variant="outline"
               size="sm"
-              className="h-8 border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white"
+              className="h-8 border-slate-800 bg-[#070A12] text-slate-200 hover:bg-slate-800 hover:text-white"
               asChild
             >
               <a href="/" target="_blank">
@@ -65,7 +65,7 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 border-slate-700 bg-slate-800 text-slate-200 hover:bg-red-900 hover:border-red-700 hover:text-white"
+              className="h-8 border-slate-800 bg-[#070A12] text-slate-200 hover:bg-rose-950 hover:border-rose-800 hover:text-rose-200"
               onClick={logout}
             >
               <LogOut className="h-3.5 w-3.5 mr-1.5" /> Sign out
@@ -92,10 +92,10 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
                 <li key={item.id}>
                   <button
                     onClick={() => setTab(item.id as Tab)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition ${
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
                       active
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-slate-700 hover:bg-slate-200'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                        : 'text-slate-400 hover:bg-[#0E1526] hover:text-slate-200'
                     }`}
                   >
                     <Icon className="h-4 w-4" />
@@ -120,8 +120,8 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
             <button
               key={item.id}
               onClick={() => setTab(item.id as Tab)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition ${
-                tab === item.id ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
+              className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition cursor-pointer ${
+                tab === item.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'
               }`}
             >
               {item.label}
@@ -130,7 +130,7 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
         </div>
 
         {/* Main panel */}
-        <main className="flex-1 min-w-0 bg-white rounded-xl shadow-sm ring-1 ring-slate-200 overflow-hidden">
+        <main className="flex-1 min-w-0 bg-[#090D18] rounded-2xl shadow-2xl border border-slate-800 overflow-hidden text-slate-100">
           {tab === 'overview' && <OverviewTab onNavigate={setTab} />}
           {tab === 'fees' && <FeesTab />}
           {tab === 'listings' && <ListingsTab />}

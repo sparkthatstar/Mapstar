@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Star, ShieldCheck, Video, Camera, Droplet, Zap, Toilet, Wifi, Car, Sparkles,
-  Home, MapPin, FileText, Calendar, CheckCircle2, AlertCircle
+  Home, MapPin, FileText, Calendar, CheckCircle2, AlertCircle, Building2,
 } from 'lucide-react'
 import { MockListing, formatNaira, PROPERTY_TYPE_LABELS } from '@/lib/mock-data'
 
@@ -30,116 +30,118 @@ export default function ListingDetail({ listing, open, onOpenChange, fees }: Lis
   if (!listing) return null
 
   const statusColor = {
-    AVAILABLE: 'bg-emerald-100 text-emerald-700',
-    COMING_SOON: 'bg-amber-100 text-amber-700',
-    UNDER_INSPECTION: 'bg-blue-100 text-blue-700',
-    RECENTLY_LET: 'bg-slate-100 text-slate-600',
-    VERIFIED: 'bg-red-100 text-red-700',
-  }[listing.status] ?? 'bg-slate-100 text-slate-600'
+    AVAILABLE: 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60',
+    COMING_SOON: 'bg-amber-950/80 text-amber-300 border border-amber-800/60',
+    UNDER_INSPECTION: 'bg-blue-950/80 text-blue-300 border border-blue-700/60',
+    RECENTLY_LET: 'bg-slate-900 text-slate-400 border border-slate-800',
+    VERIFIED: 'bg-sky-950/80 text-sky-300 border border-sky-800/60',
+  }[listing.status] ?? 'bg-slate-900 text-slate-400 border border-slate-800'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[92vh] p-0 overflow-hidden">
+      <DialogContent className="max-w-3xl max-h-[92vh] p-0 overflow-hidden bg-[#090D18] border-slate-800 text-slate-100 shadow-2xl shadow-black/90">
         <ScrollArea className="max-h-[92vh]">
-          {/* Photo gallery placeholder */}
-          <div className="relative h-56 bg-gradient-to-br from-emerald-100 via-amber-50 to-emerald-50 flex items-center justify-center">
-            <Sparkles className="h-16 w-16 text-emerald-300" />
+          {/* Photo gallery / Header Banner */}
+          <div className="relative h-60 bg-gradient-to-br from-[#070A12] via-[#0E172C] to-[#070A12] border-b border-slate-800 flex items-center justify-center">
+            <Building2 className="h-20 w-20 text-blue-500/30" />
+
             {listing.featured && (
-              <div className="absolute top-3 left-3 rounded-md bg-cyan-500 px-2 py-1 text-xs font-bold text-white">
-                FEATURED
+              <div className="absolute top-4 left-4 rounded-md bg-gradient-to-r from-blue-600 to-sky-500 px-2.5 py-1 text-xs font-extrabold uppercase tracking-wider text-white shadow-lg shadow-blue-950/60">
+                FEATURED LODGE
               </div>
             )}
-            <div className={`absolute top-3 right-3 rounded-md px-2 py-1 text-xs font-medium ${statusColor}`}>
+            <div className={`absolute top-4 right-4 rounded-md px-2.5 py-1 text-xs font-semibold ${statusColor}`}>
               {listing.status.replace('_', ' ')}
             </div>
-            <div className="absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-[10px] text-white">
-              {listing.photoCount} photos · {listing.has360Tour ? '360° tour' : 'no 360°'} · {listing.hasVideoWalkthrough ? 'video' : 'no video'}
+            <div className="absolute bottom-3 left-4 rounded-md bg-black/85 px-2.5 py-1 text-[11px] font-mono text-slate-300 border border-slate-800 backdrop-blur-md">
+              {listing.photoCount} photos · {listing.has360Tour ? '360° tour available' : 'Standard photos'} · {listing.hasVideoWalkthrough ? 'Video walkthrough' : 'No video'}
             </div>
           </div>
 
-          <div className="p-5">
-            <DialogHeader className="mb-3">
-              <div className="flex items-start justify-between gap-3">
+          <div className="p-6">
+            <DialogHeader className="mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div className="flex-1">
-                  <DialogTitle className="text-xl text-slate-900 leading-tight">
+                  <DialogTitle className="text-xl sm:text-2xl font-bold text-white leading-tight">
                     {listing.title}
                   </DialogTitle>
-                  <DialogDescription className="flex items-center gap-1 mt-1 text-sm">
-                    <MapPin className="h-3.5 w-3.5" />
+                  <DialogDescription className="flex items-center gap-1.5 mt-1.5 text-sm text-slate-400">
+                    <MapPin className="h-4 w-4 text-blue-400 shrink-0" />
                     {listing.address}, {listing.area}, {listing.city} {listing.state}
                   </DialogDescription>
                 </div>
-                <div className="text-right shrink-0">
-                  <div className="text-2xl font-bold text-emerald-700">
+                <div className="sm:text-right shrink-0">
+                  <div className="text-2xl sm:text-3xl font-extrabold text-blue-400">
                     {formatNaira(listing.annualRent)}
                   </div>
-                  <div className="text-xs text-slate-500">per year</div>
+                  <div className="text-xs text-slate-500 font-mono">annual rent</div>
                 </div>
               </div>
             </DialogHeader>
 
             {/* Badges */}
-            <div className="flex flex-wrap gap-1.5 mb-4">
+            <div className="flex flex-wrap gap-1.5 mb-5">
               {listing.physicallyVerified && (
-                <Badge variant="outline" className="gap-1 border-red-300 text-red-700">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Physically verified
+                <Badge variant="outline" className="gap-1 border-sky-800/60 bg-sky-950/40 text-sky-300">
+                  <ShieldCheck className="h-3.5 w-3.5 text-sky-400" /> Physically verified
                 </Badge>
               )}
               {listing.fairPriceBadge && (
-                <Badge variant="outline" className="gap-1 border-emerald-300 text-emerald-700">
-                  <Star className="h-3.5 w-3.5 fill-emerald-500 text-emerald-500" /> Fair Price
+                <Badge variant="outline" className="gap-1 border-blue-800/60 bg-blue-950/40 text-blue-300">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-400" /> Fair Price Certified
                 </Badge>
               )}
               {listing.has360Tour && (
-                <Badge variant="outline" className="gap-1"><Camera className="h-3.5 w-3.5" /> 360° Tour</Badge>
+                <Badge variant="outline" className="gap-1 border-slate-700 bg-slate-900/60 text-slate-300">
+                  <Camera className="h-3.5 w-3.5 text-blue-400" /> 360° Tour
+                </Badge>
               )}
               {listing.hasVideoWalkthrough && (
-                <Badge variant="outline" className="gap-1"><Video className="h-3.5 w-3.5" /> Video Walkthrough</Badge>
-              )}
-              {listing.featured && (
-                <Badge variant="outline" className="gap-1 border-cyan-300 text-cyan-700"><Sparkles className="h-3.5 w-3.5" /> Featured</Badge>
+                <Badge variant="outline" className="gap-1 border-slate-700 bg-slate-900/60 text-slate-300">
+                  <Video className="h-3.5 w-3.5 text-blue-400" /> Video Walkthrough
+                </Badge>
               )}
             </div>
 
-            <p className="text-sm text-slate-700 leading-relaxed mb-4">{listing.description}</p>
+            <p className="text-sm text-slate-300 leading-relaxed mb-6">{listing.description}</p>
 
             {/* Specs grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-              <Spec icon={<Home className="h-4 w-4" />} label="Type" value={PROPERTY_TYPE_LABELS[listing.propertyType]} />
-              <Spec icon={<Car className="h-4 w-4" />} label="Bedrooms" value={String(listing.bedrooms || 'Studio')} />
-              <Spec icon={<Toilet className="h-4 w-4" />} label="Bathrooms" value={String(listing.bathrooms)} />
-              <Spec icon={<Car className="h-4 w-4" />} label="Parking" value={String(listing.parkingSpaces)} />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+              <Spec icon={<Home className="h-4 w-4 text-blue-400" />} label="Type" value={PROPERTY_TYPE_LABELS[listing.propertyType]} />
+              <Spec icon={<Car className="h-4 w-4 text-blue-400" />} label="Bedrooms" value={String(listing.bedrooms || 'Studio')} />
+              <Spec icon={<Toilet className="h-4 w-4 text-blue-400" />} label="Bathrooms" value={String(listing.bathrooms)} />
+              <Spec icon={<Car className="h-4 w-4 text-blue-400" />} label="Parking" value={String(listing.parkingSpaces)} />
             </div>
 
             {/* Amenities */}
-            <section className="mb-4">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Amenities</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                <Amenity ok={listing.hasBorehole} icon={<Droplet className="h-3.5 w-3.5" />} label="Borehole water" />
-                <Amenity ok={listing.hasPrepaidMeter} icon={<Zap className="h-3.5 w-3.5" />} label="Prepaid meter" />
-                <Amenity ok={listing.hasInsideToilet} icon={<Toilet className="h-3.5 w-3.5" />} label="Inside toilet" />
-                <Amenity ok={listing.hasCCTV} icon={<ShieldCheck className="h-3.5 w-3.5" />} label="CCTV / Security" />
-                <Amenity ok={listing.hasGenerator} icon={<Zap className="h-3.5 w-3.5" />} label="Generator wiring" />
-                <Amenity ok={listing.hasWiFi} icon={<Wifi className="h-3.5 w-3.5" />} label="WiFi-ready" />
-                <Amenity ok={listing.furnished} icon={<Home className="h-3.5 w-3.5" />} label="Furnished" />
+            <section className="mb-6">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Amenities & Facilities</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <Amenity ok={listing.hasBorehole} icon={<Droplet className="h-3.5 w-3.5 text-blue-400" />} label="Borehole water" />
+                <Amenity ok={listing.hasPrepaidMeter} icon={<Zap className="h-3.5 w-3.5 text-amber-400" />} label="Prepaid meter" />
+                <Amenity ok={listing.hasInsideToilet} icon={<Toilet className="h-3.5 w-3.5 text-slate-400" />} label="Inside toilet" />
+                <Amenity ok={listing.hasCCTV} icon={<ShieldCheck className="h-3.5 w-3.5 text-blue-400" />} label="CCTV / Security" />
+                <Amenity ok={listing.hasGenerator} icon={<Zap className="h-3.5 w-3.5 text-amber-400" />} label="Generator wiring" />
+                <Amenity ok={listing.hasWiFi} icon={<Wifi className="h-3.5 w-3.5 text-sky-400" />} label="WiFi-ready" />
+                <Amenity ok={listing.furnished} icon={<Home className="h-3.5 w-3.5 text-slate-400" />} label="Furnished" />
               </div>
             </section>
 
-            <Separator className="my-4" />
+            <Separator className="my-6 bg-slate-800" />
 
             {/* Fee breakdown */}
-            <section className="mb-4">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5" /> Fee breakdown
+            <section className="mb-6">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-blue-400" /> Transparent Regulated Fee Schedule
               </h4>
-              <div className="rounded-lg border border-slate-200 overflow-hidden">
+              <div className="rounded-xl border border-slate-800 overflow-hidden bg-[#070A12]">
                 <FeeRow label="Annual rent" value={formatNaira(listing.annualRent)} bold />
                 <FeeRow label="Caution fee (refundable)" value={formatNaira(listing.cautionFee)} />
                 <FeeRow label="Legal fee" value={formatNaira(listing.legalFee)} />
                 <FeeRow
-                  label={`Agent fee (capped at ${fees ? fees.agentFeeCap !== listing.agentFeeCap ? formatNaira(fees.agentFeeCap) : formatNaira(listing.agentFeeCap) : formatNaira(listing.agentFeeCap)})`}
+                  label={`Agent fee cap (regulated)`}
                   value={formatNaira(listing.agentFeeCap)}
-                  hint="Mapstar-capped per admin policy"
+                  hint="Mapstar-capped ceiling — no excess agent fees"
                 />
                 {fees && (
                   <>
@@ -148,52 +150,58 @@ export default function ListingDetail({ listing, open, onOpenChange, fees }: Lis
                     <FeeRow label="Agreement + e-sign fee" value={formatNaira(fees.agreementFee)} hint="First agreement free per landlord" />
                   </>
                 )}
-                <div className="bg-emerald-50 px-3 py-2 flex items-center justify-between border-t-2 border-emerald-200">
-                  <span className="text-sm font-semibold text-emerald-900">Total tenant pays</span>
-                  <span className="text-lg font-bold text-emerald-700">
+                <div className="bg-[#0E1A34] px-4 py-3 flex items-center justify-between border-t border-blue-500/40">
+                  <span className="text-sm font-semibold text-slate-200">Total payable by tenant</span>
+                  <span className="text-xl font-extrabold text-blue-400">
                     {formatNaira(fees?.totalTenantPays ?? listing.annualRent + listing.cautionFee + listing.legalFee + listing.agentFeeCap)}
                   </span>
                 </div>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1.5 flex items-start gap-1">
-                <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
-                Fees are computed live from the admin-configured FeeConfig table. Deposit held in Paystack escrow until agreement is signed.
+              <p className="text-[10px] text-slate-500 mt-2 flex items-start gap-1">
+                <AlertCircle className="h-3.5 w-3.5 text-blue-400 mt-0.5 shrink-0" />
+                Escrow funds are held securely until digital agreement e-signing and key handover.
               </p>
             </section>
 
             {/* Availability */}
-            <section className="mb-4 grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Available from
+            <section className="mb-6 grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-slate-800 bg-[#070A12] p-3.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                  <Calendar className="h-3 w-3 text-blue-400" /> Available from
                 </div>
-                <div className="text-sm font-medium text-slate-900">
+                <div className="text-sm font-semibold text-white">
                   {new Date(listing.availableFrom).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </div>
               </div>
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" /> Last verified
+              <div className="rounded-xl border border-slate-800 bg-[#070A12] p-3.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-blue-400" /> Verification Status
                 </div>
-                <div className="text-sm font-medium text-slate-900">
+                <div className="text-sm font-semibold text-white">
                   {listing.lastVerifiedAt
-                    ? new Date(listing.lastVerifiedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })
-                    : 'Pending verification'}
+                    ? `Verified ${new Date(listing.lastVerifiedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}`
+                    : 'Pending physical verification'}
                 </div>
               </div>
             </section>
 
-            {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={listing.status === 'RECENTLY_LET'}>
-                {listing.status === 'COMING_SOON' ? 'Notify me when ready' : 'Request inspection'}
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                className="flex-1 h-11 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition cursor-pointer"
+                disabled={listing.status === 'RECENTLY_LET'}
+              >
+                {listing.status === 'COMING_SOON' ? 'Notify me when ready' : 'Request Lodge Inspection'}
               </Button>
-              <Button variant="outline" className="flex-1">
-                Save listing
+              <Button
+                variant="outline"
+                className="flex-1 h-11 border-slate-800 bg-[#070A12] text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
+              >
+                Save to favorites
               </Button>
             </div>
-            <p className="text-[10px] text-slate-500 mt-2 text-center">
-              Landlord contact revealed only after escrow deposit — protects both parties.
+            <p className="text-[10px] text-slate-500 mt-3 text-center">
+              Direct landlord contact details are shared immediately upon inspection request.
             </p>
           </div>
         </ScrollArea>
@@ -204,43 +212,40 @@ export default function ListingDetail({ listing, open, onOpenChange, fees }: Lis
 
 function Spec({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-2.5">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500 mb-1">
+    <div className="rounded-xl border border-slate-800 bg-[#070A12] p-3 flex items-center gap-2.5">
+      <div className="p-2 rounded-lg bg-blue-950/60 border border-blue-900/40 text-blue-400 shrink-0">
         {icon}
-        {label}
       </div>
-      <div className="text-sm font-medium text-slate-900">{value}</div>
+      <div className="min-w-0">
+        <div className="text-[10px] uppercase tracking-wide text-slate-400 font-medium truncate">{label}</div>
+        <div className="text-xs font-bold text-white truncate">{value}</div>
+      </div>
     </div>
   )
 }
 
 function Amenity({ ok, icon, label }: { ok: boolean; icon: React.ReactNode; label: string }) {
   return (
-    <div className={`flex items-center gap-1.5 text-xs ${ok ? 'text-slate-700' : 'text-slate-400 line-through'}`}>
-      <span className={ok ? 'text-emerald-600' : 'text-slate-400'}>{icon}</span>
-      <span>{label}</span>
+    <div className={`rounded-lg border px-3 py-2 flex items-center gap-2 text-xs font-medium ${
+      ok
+        ? 'border-slate-800 bg-[#070A12] text-slate-200'
+        : 'border-slate-800/40 bg-transparent text-slate-600 opacity-50'
+    }`}>
+      {icon}
+      <span className="truncate">{label}</span>
+      {ok && <span className="ml-auto text-[10px] text-blue-400 font-bold">✓</span>}
     </div>
   )
 }
 
-function FeeRow({
-  label,
-  value,
-  bold,
-  hint,
-}: {
-  label: string
-  value: string
-  bold?: boolean
-  hint?: string
-}) {
+function FeeRow({ label, value, bold, hint }: { label: string; value: string; bold?: boolean; hint?: string }) {
   return (
-    <div className="px-3 py-1.5 flex items-center justify-between border-b border-slate-100 last:border-b-0">
+    <div className="px-4 py-2.5 flex items-center justify-between text-xs border-b border-slate-800 last:border-b-0 hover:bg-slate-900/40 transition">
       <div>
-        <div className={`text-xs ${bold ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>{label}</div>
-        {hint && <div className="text-[10px] text-slate-500">{hint}</div>}
+        <div className={bold ? 'font-semibold text-white' : 'text-slate-300'}>{label}</div>
+        {hint && <div className="text-[10px] text-blue-400/80">{hint}</div>}
       </div>
-      <div className={`text-sm ${bold ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>{value}</div>
+      <div className={bold ? 'font-bold text-white font-mono' : 'text-slate-300 font-mono'}>{value}</div>
     </div>
   )
 }

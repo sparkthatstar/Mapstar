@@ -16,6 +16,14 @@ import {
   ChevronDown,
   Shield,
   Plus,
+  Columns2,
+  LayoutGrid,
+  CheckCircle2,
+  Sparkles,
+  Droplet,
+  Zap,
+  ArrowUpDown,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,13 +47,14 @@ import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
 const MapView = dynamic(() => import('@/components/mapstar/map-view'), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full flex items-center justify-center bg-slate-100 text-sm text-slate-500">
-      Loading map…
+    <div className="h-full w-full flex flex-col items-center justify-center bg-[#070A12] text-sm text-slate-400 gap-2">
+      <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <span>Loading Mapstar Radar…</span>
     </div>
   ),
 })
 
-type ViewMode = 'map' | 'list'
+type ViewMode = 'split' | 'list' | 'map'
 
 const CITIES = [
   { id: 'Owerri', label: 'Owerri', center: [5.497, 7.025] as [number, number], state: 'Imo' },
@@ -53,7 +62,7 @@ const CITIES = [
 ]
 
 export default function Home() {
-  const [view, setView] = useState<ViewMode>('map')
+  const [view, setView] = useState<ViewMode>('split')
   const [filters, setFilters] = useState<FilterState>({ ...DEFAULT_FILTERS })
   const [filterOpen, setFilterOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -139,14 +148,25 @@ export default function Home() {
       if (filters.hasWiFi && !l.hasWiFi) return false
       if (searchQuery) {
         const q = searchQuery.toLowerCase()
-        if (!l.title.toLowerCase().includes(q) && !l.area.toLowerCase().includes(q) && !l.city.toLowerCase().includes(q)) return false
+        if (
+          !l.title.toLowerCase().includes(q) &&
+          !l.area.toLowerCase().includes(q) &&
+          !l.city.toLowerCase().includes(q)
+        )
+          return false
       }
       return true
     })
     switch (filters.sort) {
-      case 'price_asc': r = [...r].sort((a, b) => a.annualRent - b.annualRent); break
-      case 'price_desc': r = [...r].sort((a, b) => b.annualRent - a.annualRent); break
-      case 'newest': r = [...r].reverse(); break
+      case 'price_asc':
+        r = [...r].sort((a, b) => a.annualRent - b.annualRent)
+        break
+      case 'price_desc':
+        r = [...r].sort((a, b) => b.annualRent - a.annualRent)
+        break
+      case 'newest':
+        r = [...r].reverse()
+        break
     }
     return r
   }, [listingsData, filters, activeCity, searchQuery])
@@ -168,7 +188,8 @@ export default function Home() {
       stampDuty,
       tenantServiceFee: fees.tenantServiceFeeNaira,
       agreementFee: fees.agreementFeeNaira,
-      totalTenantPays: selected.annualRent + selected.cautionFee + stampDuty + fees.tenantServiceFeeNaira + fees.agreementFeeNaira,
+      totalTenantPays:
+        selected.annualRent + selected.cautionFee + stampDuty + fees.tenantServiceFeeNaira + fees.agreementFeeNaira,
       totalLandlordReceives: selected.annualRent - successFee - agentFeeCap,
     }
   }, [selected, fees])
@@ -178,6 +199,10 @@ export default function Home() {
     setDetailOpen(true)
   }
 
+  function handleSelectFromCard(id: string) {
+    setSelectedId(id)
+  }
+
   function patchFilters(p: Partial<FilterState>) {
     setFilters((f) => ({ ...f, ...p }))
   }
@@ -185,6 +210,7 @@ export default function Home() {
   function resetFilters() {
     setFilters({ ...DEFAULT_FILTERS })
     setSearchQuery('')
+    setActiveCity(null)
   }
 
   const mapCenter: [number, number] = activeCity
@@ -200,58 +226,96 @@ export default function Home() {
     }
   }, [listingsData])
 
+  const activeFilterCount = useMemo(() => {
+    let c = 0
+    if (filters.city !== null) c++
+    if (filters.propertyTypes.length > 0) c += filters.propertyTypes.length
+    if (filters.minRent > 0 || filters.maxRent < 2000000) c++
+    if (filters.statuses.length < 5) c++
+    if (filters.verifiedOnly) c++
+    if (filters.featuredOnly) c++
+    if (filters.fairPriceOnly) c++
+    if (filters.has360) c++
+    if (filters.hasVideo) c++
+    if (filters.furnished) c++
+    if (filters.hasBorehole) c++
+    if (filters.hasPrepaidMeter) c++
+    if (filters.hasInsideToilet) c++
+    if (filters.hasCCTV) c++
+    if (filters.hasGenerator) c++
+    if (filters.hasWiFi) c++
+    return c
+  }, [filters])
+
   return (
-    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
-      {/* Top header */}
-      <header className="shrink-0 bg-white border-b border-slate-200 px-3 py-2 sm:px-4 sm:py-3">
-        <div className="flex items-center justify-between gap-2 sm:gap-3">
+    <div className="flex flex-col h-screen bg-[#070A12] text-slate-100 overflow-hidden">
+      {/* Top Header — Midnight Obsidian with Electric Blue accents */}
+      <header className="shrink-0 bg-[#090D18] border-b border-slate-800/90 px-3 py-2 sm:px-5 sm:py-2.5 z-20">
+        <div className="flex items-center justify-between gap-2 sm:gap-4">
           {/* Logo */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="relative h-8 w-8 flex items-center justify-center">
-              <svg viewBox="0 0 32 32" className="h-8 w-8">
+          <div className="flex items-center gap-2.5 shrink-0 cursor-pointer" onClick={() => resetFilters()}>
+            <div className="relative h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-950 p-1 flex items-center justify-center shadow-lg shadow-blue-600/30 border border-blue-500/40">
+              <svg viewBox="0 0 32 32" className="h-5 w-5">
                 <path
                   d="M16 2 L19.6 12.2 L30.4 12.5 L21.7 19.0 L24.7 29.3 L16 23.2 L7.3 29.3 L10.3 19.0 L1.6 12.5 L12.4 12.2 Z"
-                  fill="#10B981"
-                  stroke="#047857"
+                  fill="#60A5FA"
+                  stroke="#1D4ED8"
                   strokeWidth="1.2"
                   strokeLinejoin="round"
                 />
               </svg>
             </div>
             <div className="hidden sm:block">
-              <div className="text-base font-bold text-slate-900 leading-none">Mapstar</div>
-              <div className="text-[10px] text-slate-500 leading-none mt-0.5">Find lodges. Skip the agent fees.</div>
+              <div className="text-base font-extrabold text-white tracking-tight flex items-center gap-1 leading-none">
+                Mapstar <span className="text-[10px] font-mono text-blue-400 bg-blue-950/80 px-1.5 py-0.2 rounded border border-blue-800/50">PRO</span>
+              </div>
+              <div className="text-[10px] text-slate-400 leading-none mt-1">Verified Lodges · Regulated Fees</div>
             </div>
           </div>
 
           {/* Search bar */}
-          <div className="flex-1 relative max-w-md">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <div className="flex-1 relative max-w-lg">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Owerri, Enugu, area, or lodge..."
-              className="h-9 pl-8 text-sm"
+              placeholder="Search lodge, area (e.g. Eziobodo, New Haven, Ikenegbu)..."
+              className="h-9 pl-9 pr-8 text-xs bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 rounded-xl"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Filters toggle */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Filter Toggle Button */}
             <Button
               variant="outline"
               size="sm"
-              className="h-9 text-xs"
+              className={`h-9 text-xs border-slate-800 bg-[#070A12] hover:bg-slate-850 hover:border-blue-500/60 cursor-pointer ${
+                activeFilterCount > 0 ? 'text-blue-400 border-blue-500/60 bg-blue-950/30' : 'text-slate-300'
+              }`}
               onClick={() => setFilterOpen(true)}
             >
               <SlidersHorizontal className="h-3.5 w-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
             </Button>
 
             {/* List Property Action Button */}
             <Button
               size="sm"
-              className="h-9 px-2.5 sm:px-3 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 shadow-xs"
+              className="h-9 px-3 text-xs font-semibold text-blue-300 bg-blue-950/60 hover:bg-blue-900/60 border border-blue-700/60 shadow-xs cursor-pointer transition"
               onClick={() => {
                 if (!user) {
                   setAuthMode('login')
@@ -261,64 +325,58 @@ export default function Home() {
                 }
               }}
             >
-              <Plus className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-              <span>List Property</span>
+              <Plus className="h-3.5 w-3.5 mr-1 text-blue-400" />
+              <span className="hidden md:inline">List Property</span>
+              <span className="md:hidden">List</span>
             </Button>
 
             {/* User Profile or Login/Signup */}
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 gap-1.5 pr-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-semibold text-white">
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 pr-2 border-slate-800 bg-[#070A12] text-slate-200 hover:bg-slate-850">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-[10px] font-semibold text-white shadow-xs">
                       {(user.fullName || user.email || '?').charAt(0).toUpperCase()}
                     </span>
-                    <span className="hidden sm:inline max-w-[100px] truncate text-xs">
+                    <span className="hidden sm:inline max-w-[100px] truncate text-xs font-medium">
                       {user.fullName || user.email}
                     </span>
                     <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-56 bg-[#090D18] border-slate-800 text-slate-100 shadow-2xl">
                   <DropdownMenuLabel className="text-xs">
                     <div className="flex flex-col">
-                      <span className="font-medium text-slate-900 truncate">
+                      <span className="font-semibold text-white truncate">
                         {user.fullName || 'Unnamed user'}
                       </span>
-                      <span className="text-slate-500 font-normal truncate">{user.email}</span>
-                      <span className="mt-1 inline-flex w-fit items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                        {user.role === 'ADMIN' ? 'Admin' : user.role === 'LANDLORD' ? 'Landlord' : user.role === 'AGENT' ? 'Agent' : 'User'}
+                      <span className="text-slate-400 font-normal truncate text-[11px]">{user.email}</span>
+                      <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-blue-950/80 border border-blue-800/60 px-2 py-0.5 text-[9px] font-semibold text-blue-300">
+                        {user.role === 'ADMIN' ? 'Administrator' : user.role === 'LANDLORD' ? 'Landlord / Owner' : user.role === 'AGENT' ? 'Verified Agent' : 'Student / Tenant'}
                       </span>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
+                  <DropdownMenuSeparator className="bg-slate-800" />
                   <DropdownMenuItem
-                    className="text-xs font-medium text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-800"
+                    className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:bg-blue-950/40 cursor-pointer"
                     onClick={() => setListPropertyOpen(true)}
                   >
-                    <Plus className="h-3.5 w-3.5 mr-2 text-emerald-600" /> List a Property
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs" disabled>
-                    <UserIcon className="h-3.5 w-3.5 mr-2" /> My saved lodges
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs" disabled>
-                    <Star className="h-3.5 w-3.5 mr-2" /> Saved searches
+                    <Plus className="h-3.5 w-3.5 mr-2" /> List a Property
                   </DropdownMenuItem>
 
-                  {/* Admin Control Portal is ONLY accessible for the special ADMIN account */}
                   {user.role === 'ADMIN' && (
                     <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild className="text-xs text-purple-700 font-semibold focus:text-purple-800 focus:bg-purple-50 cursor-pointer">
+                      <DropdownMenuSeparator className="bg-slate-800" />
+                      <DropdownMenuItem asChild className="text-xs text-sky-400 font-semibold hover:bg-sky-950/40 cursor-pointer">
                         <Link href="/admin">
-                          <Shield className="h-3.5 w-3.5 mr-2 text-purple-600" /> Admin Control Portal
+                          <Shield className="h-3.5 w-3.5 mr-2" /> Admin Control Portal
                         </Link>
                       </DropdownMenuItem>
                     </>
                   )}
 
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-xs text-red-600 focus:text-red-700 cursor-pointer" onClick={handleLogout}>
+                  <DropdownMenuSeparator className="bg-slate-800" />
+                  <DropdownMenuItem className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 cursor-pointer" onClick={handleLogout}>
                     <LogOut className="h-3.5 w-3.5 mr-2" /> Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -328,16 +386,22 @@ export default function Home() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 px-2.5 sm:px-3 text-xs font-medium text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 border-slate-300"
-                  onClick={() => { setAuthMode('login'); setAuthOpen(true) }}
+                  className="h-9 px-2.5 sm:px-3 text-xs font-medium text-slate-300 hover:text-white border-slate-800 bg-[#070A12] hover:bg-slate-850 cursor-pointer"
+                  onClick={() => {
+                    setAuthMode('login')
+                    setAuthOpen(true)
+                  }}
                 >
-                  <LogIn className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                  <LogIn className="h-3.5 w-3.5 mr-1 text-blue-400" />
                   <span>Log in</span>
                 </Button>
                 <Button
                   size="sm"
-                  className="h-9 px-2.5 sm:px-3 bg-emerald-600 hover:bg-emerald-700 text-xs font-medium text-white shadow-sm"
-                  onClick={() => { setAuthMode('signup'); setAuthOpen(true) }}
+                  className="h-9 px-2.5 sm:px-3 bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/30 cursor-pointer transition"
+                  onClick={() => {
+                    setAuthMode('signup')
+                    setAuthOpen(true)
+                  }}
                 >
                   <UserPlus className="h-3.5 w-3.5 mr-1" />
                   <span>Sign up</span>
@@ -347,126 +411,233 @@ export default function Home() {
           </div>
         </div>
 
-        {/* City selector + counts */}
-        <div className="flex items-center gap-2 mt-2 overflow-x-auto pb-1">
-          <div className="flex items-center gap-1 shrink-0">
+        {/* City Filter & Status Ticker */}
+        <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-850/80 overflow-x-auto text-xs">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setActiveCity(null)}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
-                activeCity === null ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+                activeCity === null
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30 font-semibold'
+                  : 'bg-[#070A12] text-slate-400 hover:text-slate-200 border border-slate-800/80'
               }`}
             >
-              All
+              All Cities
             </button>
             {CITIES.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setActiveCity(c.id)}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
-                  activeCity === c.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+                  activeCity === c.id
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30 font-semibold'
+                    : 'bg-[#070A12] text-slate-400 hover:text-slate-200 border border-slate-800/80'
                 }`}
               >
                 {c.label}
               </button>
             ))}
           </div>
-          <div className="h-4 w-px bg-slate-200 shrink-0" />
-          <div className="flex items-center gap-2 text-[10px] text-slate-500 shrink-0">
-            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />{counts.available} available</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />{counts.comingSoon} soon</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />{counts.inspection} inspection</span>
+
+          <div className="flex items-center gap-3 text-[11px] text-slate-400 shrink-0">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-xs shadow-emerald-400/50" />
+              <strong className="text-slate-200 font-semibold">{counts.available}</strong> Available
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400 shadow-xs shadow-amber-400/50" />
+              <strong className="text-slate-200 font-semibold">{counts.comingSoon}</strong> Soon
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-400 shadow-xs shadow-blue-400/50" />
+              <strong className="text-slate-200 font-semibold">{counts.inspection}</strong> In Inspection
+            </span>
           </div>
         </div>
       </header>
 
-      {/* View toggle — sticky just below header */}
-      <div className="shrink-0 bg-white border-b border-slate-200 px-3 py-1.5 flex items-center justify-between">
-        <div className="text-xs text-slate-600">
-          <span className="font-semibold text-slate-900">{filtered.length}</span> lodges match
+      {/* Main Body — Rearranged Layout: Houses on the LEFT side, Balanced Map on the RIGHT side */}
+      <main className="flex-1 min-h-0 relative flex flex-col">
+        {/* Mobile View Toggle Bar (visible only below lg) */}
+        <div className="lg:hidden shrink-0 bg-[#090D18] border-b border-slate-800 px-3 py-1.5 flex items-center justify-between">
+          <div className="text-xs text-slate-400">
+            <span className="font-bold text-blue-400">{filtered.length}</span> lodges found
+          </div>
+          <div className="inline-flex rounded-lg border border-slate-800 bg-[#070A12] p-0.5">
+            <button
+              onClick={() => setView('split')}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+                view === 'split' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400'
+              }`}
+            >
+              <Columns2 className="h-3.5 w-3.5" /> Split
+            </button>
+            <button
+              onClick={() => setView('list')}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+                view === 'list' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400'
+              }`}
+            >
+              <List className="h-3.5 w-3.5" /> List
+            </button>
+            <button
+              onClick={() => setView('map')}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+                view === 'map' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400'
+              }`}
+            >
+              <MapIcon className="h-3.5 w-3.5" /> Map
+            </button>
+          </div>
         </div>
-        <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5">
-          <button
-            onClick={() => setView('map')}
-            className={`inline-flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition ${
-              view === 'map' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-600'
-            }`}
-          >
-            <MapIcon className="h-3.5 w-3.5" /> Map
-          </button>
-          <button
-            onClick={() => setView('list')}
-            className={`inline-flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition ${
-              view === 'list' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-600'
-            }`}
-          >
-            <List className="h-3.5 w-3.5" /> List
-          </button>
-        </div>
-      </div>
 
-      {/* Main body */}
-      <main className="flex-1 min-h-0 relative">
-        {view === 'map' ? (
-          <div className="absolute inset-0 flex">
-            <div className="flex-1 h-full">
-              <MapView
-                listings={filtered}
-                selectedId={selectedId}
-                onSelect={openListing}
-                center={mapCenter}
-                zoom={13}
-              />
-            </div>
-            {/* Right-side list rail on desktop */}
-            <aside className="hidden lg:block w-96 border-l border-slate-200 bg-white overflow-y-auto">
-              <div className="p-3 space-y-2">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold px-1">
-                  {filtered.length} lodges in view
-                </div>
-                {filtered.length === 0 ? (
-                  <EmptyState onReset={resetFilters} />
-                ) : (
-                  filtered.map((l) => (
-                    <ListingCard
-                      key={l.id}
-                      listing={l}
-                      selected={selectedId === l.id}
-                      onSelect={openListing}
-                    />
-                  ))
+        {/* Workspace Container */}
+        <div className="flex-1 min-h-0 relative flex overflow-hidden">
+          {/* =========================================================================
+              LEFT SIDE: Listed Houses Feed (Occupies the Left side as explicitly requested)
+             ========================================================================= */}
+          <div
+            className={`flex flex-col h-full bg-[#070A12] overflow-hidden transition-all duration-300 ${
+              view === 'map'
+                ? 'hidden'
+                : view === 'list'
+                ? 'w-full'
+                : 'w-full lg:w-[54%] xl:w-[52%] 2xl:w-[50%]'
+            }`}
+          >
+            {/* Top Toolbar for the Left Listings Pane */}
+            <div className="shrink-0 bg-[#090D18] border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between gap-3 z-10">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white tracking-wide">
+                  {filtered.length} {filtered.length === 1 ? 'Lodge' : 'Lodges'}
+                </span>
+                {activeCity && (
+                  <span className="text-xs text-blue-400 font-medium">in {activeCity}</span>
+                )}
+                {filters.sort && (
+                  <span className="hidden sm:inline text-[11px] text-slate-500">
+                    · sorted by{' '}
+                    {filters.sort === 'price_asc'
+                      ? 'price (low to high)'
+                      : filters.sort === 'price_desc'
+                      ? 'price (high to low)'
+                      : 'newest'}
+                  </span>
                 )}
               </div>
-            </aside>
-          </div>
-        ) : (
-          <div className="absolute inset-0 overflow-y-auto bg-slate-50">
-            <div className="max-w-3xl mx-auto p-3 sm:p-4 space-y-2.5">
-              {/* Featured carousel */}
-              {filtered.some((l) => l.featured) && (
-                <section className="mb-2">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 px-1">
-                    <Star className="h-3.5 w-3.5 text-cyan-500 fill-cyan-500" /> Featured
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-2.5">
-                    {filtered.filter((l) => l.featured).slice(0, 4).map((l) => (
-                      <ListingCard
-                        key={l.id}
-                        listing={l}
-                        selected={selectedId === l.id}
-                        onSelect={openListing}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
 
-              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1 px-1">
-                All lodges
+              {/* View options & Quick Sort */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={filters.sort}
+                  onChange={(e) => patchFilters({ sort: e.target.value })}
+                  className="h-7 rounded-lg border border-slate-800 bg-[#070A12] px-2 text-[11px] text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="price_asc">Price: Low to High</option>
+                  <option value="price_desc">Price: High to Low</option>
+                </select>
+
+                {/* Desktop View Switcher */}
+                <div className="hidden lg:inline-flex rounded-lg border border-slate-800 bg-[#070A12] p-0.5">
+                  <button
+                    onClick={() => setView('split')}
+                    className={`p-1 rounded transition cursor-pointer ${
+                      view === 'split' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Split view (List on left, map on right)"
+                  >
+                    <Columns2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setView('list')}
+                    className={`p-1 rounded transition cursor-pointer ${
+                      view === 'list' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Full listings view"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setView('map')}
+                    className={`p-1 rounded transition cursor-pointer ${
+                      view === 'map' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Full map view"
+                  >
+                    <MapIcon className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
+            </div>
+
+            {/* Quick Filter Tag Chips */}
+            <div className="shrink-0 bg-[#070A12] px-4 py-1.5 border-b border-slate-850 flex items-center gap-1.5 overflow-x-auto text-[11px]">
+              <span className="text-[10px] uppercase font-bold text-slate-500 mr-1 shrink-0">Quick filters:</span>
+              <button
+                onClick={() => patchFilters({ verifiedOnly: !filters.verifiedOnly })}
+                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                  filters.verifiedOnly
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                Verified Only
+              </button>
+              <button
+                onClick={() => patchFilters({ fairPriceOnly: !filters.fairPriceOnly })}
+                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                  filters.fairPriceOnly
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                Fair Price
+              </button>
+              <button
+                onClick={() => patchFilters({ hasBorehole: !filters.hasBorehole })}
+                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                  filters.hasBorehole
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                Borehole Water
+              </button>
+              <button
+                onClick={() => patchFilters({ hasPrepaidMeter: !filters.hasPrepaidMeter })}
+                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                  filters.hasPrepaidMeter
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                Prepaid NEPA
+              </button>
+              <button
+                onClick={() => patchFilters({ hasWiFi: !filters.hasWiFi })}
+                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                  filters.hasWiFi
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                WiFi Ready
+              </button>
+            </div>
+
+            {/* Scrollable Listings Feed */}
+            <div className="flex-1 overflow-y-auto p-3.5 sm:p-4">
               {filtered.length === 0 ? (
                 <EmptyState onReset={resetFilters} />
               ) : (
-                <div className="grid sm:grid-cols-2 gap-2.5">
+                <div
+                  className={`grid gap-3 ${
+                    view === 'list'
+                      ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-7xl mx-auto'
+                      : 'grid-cols-1 xl:grid-cols-2'
+                  }`}
+                >
                   {filtered.map((l) => (
                     <ListingCard
                       key={l.id}
@@ -479,10 +650,31 @@ export default function Home() {
               )}
             </div>
           </div>
-        )}
+
+          {/* =========================================================================
+              RIGHT SIDE: Balanced, High-Tech Map (Framed on the Right side)
+             ========================================================================= */}
+          <div
+            className={`h-full relative overflow-hidden border-l border-slate-850 transition-all duration-300 ${
+              view === 'list'
+                ? 'hidden'
+                : view === 'map'
+                ? 'w-full'
+                : 'hidden lg:flex flex-1'
+            }`}
+          >
+            <MapView
+              listings={filtered}
+              selectedId={selectedId}
+              onSelect={openListing}
+              center={mapCenter}
+              zoom={13}
+            />
+          </div>
+        </div>
       </main>
 
-      {/* Drawables */}
+      {/* Drawers & Dialogs */}
       <FilterPanel
         open={filterOpen}
         onOpenChange={setFilterOpen}
@@ -514,13 +706,21 @@ export default function Home() {
 
 function EmptyState({ onReset }: { onReset: () => void }) {
   return (
-    <div className="text-center py-12 px-4">
-      <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-        <Search className="h-5 w-5 text-slate-400" />
+    <div className="text-center py-16 px-4 rounded-2xl bg-[#090D18] border border-slate-800/80 my-4 max-w-md mx-auto">
+      <div className="mx-auto h-12 w-12 rounded-full bg-blue-950/60 border border-blue-800/60 flex items-center justify-center mb-3">
+        <Search className="h-5 w-5 text-blue-400" />
       </div>
-      <h3 className="text-sm font-semibold text-slate-700">No lodges match</h3>
-      <p className="text-xs text-slate-500 mt-1 mb-3">Try widening your filters or removing the price cap.</p>
-      <Button size="sm" variant="outline" onClick={onReset}>Reset filters</Button>
+      <h3 className="text-base font-bold text-white">No lodges match your filters</h3>
+      <p className="text-xs text-slate-400 mt-1.5 mb-5 max-w-xs mx-auto">
+        Try adjusting your budget range, changing the city, or removing amenity restrictions.
+      </p>
+      <Button
+        size="sm"
+        onClick={onReset}
+        className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 h-9 shadow-md shadow-blue-600/30 cursor-pointer"
+      >
+        Reset all filters
+      </Button>
     </div>
   )
 }

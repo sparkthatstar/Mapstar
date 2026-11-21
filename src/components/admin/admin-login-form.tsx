@@ -34,15 +34,15 @@ export default function AdminLoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-[#070A12] px-4 py-8">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="relative h-14 w-14 flex items-center justify-center rounded-2xl bg-emerald-600 ring-4 ring-emerald-600/20">
+          <div className="relative h-14 w-14 flex items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-950 border border-blue-500/40 shadow-xl shadow-blue-600/30">
             <Shield className="h-7 w-7 text-white" />
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-white">Mapstar Admin</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className="mt-4 text-2xl font-bold text-white tracking-tight">Mapstar Admin</h1>
+          <p className="mt-1 text-xs text-slate-400">
             Restricted access · Authorized personnel only
           </p>
         </div>
@@ -50,20 +50,20 @@ export default function AdminLoginForm() {
         {/* Login card */}
         <form
           onSubmit={submit}
-          className="rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-white/10"
+          className="rounded-2xl bg-[#090D18] p-6 shadow-2xl border border-slate-800"
         >
-          <h2 className="text-lg font-semibold text-slate-900 mb-1">Sign in</h2>
-          <p className="text-xs text-slate-500 mb-5">
+          <h2 className="text-lg font-semibold text-white mb-1">Administrator Portal</h2>
+          <p className="text-xs text-slate-400 mb-5">
             Use your administrator credentials to access the control panel.
           </p>
 
           <div className="space-y-3">
             <div>
-              <Label htmlFor="email" className="text-xs font-medium text-slate-700">
+              <Label htmlFor="email" className="text-xs font-medium text-slate-300">
                 Admin email
               </Label>
               <div className="relative mt-1">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input
                   id="email"
                   type="email"
@@ -71,7 +71,7 @@ export default function AdminLoginForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@example.com"
-                  className="pl-9"
+                  className="pl-9 bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
                   autoComplete="email"
                   autoFocus
                 />
@@ -79,11 +79,11 @@ export default function AdminLoginForm() {
             </div>
 
             <div>
-              <Label htmlFor="password" className="text-xs font-medium text-slate-700">
+              <Label htmlFor="password" className="text-xs font-medium text-slate-300">
                 Password
               </Label>
               <div className="relative mt-1">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input
                   id="password"
                   type="password"
@@ -91,7 +91,7 @@ export default function AdminLoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="pl-9"
+                  className="pl-9 bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
                   autoComplete="current-password"
                 />
               </div>
@@ -99,7 +99,7 @@ export default function AdminLoginForm() {
           </div>
 
           {error && (
-            <div className="mt-3 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+            <div className="mt-3 rounded-lg bg-red-950/40 border border-red-800/60 px-3 py-2 text-xs text-red-300">
               {error}
             </div>
           )}
@@ -107,7 +107,7 @@ export default function AdminLoginForm() {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full mt-5 bg-emerald-600 hover:bg-emerald-700"
+            className="w-full mt-5 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-md shadow-blue-600/30 cursor-pointer transition"
           >
             {loading ? (
               <>
@@ -118,15 +118,15 @@ export default function AdminLoginForm() {
             )}
           </Button>
 
-          <p className="mt-4 text-[10px] text-slate-400 text-center">
-            All admin actions are logged. Unauthorized access is prohibited.
+          <p className="mt-4 text-[10px] text-slate-500 text-center">
+            All admin actions are logged and audited.
           </p>
         </form>
 
         <div className="mt-6 text-center">
           <a
             href="/"
-            className="text-xs text-slate-500 hover:text-emerald-400 transition"
+            className="text-xs text-slate-400 hover:text-blue-400 transition"
           >
             ← Back to Mapstar public site
           </a>

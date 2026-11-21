@@ -10,7 +10,7 @@ import L from 'leaflet'
  *   🔵 blue   = UNDER_INSPECTION
  *   ⚪ grey   = RECENTLY_LET
  *   🔴 red    = VERIFIED (physically visited by Mapstar rep)
- *   💎 ring   = FEATURED (paid boost) — adds a cyan ring around the star
+ *   💎 ring   = FEATURED (paid boost) — adds an electric/cyan halo around the star
  */
 export type PinColor = 'green' | 'orange' | 'blue' | 'grey' | 'red'
 
@@ -18,16 +18,16 @@ const COLOR_HEX: Record<PinColor, string> = {
   green: '#10B981',
   orange: '#F59E0B',
   blue: '#3B82F6',
-  grey: '#9CA3AF',
-  red: '#EF4444',
+  grey: '#64748B',
+  red: '#F43F5E',
 }
 
 const COLOR_DARK: Record<PinColor, string> = {
-  green: '#047857',
-  orange: '#B45309',
-  blue: '#1E40AF',
-  grey: '#4B5563',
-  red: '#B91C1C',
+  green: '#064E3B',
+  orange: '#78350F',
+  blue: '#1E3A8A',
+  grey: '#334155',
+  red: '#881337',
 }
 
 export function createStarIcon(
@@ -37,13 +37,15 @@ export function createStarIcon(
   const size = opts.size ?? 32
   const fill = COLOR_HEX[color]
   const stroke = COLOR_DARK[color]
-  const ringStroke = opts.featured ? '#06B6D4' : 'none'
-  const ringWidth = opts.featured ? 3 : 0
-  const scale = opts.selected ? 1.25 : 1
+  const ringStroke = opts.featured ? '#38BDF8' : 'none'
+  const ringWidth = opts.featured ? 3.5 : 0
+  const scale = opts.selected ? 1.3 : 1
   const dim = size * scale
   const glow = opts.selected
-    ? `filter: drop-shadow(0 0 6px ${fill});`
-    : `filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));`
+    ? `filter: drop-shadow(0 0 10px #3B82F6) drop-shadow(0 0 16px rgba(59, 130, 246, 0.7)); z-index: 999;`
+    : opts.featured
+    ? `filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.7));`
+    : `filter: drop-shadow(0 2px 6px rgba(0,0,0,0.8));`
 
   // 5-point star SVG path, centered in a 32x32 viewBox
   const starPath =
@@ -55,16 +57,20 @@ export function createStarIcon(
   height: ${dim}px;
   ${glow}
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 ">
   <svg width="${dim}" height="${dim}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-    ${opts.featured ? `<circle cx="16" cy="16" r="15" fill="none" stroke="${ringStroke}" stroke-width="${ringWidth}" opacity="0.9"/>` : ''}
+    ${opts.featured ? `<circle cx="16" cy="16" r="14.5" fill="none" stroke="${ringStroke}" stroke-width="${ringWidth}" opacity="0.95"/>` : ''}
+    ${opts.selected ? `<circle cx="16" cy="16" r="15" fill="rgba(59, 130, 246, 0.35)" stroke="#60A5FA" stroke-width="1.8"/>` : ''}
     <path d="${starPath}"
       fill="${fill}"
       stroke="${stroke}"
       stroke-width="1.2"
       stroke-linejoin="round"
     />
-    <circle cx="16" cy="16" r="2.4" fill="#ffffff" opacity="0.9"/>
+    <circle cx="16" cy="16" r="2.4" fill="#ffffff" opacity="0.95"/>
   </svg>
 </div>
 `.trim()

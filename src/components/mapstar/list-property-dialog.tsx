@@ -59,16 +59,16 @@ export default function ListPropertyDialog({
     user?.role === 'AGENT' ? 'AGENT' : 'LANDLORD'
   )
 
-  // Listing details
+  // Listing fields
   const [title, setTitle] = useState('')
   const [city, setCity] = useState<'Owerri' | 'Enugu'>('Owerri')
-  const [area, setArea] = useState('')
+  const [area, setArea] = useState('Eziobodo (FUTO)')
   const [address, setAddress] = useState('')
   const [propertyType, setPropertyType] = useState('SELF_CONTAINED')
   const [annualRent, setAnnualRent] = useState('')
   const [cautionFee, setCautionFee] = useState('')
-  const [status, setStatus] = useState<'AVAILABLE' | 'COMING_SOON' | 'UNDER_INSPECTION'>('AVAILABLE')
   const [description, setDescription] = useState('')
+  const [status, setStatus] = useState<'AVAILABLE' | 'COMING_SOON' | 'UNDER_INSPECTION'>('AVAILABLE')
 
   // Amenities
   const [hasBorehole, setHasBorehole] = useState(true)
@@ -76,10 +76,10 @@ export default function ListPropertyDialog({
   const [hasInsideToilet, setHasInsideToilet] = useState(true)
   const [hasGenerator, setHasGenerator] = useState(false)
   const [hasCCTV, setHasCCTV] = useState(false)
-  const [furnished, setFurnished] = useState(false)
   const [hasWiFi, setHasWiFi] = useState(false)
+  const [furnished, setFurnished] = useState(false)
 
-  // Submission state
+  // Status
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -88,19 +88,9 @@ export default function ListPropertyDialog({
     e.preventDefault()
     setError(null)
 
-    if (!title.trim()) {
-      setError('Please provide a listing title')
-      return
-    }
-
-    if (!area.trim()) {
-      setError('Please select or specify the neighborhood/area')
-      return
-    }
-
-    const rent = Number(annualRent)
-    if (!rent || rent <= 0) {
-      setError('Please enter a valid annual rent in Naira')
+    const rentNum = parseInt(annualRent, 10)
+    if (isNaN(rentNum) || rentNum <= 0) {
+      setError('Please specify a valid annual rent in Naira.')
       return
     }
 
@@ -114,28 +104,26 @@ export default function ListPropertyDialog({
           role,
           title,
           city,
-          area: area.trim(),
-          address: address.trim(),
+          state: city === 'Owerri' ? 'Imo' : 'Enugu',
+          area,
+          address: address || `${area}, ${city}`,
           propertyType,
-          annualRent: rent,
-          cautionFee: Number(cautionFee) || Math.round(rent * 0.1),
+          annualRent: rentNum,
+          cautionFee: parseInt(cautionFee, 10) || Math.round(rentNum * 0.1),
+          description: description || `Modern ${propertyType.toLowerCase()} located in ${area}, ${city}.`,
           status,
-          description,
           hasBorehole,
           hasPrepaidMeter,
           hasInsideToilet,
           hasGenerator,
           hasCCTV,
-          furnished,
           hasWiFi,
+          furnished,
         }),
       })
 
       const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to list property')
-      }
+      if (!res.ok) throw new Error(data.error || 'Failed to publish listing')
 
       setSuccess(true)
       onListingCreated(data.listing, data.user)
@@ -143,10 +131,7 @@ export default function ListPropertyDialog({
       setTimeout(() => {
         setSuccess(false)
         onOpenChange(false)
-        // Reset form
         setTitle('')
-        setArea('')
-        setAddress('')
         setAnnualRent('')
         setCautionFee('')
         setDescription('')
@@ -160,17 +145,17 @@ export default function ListPropertyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto p-0 border-slate-200 z-[9999]">
+      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto p-0 bg-[#090D18] border-slate-800 text-slate-100 shadow-2xl shadow-black/90 z-[9999]">
         {/* Banner */}
-        <div className="bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 px-6 py-5 text-white sticky top-0 z-10">
+        <div className="bg-gradient-to-r from-blue-700 via-blue-900 to-slate-950 px-6 py-5 text-white sticky top-0 z-10 border-b border-slate-800">
           <div className="flex items-center gap-2 mb-1">
-            <div className="h-7 w-7 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-              <Building className="h-4 w-4 text-white" />
+            <div className="h-7 w-7 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+              <Building className="h-4 w-4 text-blue-400" />
             </div>
-            <span className="font-bold tracking-tight text-lg">List Your Property</span>
+            <span className="font-bold tracking-tight text-lg text-white">List Your Property</span>
           </div>
           <DialogTitle className="sr-only">List Your Property</DialogTitle>
-          <DialogDescription className="text-emerald-100 text-xs">
+          <DialogDescription className="text-blue-200/80 text-xs">
             Connect directly with verified tenants looking for lodges across Imo & Enugu.
           </DialogDescription>
         </div>
@@ -178,46 +163,46 @@ export default function ListPropertyDialog({
         <div className="p-6">
           {success ? (
             <div className="py-8 text-center space-y-3">
-              <div className="mx-auto h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center">
-                <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+              <div className="mx-auto h-12 w-12 rounded-full bg-blue-950/60 border border-blue-800/60 flex items-center justify-center">
+                <CheckCircle2 className="h-7 w-7 text-blue-400" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">Property Listed Successfully!</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              <h3 className="text-base font-bold text-white">Property Listed Successfully!</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
                 Your listing is now live on the Mapstar map and list views for verified tenants to explore.
               </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               {error && (
-                <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
+                <div className="flex items-start gap-2 rounded-lg border border-red-800/60 bg-red-950/40 p-2.5 text-xs text-red-300">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
                   <div className="flex-1 leading-snug">{error}</div>
                 </div>
               )}
 
               {/* ROLE SELECTION */}
               <div className="space-y-2">
-                <Label className="text-xs font-semibold text-slate-800 block">
+                <Label className="text-xs font-semibold text-slate-300 block">
                   1. I am listing this property as a:
                 </Label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setRole('LANDLORD')}
-                    className={`flex flex-col p-3 rounded-lg border text-left transition ${
+                    className={`flex flex-col p-3 rounded-xl border text-left transition cursor-pointer ${
                       role === 'LANDLORD'
-                        ? 'border-emerald-600 bg-emerald-50/70 ring-1 ring-emerald-600'
-                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                        ? 'border-blue-500 bg-blue-950/60 ring-1 ring-blue-500 text-blue-200'
+                        : 'border-slate-800 bg-[#070A12] hover:bg-slate-800 text-slate-400'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5 font-semibold text-xs text-slate-900">
-                        <Home className="h-4 w-4 text-emerald-600" />
+                      <div className="flex items-center gap-1.5 font-semibold text-xs text-white">
+                        <Home className="h-4 w-4 text-blue-400" />
                         <span>Landlord / Owner</span>
                       </div>
-                      {role === 'LANDLORD' && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                      {role === 'LANDLORD' && <Check className="h-3.5 w-3.5 text-blue-400" />}
                     </div>
-                    <span className="text-[11px] text-slate-500 leading-tight">
+                    <span className="text-[11px] text-slate-400 leading-tight">
                       Direct owner listing. 0% agent fee charged to tenants.
                     </span>
                   </button>
@@ -225,20 +210,20 @@ export default function ListPropertyDialog({
                   <button
                     type="button"
                     onClick={() => setRole('AGENT')}
-                    className={`flex flex-col p-3 rounded-lg border text-left transition ${
+                    className={`flex flex-col p-3 rounded-xl border text-left transition cursor-pointer ${
                       role === 'AGENT'
-                        ? 'border-emerald-600 bg-emerald-50/70 ring-1 ring-emerald-600'
-                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                        ? 'border-blue-500 bg-blue-950/60 ring-1 ring-blue-500 text-blue-200'
+                        : 'border-slate-800 bg-[#070A12] hover:bg-slate-800 text-slate-400'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5 font-semibold text-xs text-slate-900">
-                        <Briefcase className="h-4 w-4 text-teal-600" />
+                      <div className="flex items-center gap-1.5 font-semibold text-xs text-white">
+                        <Briefcase className="h-4 w-4 text-sky-400" />
                         <span>Verified Agent</span>
                       </div>
-                      {role === 'AGENT' && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                      {role === 'AGENT' && <Check className="h-3.5 w-3.5 text-blue-400" />}
                     </div>
-                    <span className="text-[11px] text-slate-500 leading-tight">
+                    <span className="text-[11px] text-slate-400 leading-tight">
                       Fee-regulated agent. Admin-capped fee structure applies.
                     </span>
                   </button>
@@ -246,13 +231,13 @@ export default function ListPropertyDialog({
               </div>
 
               {/* BASIC DETAILS */}
-              <div className="space-y-3 pt-2 border-t border-slate-100">
-                <Label className="text-xs font-semibold text-slate-800 block">
+              <div className="space-y-3 pt-2 border-t border-slate-800">
+                <Label className="text-xs font-semibold text-slate-300 block">
                   2. Lodge Details
                 </Label>
 
                 <div className="space-y-1">
-                  <Label htmlFor="prop-title" className="text-xs text-slate-600 font-medium">
+                  <Label htmlFor="prop-title" className="text-xs text-slate-400 font-medium">
                     Property Title
                   </Label>
                   <Input
@@ -261,13 +246,13 @@ export default function ListPropertyDialog({
                     placeholder="e.g. Clean Self-Con with constant borehole water near FUTO gate"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="h-9 text-xs"
+                    className="h-9 text-xs bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label htmlFor="prop-city" className="text-xs text-slate-600 font-medium">
+                    <Label htmlFor="prop-city" className="text-xs text-slate-400 font-medium">
                       City
                     </Label>
                     <select
@@ -278,7 +263,7 @@ export default function ListPropertyDialog({
                         setCity(newCity)
                         setArea(POPULAR_AREAS[newCity][0] || '')
                       }}
-                      className="w-full h-9 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                      className="w-full h-9 rounded-md border border-slate-800 bg-[#070A12] px-3 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                     >
                       <option value="Owerri">Owerri (Imo)</option>
                       <option value="Enugu">Enugu (Enugu)</option>
@@ -286,14 +271,14 @@ export default function ListPropertyDialog({
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="prop-type" className="text-xs text-slate-600 font-medium">
+                    <Label htmlFor="prop-type" className="text-xs text-slate-400 font-medium">
                       Lodge Type
                     </Label>
                     <select
                       id="prop-type"
                       value={propertyType}
                       onChange={(e) => setPropertyType(e.target.value)}
-                      className="w-full h-9 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                      className="w-full h-9 rounded-md border border-slate-800 bg-[#070A12] px-3 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                     >
                       {PROPERTY_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>
@@ -306,7 +291,7 @@ export default function ListPropertyDialog({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label htmlFor="prop-area" className="text-xs text-slate-600 font-medium">
+                    <Label htmlFor="prop-area" className="text-xs text-slate-400 font-medium">
                       Neighborhood / Area
                     </Label>
                     <Input
@@ -315,7 +300,7 @@ export default function ListPropertyDialog({
                       placeholder="e.g. Eziobodo, Ikenegbu, New Haven"
                       value={area}
                       onChange={(e) => setArea(e.target.value)}
-                      className="h-9 text-xs"
+                      className="h-9 text-xs bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
                       list="area-suggestions"
                     />
                     <datalist id="area-suggestions">
@@ -326,7 +311,7 @@ export default function ListPropertyDialog({
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="prop-address" className="text-xs text-slate-600 font-medium">
+                    <Label htmlFor="prop-address" className="text-xs text-slate-400 font-medium">
                       Street Address / Landmark
                     </Label>
                     <Input
@@ -334,21 +319,21 @@ export default function ListPropertyDialog({
                       placeholder="e.g. Road 4, Green Garden Estate"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
-                      className="h-9 text-xs"
+                      className="h-9 text-xs bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
                     />
                   </div>
                 </div>
               </div>
 
               {/* PRICING & STATUS */}
-              <div className="space-y-3 pt-2 border-t border-slate-100">
-                <Label className="text-xs font-semibold text-slate-800 block">
+              <div className="space-y-3 pt-2 border-t border-slate-800">
+                <Label className="text-xs font-semibold text-slate-300 block">
                   3. Pricing & Availability
                 </Label>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <Label htmlFor="prop-rent" className="text-xs text-slate-600 font-medium">
+                    <Label htmlFor="prop-rent" className="text-xs text-slate-400 font-medium">
                       Annual Rent (₦)
                     </Label>
                     <Input
@@ -358,12 +343,12 @@ export default function ListPropertyDialog({
                       placeholder="250000"
                       value={annualRent}
                       onChange={(e) => setAnnualRent(e.target.value)}
-                      className="h-9 text-xs font-mono"
+                      className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="prop-caution" className="text-xs text-slate-600 font-medium">
+                    <Label htmlFor="prop-caution" className="text-xs text-slate-400 font-medium">
                       Caution Deposit (₦)
                     </Label>
                     <Input
@@ -372,19 +357,19 @@ export default function ListPropertyDialog({
                       placeholder="25000"
                       value={cautionFee}
                       onChange={(e) => setCautionFee(e.target.value)}
-                      className="h-9 text-xs font-mono"
+                      className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="prop-status" className="text-xs text-slate-600 font-medium">
+                    <Label htmlFor="prop-status" className="text-xs text-slate-400 font-medium">
                       Current Status
                     </Label>
                     <select
                       id="prop-status"
                       value={status}
                       onChange={(e) => setStatus(e.target.value as any)}
-                      className="w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                      className="w-full h-9 rounded-md border border-slate-800 bg-[#070A12] px-2.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                     >
                       <option value="AVAILABLE">Available Now (Green Star)</option>
                       <option value="COMING_SOON">Coming Soon (Orange Star)</option>
@@ -395,8 +380,8 @@ export default function ListPropertyDialog({
               </div>
 
               {/* AMENITIES */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <Label className="text-xs font-semibold text-slate-800 block">
+              <div className="space-y-2 pt-2 border-t border-slate-800">
+                <Label className="text-xs font-semibold text-slate-300 block">
                   4. Key Amenities Included
                 </Label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -411,17 +396,17 @@ export default function ListPropertyDialog({
                   ].map((amenity, i) => (
                     <label
                       key={i}
-                      className={`flex items-center gap-2 p-2 rounded border text-xs cursor-pointer select-none transition ${
+                      className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer select-none transition ${
                         amenity.checked
-                          ? 'border-emerald-500 bg-emerald-50/50 text-emerald-900 font-medium'
-                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          ? 'border-blue-500 bg-blue-950/50 text-blue-200 font-medium'
+                          : 'border-slate-800 bg-[#070A12] text-slate-400 hover:bg-slate-850 hover:text-slate-200'
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={amenity.checked}
                         onChange={(e) => amenity.set(e.target.checked)}
-                        className="rounded text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
+                        className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
                       />
                       <span>{amenity.label}</span>
                     </label>
@@ -430,8 +415,8 @@ export default function ListPropertyDialog({
               </div>
 
               {/* DESCRIPTION */}
-              <div className="space-y-1 pt-2 border-t border-slate-100">
-                <Label htmlFor="prop-desc" className="text-xs text-slate-600 font-medium">
+              <div className="space-y-1 pt-2 border-t border-slate-800">
+                <Label htmlFor="prop-desc" className="text-xs text-slate-400 font-medium">
                   Brief Lodge Description
                 </Label>
                 <Textarea
@@ -440,7 +425,7 @@ export default function ListPropertyDialog({
                   placeholder="Mention compound rules, proximity to campus, light stability, etc."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="text-xs resize-none"
+                  className="text-xs resize-none bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
                 />
               </div>
 
@@ -448,7 +433,7 @@ export default function ListPropertyDialog({
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm mt-3"
+                className="w-full h-10 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg shadow-blue-600/30 mt-3 cursor-pointer transition"
               >
                 {loading ? (
                   <>
