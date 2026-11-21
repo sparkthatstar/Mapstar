@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import {
   Shield, Save, RefreshCw, Lock, LogOut, DollarSign, Building, Users,
   Flag, BarChart3, LayoutDashboard, Loader2, ExternalLink, Star,
+  Database, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import { DEFAULT_FEES, FeeConfig } from '@/lib/fees'
 import { MockListing, formatNaira, PROPERTY_TYPE_LABELS } from '@/lib/mock-data'
@@ -145,16 +146,59 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
 /* ---------------- Overview ---------------- */
 
 function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
-  const stats = useMemo(() => ({
-    listings: MOCK_LISTINGS.length,
-    available: MOCK_LISTINGS.filter((l) => l.status === 'AVAILABLE' || l.status === 'VERIFIED').length,
-    comingSoon: MOCK_LISTINGS.filter((l) => l.status === 'COMING_SOON').length,
-    featured: MOCK_LISTINGS.filter((l) => l.featured).length,
-    verified: MOCK_LISTINGS.filter((l) => l.physicallyVerified).length,
-    totalRentValue: MOCK_LISTINGS.reduce((s, l) => s + l.annualRent, 0),
-  }), [])
-
+  const [dbStatus, setDbStatus] = useState<any>(null)
+  const [dbLoading, setDbLoading] = useState(false)
+  const [seeding, setSeeding] = useState(false)
   const [fees, setFees] = useState<FeeConfig | null>(null)
+
+  const loadDbStatus = useCallback(() => {
+    setDbLoading(true)
+    fetch('/api/admin/database', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => setDbStatus(d))
+      .catch(() => {})
+      .finally(() => setDbLoading(false))
+  }, [])
+
+  useEffect(() => {
+    loadDbStatus()
+  }, [loadDbStatus])
+
+  async function handleSeed() {
+    setSeeding(true)
+    try {
+      const res = await fetch('/api/admin/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'seed' }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || 'Supabase database seeded successfully!')
+        loadDbStatus()
+      } else {
+        toast.error(data.error || 'Failed to seed Supabase database')
+      }
+    } catch (err: any) {
+      toast.error('Seed error: ' + err.message)
+    } finally {
+      setSeeding(false)
+    }
+  }
+
+  const stats = useMemo(() => {
+    const listingCount = dbStatus?.counts?.listings || MOCK_LISTINGS.length
+    return {
+      listings: listingCount,
+      users: dbStatus?.counts?.users || 0,
+      properties: dbStatus?.counts?.properties || 0,
+      available: MOCK_LISTINGS.filter((l) => l.status === 'AVAILABLE' || l.status === 'VERIFIED').length,
+      comingSoon: MOCK_LISTINGS.filter((l) => l.status === 'COMING_SOON').length,
+      featured: MOCK_LISTINGS.filter((l) => l.featured).length,
+      verified: MOCK_LISTINGS.filter((l) => l.physicallyVerified).length,
+      totalRentValue: MOCK_LISTINGS.reduce((s, l) => s + l.annualRent, 0),
+    }
+  }, [dbStatus])
 
   useEffect(() => {
     fetch('/api/fees', { cache: 'no-store' })
@@ -171,8 +215,89 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
           Monitor and control every aspect of Mapstar from this panel.
         </p>
 
+        {/* Supabase Database Connection Card */}
+        <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                dbStatus?.connected
+                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-600 border border-amber-200'
+              }`}>
+                <Database className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900">Supabase Database Connection</h3>
+                  {dbStatus?.connected ? (
+                    <Badge variant="outline" className="bg-emerald-50 border-emerald-300 text-emerald-700 text-[10px] gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Connected ({dbStatus.latencyMs}ms)
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-amber-50 border-amber-300 text-amber-700 text-[10px] gap-1">
+                      <AlertTriangle className="h-3 w-3" /> {dbStatus?.status === 'unconfigured' ? 'Awaiting .env config' : 'Connecting / Local fallback'}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Engine: <span className="font-mono text-slate-700">PostgreSQL (Supabase pgBouncer)</span>
+                  {dbStatus?.databaseUrlMasked && (
+                    <span className="hidden md:inline ml-2 text-slate-400">· {dbStatus.databaseUrlMasked}</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadDbStatus}
+                disabled={dbLoading}
+                className="h-8 text-xs text-slate-600"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${dbLoading ? 'animate-spin' : ''}`} />
+                Test Connection
+              </Button>
+              {dbStatus?.connected && (
+                <Button
+                  size="sm"
+                  onClick={handleSeed}
+                  disabled={seeding}
+                  className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700"
+                >
+                  <Database className="h-3.5 w-3.5 mr-1.5" />
+                  {seeding ? 'Seeding...' : 'Seed Anchor Data'}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Database table counts preview */}
+          {dbStatus?.connected && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 text-center">
+              <div className="bg-slate-50 rounded-lg p-2">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">DB Users</span>
+                <div className="text-base font-bold text-slate-800">{dbStatus.counts.users}</div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-2">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">DB Properties</span>
+                <div className="text-base font-bold text-slate-800">{dbStatus.counts.properties}</div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-2">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">DB Listings</span>
+                <div className="text-base font-bold text-slate-800">{dbStatus.counts.listings}</div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-2">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">Fee Config</span>
+                <div className="text-base font-bold text-emerald-600">{dbStatus.counts.feeConfigs > 0 ? 'Active' : 'Unset'}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
           <StatCard label="Total listings" value={String(stats.listings)} icon={<Building className="h-4 w-4" />} accent="bg-emerald-50 text-emerald-700" />
           <StatCard label="Available now" value={String(stats.available)} icon={<Star className="h-4 w-4" />} accent="bg-blue-50 text-blue-700" />
           <StatCard label="Featured" value={String(stats.featured)} icon={<Star className="h-4 w-4" />} accent="bg-cyan-50 text-cyan-700" />
@@ -401,7 +526,7 @@ function FeesTab() {
             <Lock className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium mb-0.5">Audit trail</p>
-              <p>All fee changes are attributed to your admin account and timestamped. In production, every PATCH is logged to the AdminAction table for compliance.</p>
+              <p>All fee changes are attributed to your admin account ({process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@mapstar.ng'}) and timestamped. In production, every PATCH is logged to the AdminAction table for compliance.</p>
             </div>
           </div>
         </div>
@@ -457,49 +582,94 @@ function FeeToggle({ label, checked, onChange }: { label: string; checked: boole
 function ListingsTab() {
   const [filter, setFilter] = useState<string>('all')
   const [listings, setListings] = useState<MockListing[]>(MOCK_LISTINGS)
+  const [loading, setLoading] = useState(true)
 
-  function toggleVerify(id: string) {
-    setListings((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          const next = !l.physicallyVerified
-          toast(next ? 'Marked physically verified' : 'Verification removed', {
-            description: l.title,
-          })
-          return { ...l, physicallyVerified: next }
+  const loadListings = useCallback(() => {
+    setLoading(true)
+    fetch('/api/admin/listings', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.listings && d.listings.length > 0) {
+          setListings(d.listings)
         }
-        return l
       })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    loadListings()
+  }, [loadListings])
+
+  async function toggleVerify(id: string) {
+    const target = listings.find((l) => l.id === id)
+    if (!target) return
+    const next = !target.physicallyVerified
+
+    setListings((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, physicallyVerified: next } : l))
     )
+    toast(next ? 'Marked physically verified' : 'Verification removed', {
+      description: target.title,
+    })
+
+    try {
+      await fetch('/api/admin/listings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, physicallyVerified: next }),
+      })
+    } catch {
+      toast.error('Failed to update listing in database')
+      loadListings()
+    }
   }
 
-  function toggleFeatured(id: string) {
+  async function toggleFeatured(id: string) {
+    const target = listings.find((l) => l.id === id)
+    if (!target) return
+    const next = !target.featured
+
     setListings((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          const next = !l.featured
-          toast(next ? 'Listing boosted as Featured' : 'Featured boost removed', {
-            description: l.title,
-          })
-          return { ...l, featured: next }
-        }
-        return l
-      })
+      prev.map((l) => (l.id === id ? { ...l, featured: next } : l))
     )
+    toast(next ? 'Listing boosted as Featured' : 'Featured boost removed', {
+      description: target.title,
+    })
+
+    try {
+      await fetch('/api/admin/listings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, featured: next }),
+      })
+    } catch {
+      toast.error('Failed to update listing in database')
+      loadListings()
+    }
   }
 
-  function delist(id: string) {
+  async function delist(id: string) {
+    const target = listings.find((l) => l.id === id)
+    if (!target) return
+
     setListings((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          toast.error('Listing delisted from public view', {
-            description: l.title,
-          })
-          return { ...l, status: 'DELISTED' as any }
-        }
-        return l
-      })
+      prev.map((l) => (l.id === id ? { ...l, status: 'DELISTED' as any } : l))
     )
+    toast.error('Listing delisted from public view', {
+      description: target.title,
+    })
+
+    try {
+      await fetch('/api/admin/listings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'DELISTED' }),
+      })
+    } catch {
+      toast.error('Failed to delist in database')
+      loadListings()
+    }
   }
 
   const filtered = listings.filter((l) => {
@@ -631,17 +801,48 @@ function StatusPill({ status }: { status: string }) {
 /* ---------------- Users ---------------- */
 
 function UsersTab() {
-  const [users, setUsers] = useState([
-    { id: 'u1', name: 'Mrs. Okoro', email: 'okoro@example.com', role: 'LANDLORD', city: 'Owerri', listings: 3, verified: true, status: 'ACTIVE', joined: '2 weeks ago' },
-    { id: 'u2', name: 'Mr. Eze', email: 'eze@example.com', role: 'LANDLORD', city: 'Enugu', listings: 2, verified: true, status: 'ACTIVE', joined: '1 month ago' },
-    { id: 'u3', name: 'Chidinma N.', email: 'chidinma@example.com', role: 'TENANT', city: 'Owerri', listings: 0, verified: true, status: 'ACTIVE', joined: '3 days ago' },
-    { id: 'u4', name: 'Emeka O.', email: 'emeka@example.com', role: 'TENANT', city: 'Enugu', listings: 0, verified: true, status: 'ACTIVE', joined: '5 days ago' },
-    { id: 'u5', name: 'Agent Johnson', email: 'johnson@properties.ng', role: 'AGENT', city: 'Owerri', listings: 4, verified: true, status: 'ACTIVE', joined: '1 week ago' },
-    { id: 'u6', name: 'Agent Blessing', email: 'blessing@homes.ng', role: 'AGENT', city: 'Enugu', listings: 3, verified: false, status: 'ACTIVE', joined: '2 days ago' },
-    { id: 'u7', name: 'Unknown User', email: 'suspicious@temp.com', role: 'LANDLORD', city: 'Owerri', listings: 1, verified: false, status: 'ACTIVE', joined: '1 hour ago' },
-  ])
+  const [users, setUsers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  function approveKYC(id: string) {
+  const loadUsers = useCallback(() => {
+    setLoading(true)
+    fetch('/api/admin/users', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.users && d.users.length > 0) {
+          setUsers(
+            d.users.map((u: any) => ({
+              id: u.id,
+              name: u.fullName || u.email.split('@')[0],
+              email: u.email,
+              role: u.role || 'TENANT',
+              city: u.city || 'Owerri',
+              listings: u.listingsCount || 0,
+              verified: Boolean(u.ninVerified || u.bvnVerified),
+              status: u.status || 'ACTIVE',
+            }))
+          )
+        } else {
+          // Default initial set
+          setUsers([
+            { id: 'u1', name: 'Mrs. Okoro', email: 'okoro@example.com', role: 'LANDLORD', city: 'Owerri', listings: 3, verified: true, status: 'ACTIVE' },
+            { id: 'u2', name: 'Mr. Eze', email: 'eze@example.com', role: 'LANDLORD', city: 'Enugu', listings: 2, verified: true, status: 'ACTIVE' },
+            { id: 'u3', name: 'Chidinma N.', email: 'chidinma@example.com', role: 'TENANT', city: 'Owerri', listings: 0, verified: true, status: 'ACTIVE' },
+            { id: 'u4', name: 'Emeka O.', email: 'emeka@example.com', role: 'TENANT', city: 'Enugu', listings: 0, verified: false, status: 'ACTIVE' },
+            { id: 'u5', name: 'Agent Johnson', email: 'johnson@properties.ng', role: 'AGENT', city: 'Owerri', listings: 4, verified: true, status: 'ACTIVE' },
+          ])
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    loadUsers()
+  }, [loadUsers])
+
+  async function approveKYC(id: string) {
+    const target = users.find((u) => u.id === id)
     setUsers((prev) =>
       prev.map((u) => {
         if (u.id === id) {
@@ -651,6 +852,17 @@ function UsersTab() {
         return u
       })
     )
+
+    try {
+      await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ninVerified: true, bvnVerified: true }),
+      })
+    } catch {
+      toast.error('Failed to save to database')
+      loadUsers()
+    }
   }
 
   function toggleSuspend(id: string) {

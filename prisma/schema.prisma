@@ -16,9 +16,9 @@ generator client {
 }
 
 datasource db {
-  // Swap to "postgresql" when connecting Supabase.
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------
@@ -28,6 +28,7 @@ datasource db {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
+  passwordHash String?
   phone        String?  @unique
   fullName     String?
   role         UserRole @default(TENANT)
@@ -35,7 +36,7 @@ model User {
   bvnVerified  Boolean  @default(false)
   avatarUrl    String?
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  updatedAt    DateTime @default(now()) @updatedAt
 
   landlord      Landlord?
   agent         Agent?
@@ -71,7 +72,7 @@ model Landlord {
   listingsCount      Int       @default(0)
   successfulTenancies Int      @default(0)
   createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  updatedAt          DateTime  @default(now()) @updatedAt
 
   properties Property[]
 
@@ -92,7 +93,7 @@ model Agent {
   verifiedAt          DateTime?
   verificationExpires DateTime?
   createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  updatedAt           DateTime  @default(now()) @updatedAt
 
   properties Property[]
 }
@@ -130,7 +131,7 @@ model Property {
   hasWiFi          Boolean      @default(false)
   titleDocument    String?
   createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  updatedAt        DateTime     @default(now()) @updatedAt
 
   listings Listing[]
   reviews  Review[]
@@ -176,13 +177,13 @@ model Listing {
   photoCount          Int           @default(0)
   has360Tour          Boolean       @default(false)
   hasVideoWalkthrough Boolean       @default(false)
-  photoUrlsJson       String
+  photoUrlsJson       String        @default("[]")
   videoUrl            String?
   tour360Url          String?
   fairPriceBadge      Boolean       @default(false)
   inspectionCount     Int           @default(0)
   createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  updatedAt           DateTime      @default(now()) @updatedAt
 
   transactions Transaction[]
   agreements   Agreement[]
@@ -219,7 +220,7 @@ model FeeConfig {
   stampDutyPercent           Float    @default(0.78)
   firstAgreementFreePerLandlord Boolean @default(true)
   firstTimeLandlordListingCap Int     @default(2)
-  updatedAt                  DateTime @updatedAt
+  updatedAt                  DateTime @default(now()) @updatedAt
   updatedBy                  String?
 }
 
@@ -239,7 +240,7 @@ model Transaction {
   escrowStatus  EscrowStatus  @default(PENDING)
   releasedAt    DateTime?
   createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  updatedAt     DateTime      @default(now()) @updatedAt
 
   @@index([listingId])
   @@index([tenantUserId])
@@ -286,7 +287,7 @@ model Agreement {
   stampedAt       DateTime?
   status          AgreementStatus @default(DRAFT)
   createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  updatedAt       DateTime        @default(now()) @updatedAt
 }
 
 enum AgreementStatus {

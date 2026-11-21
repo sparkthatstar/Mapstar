@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { createHmac, createHash, scryptSync, randomBytes, timingSafeEqual } from 'crypto'
 import fs from 'fs'
 import path from 'path'
+import { db } from './db'
 
 export const USER_COOKIE_NAME = 'mapstar_user_session'
 
@@ -126,7 +127,7 @@ export async function getUserSession(): Promise<AuthedUser | null> {
 }
 
 // ---------------------------------------------------------------------
-// Built-in Seed Users & Local Persistence for instant MVP functionality
+// Built-in Seed Users & Local Persistence for instant sandbox/offline fallback
 // ---------------------------------------------------------------------
 
 const SEED_USERS: StoredUser[] = [
@@ -166,8 +167,8 @@ const SEED_USERS: StoredUser[] = [
   {
     id: 'user_agent_01',
     email: 'agent@mapstar.ng',
-    fullName: 'Amaka Nwachukwu',
-    phone: '08145556789',
+    fullName: 'Amaka Obi (Verified Agent)',
+    phone: '08051239876',
     role: 'AGENT',
     ninVerified: true,
     bvnVerified: true,
@@ -208,7 +209,6 @@ function readUsers(): StoredUser[] {
       list = Array.isArray(parsed) ? parsed : [...SEED_USERS]
     }
 
-    // Always ensure admin user is up to date in the store
     const adminIdx = list.findIndex(
       (u) => u.id === 'user_admin_01' || u.role === 'ADMIN' || u.email.toLowerCase() === expectedAdminEmail
     )
@@ -235,7 +235,7 @@ function writeUsers(users: StoredUser[]): void {
     }
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8')
   } catch (err) {
-    console.error('Failed to write users file:', err)
+    console.error('Failed to persist users:', err)
   }
 }
 
@@ -244,10 +244,7 @@ function readResetTokens(): PasswordResetRecord[] {
     if (!fs.existsSync(RESET_TOKENS_FILE)) return []
     const content = fs.readFileSync(RESET_TOKENS_FILE, 'utf8')
     const parsed = JSON.parse(content)
-    if (Array.isArray(parsed)) {
-      return parsed.filter((r) => r.expiresAt > Date.now())
-    }
-    return []
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
@@ -260,11 +257,11 @@ function writeResetTokens(tokens: PasswordResetRecord[]): void {
     }
     fs.writeFileSync(RESET_TOKENS_FILE, JSON.stringify(tokens, null, 2), 'utf8')
   } catch (err) {
-    console.error('Failed to write reset tokens file:', err)
+    console.error('Failed to persist reset tokens:', err)
   }
 }
 
-function logOutboxEmail(to: string, subject: string, body: string) {
+function logOutboxEmail(to: string, subject: string, body: string): void {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -276,6 +273,47 @@ function logOutboxEmail(to: string, subject: string, body: string) {
 
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
   const normalized = email.trim().toLowerCase()
+  const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
+
+  // Dedicated Master Admin
+  if (normalized === expectedAdminEmail) {
+    return {
+      id: 'user_admin_01',
+      email: expectedAdminEmail,
+      fullName: process.env.ADMIN_NAME || 'Mapking',
+      phone: '08000000000',
+      role: 'ADMIN',
+      ninVerified: true,
+      bvnVerified: true,
+      avatarUrl: null,
+      passwordHash: process.env.ADMIN_PASSWORD ? hashPassword(process.env.ADMIN_PASSWORD) : SECURE_ADMIN_HASH,
+      createdAt: new Date().toISOString(),
+    }
+  }
+
+  // Try querying Supabase PostgreSQL database
+  try {
+    const dbUser = await db.user.findUnique({
+      where: { email: normalized },
+    })
+    if (dbUser) {
+      return {
+        id: dbUser.id,
+        email: dbUser.email,
+        fullName: dbUser.fullName,
+        phone: dbUser.phone,
+        role: dbUser.role as any,
+        ninVerified: dbUser.ninVerified,
+        bvnVerified: dbUser.bvnVerified,
+        avatarUrl: dbUser.avatarUrl,
+        passwordHash: (dbUser as any).passwordHash || '',
+        createdAt: dbUser.createdAt.toISOString(),
+      }
+    }
+  } catch (err) {
+    // Database offline or not yet configured — fallback to local store
+  }
+
   const users = readUsers()
   return users.find((u) => u.email.toLowerCase() === normalized) ?? null
 }
@@ -288,8 +326,34 @@ export async function registerUser(data: {
   role?: 'TENANT' | 'LANDLORD' | 'AGENT' | 'ADMIN'
 }): Promise<AuthedUser> {
   const normalizedEmail = data.email.trim().toLowerCase()
-  const users = readUsers()
+  const passwordHash = hashPassword(data.password)
 
+  // Try saving to Supabase / PostgreSQL via Prisma
+  try {
+    const created = await db.user.create({
+      data: {
+        email: normalizedEmail,
+        fullName: data.fullName.trim(),
+        phone: data.phone?.trim() || null,
+        role: (data.role || 'TENANT') as any,
+        passwordHash,
+      } as any,
+    })
+    return {
+      id: created.id,
+      email: created.email,
+      fullName: created.fullName,
+      phone: created.phone,
+      role: created.role as any,
+      ninVerified: created.ninVerified,
+      bvnVerified: created.bvnVerified,
+      avatarUrl: created.avatarUrl,
+    }
+  } catch (err) {
+    // If Supabase is offline / unreachable, save to fallback store
+  }
+
+  const users = readUsers()
   const existing = users.find((u) => u.email.toLowerCase() === normalizedEmail)
   if (existing) {
     throw new Error('An account with this email already exists')
@@ -303,7 +367,7 @@ export async function registerUser(data: {
     role: data.role || 'TENANT',
     ninVerified: false,
     bvnVerified: false,
-    passwordHash: hashPassword(data.password),
+    passwordHash,
     createdAt: new Date().toISOString(),
   }
 
@@ -353,7 +417,7 @@ export async function authenticateUser(email: string, password: string): Promise
 
   // 2. Regular user authentication
   const user = await findUserByEmail(email)
-  if (!user) return null
+  if (!user || !user.passwordHash) return null
 
   const isMatch = verifyPassword(password, user.passwordHash)
   if (!isMatch) return null
@@ -363,6 +427,22 @@ export async function authenticateUser(email: string, password: string): Promise
 }
 
 export async function listAllUsers(): Promise<AuthedUser[]> {
+  try {
+    const dbUsers = await db.user.findMany()
+    if (dbUsers && dbUsers.length > 0) {
+      return dbUsers.map((u) => ({
+        id: u.id,
+        email: u.email,
+        fullName: u.fullName,
+        phone: u.phone,
+        role: u.role as any,
+        ninVerified: u.ninVerified,
+        bvnVerified: u.bvnVerified,
+        avatarUrl: u.avatarUrl,
+      }))
+    }
+  } catch (err) {}
+
   const users = readUsers()
   return users.map(({ passwordHash: _, ...u }) => u)
 }
@@ -371,6 +451,26 @@ export async function updateUserRole(
   userId: string,
   newRole: 'LANDLORD' | 'AGENT' | 'TENANT'
 ): Promise<AuthedUser | null> {
+  // Try updating in Supabase PostgreSQL
+  try {
+    const updated = await db.user.update({
+      where: { id: userId },
+      data: { role: newRole as any },
+    })
+    if (updated) {
+      return {
+        id: updated.id,
+        email: updated.email,
+        fullName: updated.fullName,
+        phone: updated.phone,
+        role: updated.role as any,
+        ninVerified: updated.ninVerified,
+        bvnVerified: updated.bvnVerified,
+        avatarUrl: updated.avatarUrl,
+      }
+    }
+  } catch (err) {}
+
   const users = readUsers()
   const user = users.find((u) => u.id === userId)
   if (!user) return null
@@ -396,7 +496,6 @@ export async function createPasswordResetRequest(email: string): Promise<{
     throw new Error('No account found with this email address')
   }
 
-  // 6-digit numeric verification code (e.g., 482910)
   const code = Math.floor(100000 + Math.random() * 900000).toString()
   const token = randomBytes(24).toString('hex')
   const expiresAt = Date.now() + RESET_TOKEN_TTL_MS
@@ -457,6 +556,30 @@ export async function resetPasswordWithCode(
     throw new Error('New password must be at least 6 characters.')
   }
 
+  const newHash = hashPassword(newPassword)
+
+  // Try updating in Supabase / PostgreSQL database
+  try {
+    const updated = await db.user.update({
+      where: { email: normalizedEmail },
+      data: { passwordHash: newHash } as any,
+    })
+    tokens.splice(matchIndex, 1)
+    writeResetTokens(tokens)
+    return {
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      phone: updated.phone,
+      role: updated.role as any,
+      ninVerified: updated.ninVerified,
+      bvnVerified: updated.bvnVerified,
+      avatarUrl: updated.avatarUrl,
+    }
+  } catch (err) {
+    // If DB offline, update local store
+  }
+
   const users = readUsers()
   const user = users.find((u) => u.email.toLowerCase() === normalizedEmail)
 
@@ -464,7 +587,7 @@ export async function resetPasswordWithCode(
     throw new Error('User not found.')
   }
 
-  user.passwordHash = hashPassword(newPassword)
+  user.passwordHash = newHash
   writeUsers(users)
 
   tokens.splice(matchIndex, 1)

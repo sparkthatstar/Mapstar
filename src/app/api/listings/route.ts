@@ -7,6 +7,7 @@ import {
   USER_COOKIE_NAME,
   USER_COOKIE_OPTIONS,
 } from '@/lib/user-auth'
+import { db } from '@/lib/db'
 import fs from 'fs'
 import path from 'path'
 
@@ -54,6 +55,9 @@ const AREA_COORDINATES: Record<string, [number, number]> = {
 
 /**
  * GET /api/listings
+ * Reads live listings from Supabase PostgreSQL via Prisma,
+ * merged with any saved custom listings and fallback mock listings.
+ *
  * Query params: city, area, type, minRent, maxRent, verified, featured, status, sort, userLat, userLng
  */
 export async function GET(req: NextRequest) {
@@ -75,9 +79,93 @@ export async function GET(req: NextRequest) {
   const userLat = searchParams.get('userLat') ? Number(searchParams.get('userLat')) : null
   const userLng = searchParams.get('userLng') ? Number(searchParams.get('userLng')) : null
 
-  const custom = readCustomListings()
-  let results: MockListing[] = [...custom, ...MOCK_LISTINGS]
+  let dbResults: MockListing[] = []
+  let fromDatabase = false
 
+  // 1. Fetch live listings from Supabase PostgreSQL via Prisma
+  try {
+    const dbListings = await db.listing.findMany({
+      include: {
+        property: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+
+    if (dbListings && dbListings.length > 0) {
+      dbResults = dbListings.map((l) => {
+        let photos: string[] = []
+        try {
+          photos = JSON.parse(l.photoUrlsJson || '[]')
+        } catch {
+          photos = []
+        }
+
+        return {
+          id: l.id,
+          propertyId: l.propertyId,
+          title: l.property.title,
+          description: l.property.description,
+          propertyType: l.property.propertyType,
+          city: l.property.city,
+          state: l.property.state,
+          area: l.property.area,
+          address: l.property.address,
+          latitude: l.property.latitude,
+          longitude: l.property.longitude,
+          bedrooms: l.property.bedrooms,
+          bathrooms: l.property.bathrooms,
+          toilets: l.property.toilets,
+          parkingSpaces: l.property.parkingSpaces,
+          furnished: l.property.furnished,
+          hasBorehole: l.property.hasBorehole,
+          hasPrepaidMeter: l.property.hasPrepaidMeter,
+          hasInsideToilet: l.property.hasInsideToilet,
+          hasCCTV: l.property.hasCCTV,
+          hasGenerator: l.property.hasGenerator,
+          hasWiFi: l.property.hasWiFi,
+          status: l.status as any,
+          annualRent: l.annualRent,
+          cautionFee: l.cautionFee,
+          legalFee: l.legalFee,
+          agentFeeCap: l.agentFeeCap,
+          availableFrom: l.availableFrom ? l.availableFrom.toISOString() : new Date().toISOString(),
+          vacatingDate: l.vacatingDate ? l.vacatingDate.toISOString() : undefined,
+          comingSoon: l.comingSoon,
+          featured: l.featured,
+          physicallyVerified: l.physicallyVerified,
+          lastVerifiedAt: l.lastVerifiedAt ? l.lastVerifiedAt.toISOString() : undefined,
+          photoCount: l.photoCount || photos.length,
+          has360Tour: l.has360Tour,
+          hasVideoWalkthrough: l.hasVideoWalkthrough,
+          fairPriceBadge: l.fairPriceBadge,
+          inspectionCount: l.inspectionCount,
+          rating: 4.8,
+          reviewsCount: 0,
+          photoUrls: photos,
+        }
+      })
+      fromDatabase = true
+    }
+  } catch (err) {
+    // Database connection or table not yet initialized; fallback
+  }
+
+  // 2. Read local custom listings & seed mock data
+  const custom = readCustomListings()
+  let results: MockListing[] = []
+
+  if (fromDatabase) {
+    // Deduplicate against custom listings
+    const existingIds = new Set(dbResults.map((l) => l.id))
+    const uniqueCustom = custom.filter((l) => !existingIds.has(l.id))
+    results = [...dbResults, ...uniqueCustom]
+  } else {
+    results = [...custom, ...MOCK_LISTINGS]
+  }
+
+  // Filtering
   if (city) results = results.filter((l) => l.city === city)
   if (area) results = results.filter((l) => l.area === area)
   if (type) results = results.filter((l) => l.propertyType === type)
@@ -109,17 +197,23 @@ export async function GET(req: NextRequest) {
       break
     case 'newest':
     default:
-      results.reverse()
+      if (!fromDatabase) {
+        results.reverse()
+      }
       break
   }
 
-  return NextResponse.json({ listings: results, count: results.length })
+  return NextResponse.json({
+    listings: results,
+    count: results.length,
+    fromDatabase,
+  })
 }
 
 /**
  * POST /api/listings
- * Create a new property listing.
- * This is where logged-in users choose whether they are listing as Landlords or Agents.
+ * Create a new property listing in Supabase PostgreSQL via Prisma,
+ * with automatic fallback persistence and user role updating.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -127,35 +221,35 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
 
     const {
-      role, // 'LANDLORD' | 'AGENT'
       title,
+      description = '',
+      propertyType,
       city,
       area,
       address,
-      propertyType,
       annualRent,
       cautionFee,
-      status = 'AVAILABLE',
-      furnished = false,
-      hasBorehole = true,
-      hasPrepaidMeter = true,
-      hasInsideToilet = true,
-      hasCCTV = false,
-      hasGenerator = false,
-      hasWiFi = false,
-      description = '',
+      furnished,
+      hasBorehole,
+      hasPrepaidMeter,
+      hasInsideToilet,
+      hasCCTV,
+      hasGenerator,
+      hasWiFi,
+      status,
+      role,
     } = body
 
-    if (!title || !city || !area || !propertyType || !annualRent) {
+    if (!title || !propertyType || !city || !area || !annualRent) {
       return NextResponse.json(
-        { error: 'Missing required listing information' },
+        { error: 'Missing required listing fields (title, propertyType, city, area, rent)' },
         { status: 400 }
       )
     }
 
     const assignedRole = role === 'AGENT' ? 'AGENT' : 'LANDLORD'
 
-    // Determine approximate coordinates with a slight random jitter to prevent stacking
+    // Determine approximate coordinates with a slight random jitter
     const baseCoords = AREA_COORDINATES[area] || AREA_COORDINATES[city] || [5.497, 7.025]
     const jitterLat = (Math.random() - 0.5) * 0.008
     const jitterLng = (Math.random() - 0.5) * 0.008
@@ -163,6 +257,8 @@ export async function POST(req: NextRequest) {
     const rentNumber = Number(annualRent)
     const cautionNumber = Number(cautionFee) || Math.round(rentNumber * 0.1)
     const agentFee = assignedRole === 'AGENT' ? Math.round(rentNumber * 0.05) : 0
+    const finalLat = Number((baseCoords[0] + jitterLat).toFixed(6))
+    const finalLng = Number((baseCoords[1] + jitterLng).toFixed(6))
 
     const newListing: MockListing = {
       id: `list_${Date.now()}`,
@@ -174,8 +270,8 @@ export async function POST(req: NextRequest) {
       state: city === 'Owerri' ? 'Imo' : 'Enugu',
       area: area.trim(),
       address: address?.trim() || `${area}, ${city}`,
-      latitude: Number((baseCoords[0] + jitterLat).toFixed(6)),
-      longitude: Number((baseCoords[1] + jitterLng).toFixed(6)),
+      latitude: finalLat,
+      longitude: finalLng,
       bedrooms: propertyType.includes('TWO') ? 2 : propertyType.includes('THREE') ? 3 : 1,
       bathrooms: 1,
       toilets: 1,
@@ -206,12 +302,58 @@ export async function POST(req: NextRequest) {
       photoUrls: ['/lodge-exterior.jpg', '/lodge-room.jpg'],
     }
 
-    // Persist new listing
+    // 1. Try persisting directly to Supabase PostgreSQL via Prisma
+    try {
+      await db.property.create({
+        data: {
+          id: newListing.propertyId,
+          title: newListing.title,
+          description: newListing.description,
+          propertyType: newListing.propertyType as any,
+          city: newListing.city,
+          state: newListing.state,
+          area: newListing.area,
+          address: newListing.address,
+          latitude: newListing.latitude,
+          longitude: newListing.longitude,
+          bedrooms: newListing.bedrooms,
+          bathrooms: newListing.bathrooms,
+          toilets: newListing.toilets,
+          parkingSpaces: newListing.parkingSpaces,
+          furnished: newListing.furnished,
+          hasBorehole: newListing.hasBorehole,
+          hasPrepaidMeter: newListing.hasPrepaidMeter,
+          hasInsideToilet: newListing.hasInsideToilet,
+          hasCCTV: newListing.hasCCTV,
+          hasGenerator: newListing.hasGenerator,
+          hasWiFi: newListing.hasWiFi,
+          listings: {
+            create: {
+              id: newListing.id,
+              status: newListing.status as any,
+              annualRent: newListing.annualRent,
+              cautionFee: newListing.cautionFee,
+              legalFee: newListing.legalFee,
+              agentFeeCap: newListing.agentFeeCap,
+              comingSoon: newListing.comingSoon,
+              featured: newListing.featured,
+              physicallyVerified: newListing.physicallyVerified,
+              fairPriceBadge: newListing.fairPriceBadge,
+              photoUrlsJson: JSON.stringify(newListing.photoUrls),
+            },
+          },
+        },
+      })
+    } catch (dbErr) {
+      // If DB is offline, continue to fallback store
+    }
+
+    // 2. Persist in fallback store
     const custom = readCustomListings()
     custom.unshift(newListing)
     writeCustomListings(custom)
 
-    // Update user role if user is logged in
+    // 3. Update user role if user is logged in
     let updatedUser = user
     const response = NextResponse.json({ ok: true, listing: newListing, user: updatedUser })
 
