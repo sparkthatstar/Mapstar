@@ -8,6 +8,7 @@ import {
   USER_COOKIE_OPTIONS,
 } from '@/lib/user-auth'
 import { db } from '@/lib/db'
+import { fetchListingsFromSupabase, insertListingToSupabase } from '@/lib/supabase'
 import fs from 'fs'
 import path from 'path'
 
@@ -150,6 +151,17 @@ export async function GET(req: NextRequest) {
     }
   } catch (err) {
     // Database connection or table not yet initialized; fallback
+  }
+
+  // 1b. If Prisma returned nothing, try fetching directly from Supabase via REST client
+  if (!fromDatabase) {
+    try {
+      const supabaseListings = await fetchListingsFromSupabase()
+      if (supabaseListings && supabaseListings.length > 0) {
+        dbResults = supabaseListings
+        fromDatabase = true
+      }
+    } catch {}
   }
 
   // 2. Read local custom listings & seed mock data
@@ -347,6 +359,11 @@ export async function POST(req: NextRequest) {
     } catch (dbErr) {
       // If DB is offline, continue to fallback store
     }
+
+    // 1b. Also persist directly to Supabase via REST client
+    try {
+      await insertListingToSupabase(newListing)
+    } catch {}
 
     // 2. Persist in fallback store
     const custom = readCustomListings()

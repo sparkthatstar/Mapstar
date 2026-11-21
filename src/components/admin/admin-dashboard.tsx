@@ -12,8 +12,15 @@ import { toast } from 'sonner'
 import {
   Shield, Save, RefreshCw, Lock, LogOut, DollarSign, Building, Users,
   Flag, BarChart3, LayoutDashboard, Loader2, ExternalLink, Star,
-  Database, CheckCircle2, AlertTriangle,
+  Database, CheckCircle2, AlertTriangle, Settings, Key, Link2, Sparkles,
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { DEFAULT_FEES, FeeConfig } from '@/lib/fees'
 import { MockListing, formatNaira, PROPERTY_TYPE_LABELS } from '@/lib/mock-data'
 import { MOCK_LISTINGS } from '@/lib/mock-data'
@@ -151,11 +158,23 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const [seeding, setSeeding] = useState(false)
   const [fees, setFees] = useState<FeeConfig | null>(null)
 
+  // Configuration dialog state
+  const [configOpen, setConfigOpen] = useState(false)
+  const [savingConfig, setSavingConfig] = useState(false)
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState('')
+  const [supabaseAnonKeyInput, setSupabaseAnonKeyInput] = useState('')
+  const [supabaseServiceKeyInput, setSupabaseServiceKeyInput] = useState('')
+  const [databaseUrlInput, setDatabaseUrlInput] = useState('')
+  const [directUrlInput, setDirectUrlInput] = useState('')
+
   const loadDbStatus = useCallback(() => {
     setDbLoading(true)
     fetch('/api/admin/database', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d) => setDbStatus(d))
+      .then((d) => {
+        setDbStatus(d)
+        if (d.supabaseUrl) setSupabaseUrlInput(d.supabaseUrl)
+      })
       .catch(() => {})
       .finally(() => setDbLoading(false))
   }, [])
@@ -186,6 +205,37 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
     }
   }
 
+  async function handleSaveConfig(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingConfig(true)
+    try {
+      const res = await fetch('/api/admin/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'configure',
+          supabaseUrl: supabaseUrlInput.trim(),
+          supabaseAnonKey: supabaseAnonKeyInput.trim(),
+          supabaseServiceKey: supabaseServiceKeyInput.trim(),
+          databaseUrl: databaseUrlInput.trim(),
+          directUrl: directUrlInput.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || 'Supabase credentials saved successfully!')
+        setConfigOpen(false)
+        loadDbStatus()
+      } else {
+        toast.error(data.error || 'Failed to save configuration')
+      }
+    } catch (err: any) {
+      toast.error('Configuration error: ' + err.message)
+    } finally {
+      setSavingConfig(false)
+    }
+  }
+
   const stats = useMemo(() => {
     const listingCount = dbStatus?.counts?.listings || MOCK_LISTINGS.length
     return {
@@ -210,107 +260,229 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   return (
     <ScrollArea className="h-[calc(100vh-120px)]">
       <div className="p-6">
-        <h1 className="text-xl font-bold text-slate-900">Welcome back, Admin</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Monitor and control every aspect of Mapstar from this panel.
+        <h1 className="text-xl font-bold text-white tracking-tight">Welcome back, Admin</h1>
+        <p className="text-sm text-slate-400 mt-1">
+          Monitor and control Supabase cloud storage, lodge listings, and fee regulations.
         </p>
 
         {/* Supabase Database Connection Card */}
-        <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mt-5 rounded-2xl border border-slate-800 bg-[#070A12] p-5 shadow-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+              <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${
                 dbStatus?.connected
-                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                  : 'bg-amber-50 text-amber-600 border border-amber-200'
+                  ? 'bg-blue-950/70 text-blue-400 border border-blue-800/60 shadow-lg shadow-blue-950/50'
+                  : 'bg-amber-950/70 text-amber-400 border border-amber-800/60'
               }`}>
                 <Database className="h-5 w-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-slate-900">Supabase Database Connection</h3>
+                  <h3 className="text-sm font-bold text-white">Supabase Cloud Database</h3>
                   {dbStatus?.connected ? (
-                    <Badge variant="outline" className="bg-emerald-50 border-emerald-300 text-emerald-700 text-[10px] gap-1">
-                      <CheckCircle2 className="h-3 w-3" /> Connected ({dbStatus.latencyMs}ms)
+                    <Badge variant="outline" className="bg-blue-950/80 border-blue-500/60 text-blue-300 text-[10px] gap-1.5 px-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" /> Connected ({dbStatus.latencyMs}ms)
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="bg-amber-50 border-amber-300 text-amber-700 text-[10px] gap-1">
-                      <AlertTriangle className="h-3 w-3" /> {dbStatus?.status === 'unconfigured' ? 'Awaiting .env config' : 'Connecting / Local fallback'}
+                    <Badge variant="outline" className="bg-amber-950/80 border-amber-500/60 text-amber-300 text-[10px] gap-1 px-2">
+                      <AlertTriangle className="h-3 w-3" /> {dbStatus?.status === 'unconfigured' ? 'Awaiting Credentials' : 'Local Fallback Active'}
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Engine: <span className="font-mono text-slate-700">PostgreSQL (Supabase pgBouncer)</span>
+                <p className="text-xs text-slate-400 mt-1">
+                  Engine: <span className="font-mono text-blue-400">PostgreSQL (Supabase pgBouncer + REST API)</span>
                   {dbStatus?.databaseUrlMasked && (
-                    <span className="hidden md:inline ml-2 text-slate-400">· {dbStatus.databaseUrlMasked}</span>
+                    <span className="hidden md:inline ml-2 text-slate-500">· {dbStatus.databaseUrlMasked}</span>
                   )}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfigOpen(true)}
+                className="h-8 text-xs border-slate-800 bg-[#090D18] text-slate-200 hover:border-blue-500/60 hover:text-white cursor-pointer"
+              >
+                <Settings className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
+                Configure Supabase
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={loadDbStatus}
                 disabled={dbLoading}
-                className="h-8 text-xs text-slate-600"
+                className="h-8 text-xs border-slate-800 bg-[#090D18] text-slate-200 hover:border-blue-500/60 hover:text-white cursor-pointer"
               >
-                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${dbLoading ? 'animate-spin' : ''}`} />
-                Test Connection
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 text-blue-400 ${dbLoading ? 'animate-spin' : ''}`} />
+                Test Ping
               </Button>
-              {dbStatus?.connected && (
-                <Button
-                  size="sm"
-                  onClick={handleSeed}
-                  disabled={seeding}
-                  className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700"
-                >
-                  <Database className="h-3.5 w-3.5 mr-1.5" />
-                  {seeding ? 'Seeding...' : 'Seed Anchor Data'}
-                </Button>
-              )}
+              <Button
+                size="sm"
+                onClick={handleSeed}
+                disabled={seeding}
+                className="h-8 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-md shadow-blue-600/30 cursor-pointer transition"
+              >
+                <Database className="h-3.5 w-3.5 mr-1.5" />
+                {seeding ? 'Seeding...' : 'Seed Anchor Lodges'}
+              </Button>
             </div>
           </div>
 
           {/* Database table counts preview */}
           {dbStatus?.connected && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 text-center">
-              <div className="bg-slate-50 rounded-lg p-2">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">DB Users</span>
-                <div className="text-base font-bold text-slate-800">{dbStatus.counts.users}</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 pt-3.5 border-t border-slate-800/80 text-center">
+              <div className="bg-[#090D18] border border-slate-800/60 rounded-xl p-2.5">
+                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Cloud Users</span>
+                <div className="text-base font-extrabold text-white mt-0.5">{dbStatus.counts.users}</div>
               </div>
-              <div className="bg-slate-50 rounded-lg p-2">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">DB Properties</span>
-                <div className="text-base font-bold text-slate-800">{dbStatus.counts.properties}</div>
+              <div className="bg-[#090D18] border border-slate-800/60 rounded-xl p-2.5">
+                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Cloud Properties</span>
+                <div className="text-base font-extrabold text-white mt-0.5">{dbStatus.counts.properties}</div>
               </div>
-              <div className="bg-slate-50 rounded-lg p-2">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">DB Listings</span>
-                <div className="text-base font-bold text-slate-800">{dbStatus.counts.listings}</div>
+              <div className="bg-[#090D18] border border-slate-800/60 rounded-xl p-2.5">
+                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Cloud Listings</span>
+                <div className="text-base font-extrabold text-blue-400 mt-0.5">{dbStatus.counts.listings}</div>
               </div>
-              <div className="bg-slate-50 rounded-lg p-2">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">Fee Config</span>
-                <div className="text-base font-bold text-emerald-600">{dbStatus.counts.feeConfigs > 0 ? 'Active' : 'Unset'}</div>
+              <div className="bg-[#090D18] border border-slate-800/60 rounded-xl p-2.5">
+                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Fee Regulation</span>
+                <div className="text-base font-extrabold text-sky-400 mt-0.5">{dbStatus.counts.feeConfigs > 0 ? 'Active in DB' : 'Using Defaults'}</div>
               </div>
             </div>
           )}
         </div>
 
+        {/* Configure Supabase Modal Dialog */}
+        <Dialog open={configOpen} onOpenChange={setConfigOpen}>
+          <DialogContent className="sm:max-w-[560px] max-h-[92vh] overflow-y-auto p-0 bg-[#090D18] border-slate-800 text-slate-100 shadow-2xl shadow-black/90 z-[9999]">
+            <div className="bg-gradient-to-r from-blue-700 via-blue-900 to-slate-950 px-6 py-5 text-white border-b border-slate-800">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="h-7 w-7 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+                  <Database className="h-4 w-4 text-blue-400" />
+                </div>
+                <span className="font-bold tracking-tight text-lg text-white">Supabase Connection Settings</span>
+              </div>
+              <DialogTitle className="sr-only">Supabase Connection Settings</DialogTitle>
+              <DialogDescription className="text-blue-200/80 text-xs">
+                Connect Mapstar to your live Supabase project to store properties, lodge listings, and tenant agreements.
+              </DialogDescription>
+            </div>
+
+            <form onSubmit={handleSaveConfig} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="supabase-url" className="text-xs font-semibold text-slate-300">
+                  Supabase Project URL
+                </Label>
+                <Input
+                  id="supabase-url"
+                  placeholder="https://xyzprojectref.supabase.co"
+                  value={supabaseUrlInput}
+                  onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                  className="h-9 text-xs bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                />
+                <p className="text-[10px] text-slate-500">Found in: Supabase Dashboard → Project Settings → API → Project URL</p>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="supabase-anon" className="text-xs font-semibold text-slate-300">
+                  Supabase Anon Public Key (Publishable)
+                </Label>
+                <Input
+                  id="supabase-anon"
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  value={supabaseAnonKeyInput}
+                  onChange={(e) => setSupabaseAnonKeyInput(e.target.value)}
+                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="supabase-service" className="text-xs font-semibold text-slate-300">
+                  Supabase Service Role Key (Secret)
+                </Label>
+                <Input
+                  id="supabase-service"
+                  type="password"
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  value={supabaseServiceKeyInput}
+                  onChange={(e) => setSupabaseServiceKeyInput(e.target.value)}
+                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                />
+                <p className="text-[10px] text-slate-500">Bypasses RLS for secure backend API mutations and database seeding.</p>
+              </div>
+
+              <div className="space-y-1 pt-2 border-t border-slate-800">
+                <Label htmlFor="db-url" className="text-xs font-semibold text-slate-300">
+                  PostgreSQL DATABASE_URL (Transaction Pooler - port 6543)
+                </Label>
+                <Input
+                  id="db-url"
+                  placeholder="postgresql://postgres.ref:[PASSWORD]@aws-0-region.pooler.supabase.com:6543/postgres?pgbouncer=true"
+                  value={databaseUrlInput}
+                  onChange={(e) => setDatabaseUrlInput(e.target.value)}
+                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                />
+                <p className="text-[10px] text-slate-500">Found in: Supabase Dashboard → Settings → Database → Connection string (URI)</p>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="direct-url" className="text-xs font-semibold text-slate-300">
+                  DIRECT_URL (Direct / Session Mode - port 5432, for migrations)
+                </Label>
+                <Input
+                  id="direct-url"
+                  placeholder="postgresql://postgres.ref:[PASSWORD]@aws-0-region.pooler.supabase.com:5432/postgres"
+                  value={directUrlInput}
+                  onChange={(e) => setDirectUrlInput(e.target.value)}
+                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setConfigOpen(false)}
+                  className="h-9 text-xs border-slate-800 bg-[#070A12] text-slate-300 hover:bg-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={savingConfig}
+                  className="h-9 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-md shadow-blue-600/30 cursor-pointer transition"
+                >
+                  {savingConfig ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Saving & Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-3.5 w-3.5 mr-1.5" /> Save & Reconnect Supabase
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-          <StatCard label="Total listings" value={String(stats.listings)} icon={<Building className="h-4 w-4" />} accent="bg-emerald-50 text-emerald-700" />
-          <StatCard label="Available now" value={String(stats.available)} icon={<Star className="h-4 w-4" />} accent="bg-blue-50 text-blue-700" />
-          <StatCard label="Featured" value={String(stats.featured)} icon={<Star className="h-4 w-4" />} accent="bg-cyan-50 text-cyan-700" />
-          <StatCard label="Physically verified" value={String(stats.verified)} icon={<Shield className="h-4 w-4" />} accent="bg-red-50 text-red-700" />
+          <StatCard label="Total listings" value={String(stats.listings)} icon={<Building className="h-4 w-4" />} accent="bg-blue-950/60 border border-blue-800/40 text-blue-400" />
+          <StatCard label="Available now" value={String(stats.available)} icon={<Star className="h-4 w-4" />} accent="bg-emerald-950/60 border border-emerald-800/40 text-emerald-400" />
+          <StatCard label="Featured" value={String(stats.featured)} icon={<Star className="h-4 w-4" />} accent="bg-sky-950/60 border border-sky-800/40 text-sky-400" />
+          <StatCard label="Physically verified" value={String(stats.verified)} icon={<Shield className="h-4 w-4" />} accent="bg-indigo-950/60 border border-indigo-800/40 text-indigo-400" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
-          <StatCard label="Coming soon (orange)" value={String(stats.comingSoon)} icon={<Building className="h-4 w-4" />} accent="bg-amber-50 text-amber-700" />
-          <StatCard label="Total annual rent value" value={formatNaira(stats.totalRentValue)} icon={<DollarSign className="h-4 w-4" />} accent="bg-emerald-50 text-emerald-700" wide />
+          <StatCard label="Coming soon (orange)" value={String(stats.comingSoon)} icon={<Building className="h-4 w-4" />} accent="bg-amber-950/60 border border-amber-800/40 text-amber-400" />
+          <StatCard label="Total annual rent value" value={formatNaira(stats.totalRentValue)} icon={<DollarSign className="h-4 w-4" />} accent="bg-blue-950/60 border border-blue-800/40 text-blue-400" wide />
         </div>
 
         {/* Quick actions */}
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mt-8 mb-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400 mt-8 mb-3">
           Quick actions
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -340,17 +512,17 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
         {/* Current fee snapshot */}
         {fees && (
           <>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mt-8 mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400 mt-8 mb-3">
               Current fee policy snapshot
             </h2>
-            <div className="rounded-lg border border-slate-200 overflow-hidden text-sm">
-              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-200">
+            <div className="rounded-xl border border-slate-800 overflow-hidden text-sm bg-[#070A12]">
+              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-800">
                 <FeeSnap label="Success fee" value={`${fees.successFeePercent}%`} />
                 <FeeSnap label="Agent cap" value={`${fees.agentFeeCapPercent}%`} />
                 <FeeSnap label="Stamp duty" value={`${fees.stampDutyPercent}%`} />
                 <FeeSnap label="Fair Price tol." value={`±${fees.fairPriceTolerancePercent}%`} />
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-200 border-t border-slate-200">
+              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-800 border-t border-slate-800">
                 <FeeSnap label="Tenant service fee" value={formatNaira(fees.tenantServiceFeeNaira)} />
                 <FeeSnap label="Agreement fee" value={formatNaira(fees.agreementFeeNaira)} />
                 <FeeSnap label="Featured 7d" value={formatNaira(fees.featuredBoost7DayNaira)} />
@@ -366,27 +538,27 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
 
 function StatCard({ label, value, icon, accent, wide }: { label: string; value: string; icon: React.ReactNode; accent: string; wide?: boolean }) {
   return (
-    <div className={`rounded-lg border border-slate-200 p-4 ${wide ? 'lg:col-span-2' : ''}`}>
+    <div className={`rounded-xl border border-slate-800 bg-[#070A12] p-4 ${wide ? 'lg:col-span-2' : ''}`}>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{label}</span>
-        <span className={`p-1.5 rounded-md ${accent}`}>{icon}</span>
+        <span className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">{label}</span>
+        <span className={`p-1.5 rounded-lg ${accent}`}>{icon}</span>
       </div>
-      <div className="text-2xl font-bold text-slate-900">{value}</div>
+      <div className="text-2xl font-extrabold text-white">{value}</div>
     </div>
   )
 }
 
 function ActionCard({ title, description, cta, icon, onClick }: { title: string; description: string; cta: string; icon: React.ReactNode; onClick: () => void }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-4 flex flex-col">
+    <div className="rounded-xl border border-slate-800 bg-[#070A12] p-4 flex flex-col justify-between">
       <div className="flex items-start gap-3">
-        <div className="p-2 rounded-md bg-emerald-50 text-emerald-700">{icon}</div>
-        <div className="flex-1">
-          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-          <p className="text-xs text-slate-500 mt-1 flex-1">{description}</p>
+        <div className="p-2 rounded-lg bg-blue-950/60 border border-blue-800/40 text-blue-400 shrink-0">{icon}</div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
+          <p className="text-xs text-slate-400 mt-1">{description}</p>
         </div>
       </div>
-      <Button size="sm" variant="outline" className="mt-3 self-start" onClick={onClick}>
+      <Button size="sm" variant="outline" className="mt-4 self-start border-slate-800 bg-[#090D18] text-slate-200 hover:border-blue-500/60 hover:text-white cursor-pointer" onClick={onClick}>
         {cta}
       </Button>
     </div>
@@ -396,6 +568,11 @@ function ActionCard({ title, description, cta, icon, onClick }: { title: string;
 function FeeSnap({ label, value }: { label: string; value: string }) {
   return (
     <div className="px-4 py-3">
+      <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">{label}</div>
+      <div className="text-base font-extrabold text-white mt-0.5">{value}</div>
+    </div>
+  )
+}
       <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{label}</div>
       <div className="text-base font-bold text-slate-900 mt-0.5">{value}</div>
     </div>
