@@ -206,7 +206,6 @@ function readResetTokens(): PasswordResetRecord[] {
     const content = fs.readFileSync(RESET_TOKENS_FILE, 'utf8')
     const parsed = JSON.parse(content)
     if (Array.isArray(parsed)) {
-      // Filter expired tokens
       return parsed.filter((r) => r.expiresAt > Date.now())
     }
     return []
@@ -292,6 +291,19 @@ export async function listAllUsers(): Promise<AuthedUser[]> {
   return users.map(({ passwordHash: _, ...u }) => u)
 }
 
+export async function updateUserRole(
+  userId: string,
+  newRole: 'LANDLORD' | 'AGENT' | 'TENANT'
+): Promise<AuthedUser | null> {
+  const users = readUsers()
+  const user = users.find((u) => u.id === userId)
+  if (!user) return null
+  user.role = newRole
+  writeUsers(users)
+  const { passwordHash: _, ...authed } = user
+  return authed
+}
+
 // ---------------------------------------------------------------------
 // Password Reset (Forgot Password) Management
 // ---------------------------------------------------------------------
@@ -310,7 +322,6 @@ export async function createPasswordResetRequest(email: string): Promise<{
 
   // 6-digit numeric verification code (e.g., 482910)
   const code = Math.floor(100000 + Math.random() * 900000).toString()
-  // URL token (e.g. for reset links)
   const token = randomBytes(24).toString('hex')
   const expiresAt = Date.now() + RESET_TOKEN_TTL_MS
 
@@ -324,7 +335,6 @@ export async function createPasswordResetRequest(email: string): Promise<{
   })
   writeResetTokens(tokens)
 
-  // Log to outbox (simulating email delivery or SMTP)
   const subject = 'Reset Your Mapstar Password'
   const message = `Hello ${user.fullName || 'Mapstar User'},\n\nYour 6-digit password reset code is: ${code}\nAlternatively, use token: ${token}\nThis code expires in 15 minutes.`
   logOutboxEmail(normalizedEmail, subject, message)
@@ -378,11 +388,9 @@ export async function resetPasswordWithCode(
     throw new Error('User not found.')
   }
 
-  // Update password
   user.passwordHash = hashPassword(newPassword)
   writeUsers(users)
 
-  // Invalidate used reset token
   tokens.splice(matchIndex, 1)
   writeResetTokens(tokens)
 

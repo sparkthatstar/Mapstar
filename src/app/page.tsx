@@ -3,7 +3,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { Map as MapIcon, List, SlidersHorizontal, Search, Star, LogIn, LogOut, User as UserIcon, UserPlus, ChevronDown, Shield } from 'lucide-react'
+import {
+  Map as MapIcon,
+  List,
+  SlidersHorizontal,
+  Search,
+  Star,
+  LogIn,
+  LogOut,
+  User as UserIcon,
+  UserPlus,
+  ChevronDown,
+  Shield,
+  Plus,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -18,7 +31,8 @@ import ListingCard from '@/components/mapstar/listing-card'
 import ListingDetail from '@/components/mapstar/listing-detail'
 import FilterPanel, { DEFAULT_FILTERS, FilterState } from '@/components/mapstar/filter-panel'
 import LoginSignupDialog, { AuthedUser } from '@/components/mapstar/login-signup-dialog'
-import { MockListing, formatNaira } from '@/lib/mock-data'
+import ListPropertyDialog from '@/components/mapstar/list-property-dialog'
+import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
 
 // MapView uses react-leaflet which assumes `window` exists.
 // Disable SSR so it only renders on the client.
@@ -48,16 +62,34 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [fees, setFees] = useState<any>(null)
 
+  // Listings state (includes custom listings)
+  const [listingsData, setListingsData] = useState<MockListing[]>(MOCK_LISTINGS)
+
   // User auth state
   const [user, setUser] = useState<AuthedUser | null>(null)
   const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
+
+  // List property dialog state
+  const [listPropertyOpen, setListPropertyOpen] = useState(false)
 
   // Load fee config (admin-regulated) for the listing detail fee breakdown
   useEffect(() => {
     fetch('/api/fees', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => setFees(d.config))
+      .catch(() => {})
+  }, [])
+
+  // Load listings from API (fetches saved custom listings + mock listings)
+  useEffect(() => {
+    fetch('/api/listings', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.listings && Array.isArray(d.listings)) {
+          setListingsData(d.listings)
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -77,9 +109,17 @@ export default function Home() {
     }
   }
 
-  // Filtered listings (mock data — swap for /api/listings in production)
+  function handleListingCreated(newListing: MockListing, updatedUser?: AuthedUser) {
+    setListingsData((prev) => [newListing, ...prev])
+    if (updatedUser) {
+      setUser(updatedUser)
+    }
+    openListing(newListing.id)
+  }
+
+  // Filtered listings
   const filtered = useMemo(() => {
-    let r = listings.filter((l) => {
+    let r = listingsData.filter((l) => {
       if (activeCity && l.city !== activeCity) return false
       if (filters.city && l.city !== filters.city) return false
       if (filters.propertyTypes.length && !filters.propertyTypes.includes(l.propertyType)) return false
@@ -109,11 +149,11 @@ export default function Home() {
       case 'newest': r = [...r].reverse(); break
     }
     return r
-  }, [filters, activeCity, searchQuery])
+  }, [listingsData, filters, activeCity, searchQuery])
 
   const selected = useMemo(
-    () => filtered.find((l) => l.id === selectedId) ?? listings.find((l) => l.id === selectedId) ?? null,
-    [selectedId, filtered]
+    () => filtered.find((l) => l.id === selectedId) ?? listingsData.find((l) => l.id === selectedId) ?? null,
+    [selectedId, filtered, listingsData]
   )
 
   // Computed fees for the selected listing
@@ -153,12 +193,12 @@ export default function Home() {
 
   const counts = useMemo(() => {
     return {
-      available: listings.filter((l) => l.status === 'AVAILABLE' || l.status === 'VERIFIED').length,
-      comingSoon: listings.filter((l) => l.status === 'COMING_SOON').length,
-      inspection: listings.filter((l) => l.status === 'UNDER_INSPECTION').length,
-      let_: listings.filter((l) => l.status === 'RECENTLY_LET').length,
+      available: listingsData.filter((l) => l.status === 'AVAILABLE' || l.status === 'VERIFIED').length,
+      comingSoon: listingsData.filter((l) => l.status === 'COMING_SOON').length,
+      inspection: listingsData.filter((l) => l.status === 'UNDER_INSPECTION').length,
+      let_: listingsData.filter((l) => l.status === 'RECENTLY_LET').length,
     }
-  }, [])
+  }, [listingsData])
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
@@ -197,16 +237,35 @@ export default function Home() {
 
           {/* Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Filters toggle */}
             <Button
               variant="outline"
               size="sm"
-              className="h-9"
+              className="h-9 text-xs"
               onClick={() => setFilterOpen(true)}
             >
-              <SlidersHorizontal className="h-4 w-4 sm:mr-1.5" />
+              <SlidersHorizontal className="h-3.5 w-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Filters</span>
             </Button>
 
+            {/* List Property Action Button */}
+            <Button
+              size="sm"
+              className="h-9 px-2.5 sm:px-3 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 shadow-xs"
+              onClick={() => {
+                if (!user) {
+                  setAuthMode('login')
+                  setAuthOpen(true)
+                } else {
+                  setListPropertyOpen(true)
+                }
+              }}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+              <span>List Property</span>
+            </Button>
+
+            {/* User Profile or Login/Signup */}
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -228,17 +287,25 @@ export default function Home() {
                       </span>
                       <span className="text-slate-500 font-normal truncate">{user.email}</span>
                       <span className="mt-1 inline-flex w-fit items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                        {user.role.charAt(0) + user.role.slice(1).toLowerCase()}
+                        {user.role === 'ADMIN' ? 'Admin' : user.role === 'LANDLORD' ? 'Landlord' : user.role === 'AGENT' ? 'Agent' : 'User'}
                       </span>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-xs font-medium text-emerald-700 cursor-pointer focus:bg-emerald-50 focus:text-emerald-800"
+                    onClick={() => setListPropertyOpen(true)}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-2 text-emerald-600" /> List a Property
+                  </DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" disabled>
                     <UserIcon className="h-3.5 w-3.5 mr-2" /> My saved lodges
                   </DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" disabled>
                     <Star className="h-3.5 w-3.5 mr-2" /> Saved searches
                   </DropdownMenuItem>
+
+                  {/* Admin Control Portal is ONLY accessible for the special ADMIN account */}
                   {user.role === 'ADMIN' && (
                     <>
                       <DropdownMenuSeparator />
@@ -249,6 +316,7 @@ export default function Home() {
                       </DropdownMenuItem>
                     </>
                   )}
+
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="text-xs text-red-600 focus:text-red-700 cursor-pointer" onClick={handleLogout}>
                     <LogOut className="h-3.5 w-3.5 mr-2" /> Log out
@@ -434,6 +502,12 @@ export default function Home() {
         defaultMode={authMode}
         onAuthed={(u) => setUser(u)}
       />
+      <ListPropertyDialog
+        open={listPropertyOpen}
+        onOpenChange={setListPropertyOpen}
+        user={user}
+        onListingCreated={handleListingCreated}
+      />
     </div>
   )
 }
@@ -450,6 +524,3 @@ function EmptyState({ onReset }: { onReset: () => void }) {
     </div>
   )
 }
-
-// Inline import of mock listings for client-side filtering
-import { MOCK_LISTINGS as listings } from '@/lib/mock-data'

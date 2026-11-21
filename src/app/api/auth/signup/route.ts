@@ -10,11 +10,12 @@ export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/auth/signup
- * Body: { fullName, email, password, phone, role }
+ * Body: { fullName, email, password, phone }
+ * Everyone signs up as a regular user with simple credentials.
  */
 export async function POST(req: NextRequest) {
   try {
-    const { fullName, email, password, phone, role } = await req.json()
+    const { fullName, email, password, phone } = await req.json()
 
     if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
       return NextResponse.json({ error: 'Full name is required' }, { status: 400 })
@@ -31,15 +32,13 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const validRoles = ['TENANT', 'LANDLORD', 'AGENT']
-    const assignedRole = validRoles.includes(role) ? role : 'TENANT'
-
+    // Default regular user role is TENANT
     const user = await registerUser({
-      fullName,
-      email,
+      fullName: fullName.trim(),
+      email: email.trim(),
       password,
-      phone,
-      role: assignedRole,
+      phone: phone?.trim() || null,
+      role: 'TENANT',
     })
 
     const sessionCookie = createUserSessionCookie(user)

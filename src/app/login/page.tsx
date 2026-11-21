@@ -11,13 +11,8 @@ import {
   Loader2,
   Mail,
   Lock,
-  User,
-  Home,
-  CheckCircle,
-  Sparkles,
   AlertCircle,
   ArrowLeft,
-  Shield,
 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -27,19 +22,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleLogin(e?: React.FormEvent, customCreds?: { email: string; pass: string }) {
-    if (e) e.preventDefault()
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
     setError(null)
     setLoading(true)
-
-    const loginEmail = customCreds?.email ?? email
-    const loginPass = customCreds?.pass ?? password
 
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail, password: loginPass }),
+        body: JSON.stringify({ email, password }),
       })
 
       const data = await res.json()
@@ -48,7 +40,6 @@ export default function LoginPage() {
         throw new Error(data.error || 'Invalid email or password')
       }
 
-      // Successfully logged in — redirect to home
       router.push('/')
       router.refresh()
     } catch (err: any) {
@@ -56,12 +47,6 @@ export default function LoginPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  function loginDemo(demoEmail: string, demoPass: string) {
-    setEmail(demoEmail)
-    setPassword(demoPass)
-    handleLogin(undefined, { email: demoEmail, pass: demoPass })
   }
 
   return (
@@ -109,7 +94,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={(e) => handleLogin(e)} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <Label htmlFor="email" className="block text-xs font-medium text-slate-700">
                 Email address
@@ -157,7 +142,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 font-semibold text-white shadow-sm"
+              className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 font-semibold text-white shadow-sm mt-2"
             >
               {loading ? (
                 <>
@@ -170,69 +155,6 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
-
-          {/* Quick Demo Section */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-500 mb-2.5">
-              <span className="flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-amber-500" /> 1-Click Demo Accounts:
-              </span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => loginDemo('tenant@mapstar.ng', 'password123')}
-                className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 p-2 text-center transition"
-              >
-                <User className="h-4 w-4 text-emerald-600 mb-1" />
-                <span className="text-[11px] font-semibold text-slate-800">Tenant</span>
-                <span className="text-[9px] text-slate-400">Chinedu</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => loginDemo('landlord@mapstar.ng', 'password123')}
-                className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 p-2 text-center transition"
-              >
-                <Home className="h-4 w-4 text-teal-600 mb-1" />
-                <span className="text-[11px] font-semibold text-slate-800">Landlord</span>
-                <span className="text-[9px] text-slate-400">Chief Emeka</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => loginDemo('agent@mapstar.ng', 'password123')}
-                className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 p-2 text-center transition"
-              >
-                <CheckCircle className="h-4 w-4 text-blue-600 mb-1" />
-                <span className="text-[11px] font-semibold text-slate-800">Agent</span>
-                <span className="text-[9px] text-slate-400">Amaka</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => loginDemo('admin@mapstar.ng', 'mapstar2026')}
-                className="flex flex-col items-center justify-center rounded-lg border border-purple-200 bg-purple-50/50 hover:bg-purple-100/60 hover:border-purple-300 p-2 text-center transition"
-              >
-                <Shield className="h-4 w-4 text-purple-600 mb-1" />
-                <span className="text-[11px] font-semibold text-purple-900">Admin</span>
-                <span className="text-[9px] text-purple-500">Super Admin</span>
-              </button>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-center">
-              <Link
-                href="/admin"
-                className="inline-flex items-center text-xs text-slate-500 hover:text-emerald-700 font-medium transition"
-              >
-                <Shield className="h-3.5 w-3.5 mr-1 text-slate-400" /> Open Admin Governance Portal →
-              </Link>
-            </div>
-          </div>
         </div>
       </div>
     </div>

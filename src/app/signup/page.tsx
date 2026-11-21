@@ -23,7 +23,6 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'TENANT' | 'LANDLORD' | 'AGENT'>('TENANT')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -42,7 +41,7 @@ export default function SignupPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email, phone, password, role }),
+        body: JSON.stringify({ fullName, email, phone, password }),
       })
 
       const data = await res.json()
@@ -105,47 +104,6 @@ export default function SignupPage() {
 
           <form onSubmit={handleSignup} className="space-y-4">
             <div>
-              <Label className="block text-xs font-medium text-slate-700 mb-1.5">
-                I want to:
-              </Label>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRole('TENANT')}
-                  className={`rounded-lg border py-2 px-2 text-center text-xs font-medium transition ${
-                    role === 'TENANT'
-                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-semibold'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Rent a Lodge
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('LANDLORD')}
-                  className={`rounded-lg border py-2 px-2 text-center text-xs font-medium transition ${
-                    role === 'LANDLORD'
-                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-semibold'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  List Lodges
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('AGENT')}
-                  className={`rounded-lg border py-2 px-2 text-center text-xs font-medium transition ${
-                    role === 'AGENT'
-                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-semibold'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Be an Agent
-                </button>
-              </div>
-            </div>
-
-            <div>
               <Label htmlFor="name" className="block text-xs font-medium text-slate-700">
                 Full Name
               </Label>
@@ -153,6 +111,7 @@ export default function SignupPage() {
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
                   id="name"
+                  type="text"
                   required
                   placeholder="e.g. Obinna Nwosu"
                   value={fullName}
@@ -172,7 +131,7 @@ export default function SignupPage() {
                   id="email"
                   type="email"
                   required
-                  placeholder="you@email.com"
+                  placeholder="name@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-9 h-10 text-sm"
@@ -182,7 +141,7 @@ export default function SignupPage() {
 
             <div>
               <Label htmlFor="phone" className="block text-xs font-medium text-slate-700">
-                Phone Number (optional)
+                Phone Number
               </Label>
               <div className="mt-1 relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -227,7 +186,7 @@ export default function SignupPage() {
                 </>
               ) : (
                 <>
-                  <UserPlus className="mr-2 h-4 w-4" /> Create account
+                  <UserPlus className="mr-2 h-4 w-4" /> Create Account
                 </>
               )}
             </Button>
