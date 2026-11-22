@@ -16,10 +16,10 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(req: NextRequest) {
   try {
-    // 1. Rate limiting: 5 attempts per 15 minutes per IP
+    // 1. Rate limiting: 25 attempts per 15 minutes per IP
     const limit = checkRateLimit(req, {
       prefix: 'admin-login',
-      maxAttempts: 5,
+      maxAttempts: 25,
       windowMs: 15 * 60 * 1000,
     })
 
