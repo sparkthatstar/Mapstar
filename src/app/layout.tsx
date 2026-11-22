@@ -13,7 +13,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Mapstar — Find lodges in Nigeria. Skip the agent fees.",
   description:
-    "Live map of available lodges in Imo and Enugu. Green = available now, orange = coming soon. Direct-from-landlord rentals, escrow deposits, e-signed agreements, and capped agent fees.",
+    "Live map of verified lodges and rentals across Nigeria. Green = available now, orange = coming soon. Direct-from-landlord rentals, escrow deposits, e-signed agreements, and capped agent fees.",
   keywords: ["Mapstar", "Nigeria", "Owerri", "Enugu", "lodges", "rent", "self-con", "flats", "students", "FUTO", "IMSU", "UNN", "ESUT"],
   authors: [{ name: "Mapstar" }],
   manifest: "/manifest.json",

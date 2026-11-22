@@ -63,6 +63,26 @@ export default function MeView({
               Create a free Mapstar account
             </Button>
           </div>
+
+          {/* Landlord / Agent Callout */}
+          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800/80 text-left">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Building className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Landlord or Agent?
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
+              List your lodges, self-contain units, or apartments directly on Mapstar. Benefit from verified tenant leads and zero unfair middleman fees.
+            </p>
+            <Button
+              variant="outline"
+              className="w-full h-9 border-blue-200 dark:border-blue-800/60 bg-blue-50/60 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-semibold cursor-pointer"
+              onClick={() => onOpenAuth('login')}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> Sign in to List Property
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -144,6 +164,31 @@ export default function MeView({
               className="h-10 border-slate-200 dark:border-slate-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-semibold cursor-pointer"
             >
               <LogOut className="h-4 w-4 mr-2" /> Sign Out
+            </Button>
+          </div>
+        </div>
+
+        {/* Landlord & Agent Hub - List Property Card */}
+        <div className="bg-white dark:bg-[#090D18] border border-blue-200/80 dark:border-blue-800/60 rounded-3xl p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-xl bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <Building className="h-4 w-4" />
+                </div>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  List Your Property on Mapstar
+                </h2>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md">
+                Have a lodge, self-contain, or flat to rent out? Connect directly with verified tenants, set capped fees, and receive payments securely.
+              </p>
+            </div>
+            <Button
+              onClick={onOpenListProperty}
+              className="w-full sm:w-auto h-10 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-600/30 cursor-pointer shrink-0"
+            >
+              <Plus className="h-4 w-4 mr-1.5" /> List Property
             </Button>
           </div>
         </div>

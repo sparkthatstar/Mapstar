@@ -15,7 +15,6 @@ import {
   UserPlus,
   ChevronDown,
   Shield,
-  Plus,
   Columns2,
   LayoutGrid,
   CheckCircle2,
@@ -318,7 +317,7 @@ export default function Home() {
             </div>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium tracking-tight">
-            Verified Lodges · Regulated Fees · Imo & Enugu
+            Verified Lodges · Regulated Fees
           </p>
         </div>
       </header>
@@ -365,7 +364,7 @@ export default function Home() {
             <div className="shrink-0 bg-white dark:bg-[#090D18] border-b border-slate-200 dark:border-slate-800/80 px-3 py-2.5 sm:px-5 sm:py-3 z-10 transition-colors">
               <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5 max-w-full mx-auto">
                 {/* Unified Search & Filter Command Bar */}
-                <div className="flex-1 flex items-center gap-2">
+                <div className="flex-1 flex items-center">
                   <div className="relative flex-1 flex items-center">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
                     <Input
@@ -402,24 +401,6 @@ export default function Home() {
                       )}
                     </button>
                   </div>
-
-                  {/* List Property Action Button */}
-                  <Button
-                    size="sm"
-                    className="h-10 px-3 sm:px-4 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-700/60 shadow-xs cursor-pointer transition shrink-0"
-                    onClick={() => {
-                      if (!user) {
-                        setAuthMode('login')
-                        setAuthOpen(true)
-                      } else {
-                        setListPropertyOpen(true)
-                      }
-                    }}
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
-                    <span className="hidden sm:inline">List Property</span>
-                    <span className="sm:hidden">List</span>
-                  </Button>
                 </div>
 
                 {/* Sorting and View Options in the Same Row */}
