@@ -47,7 +47,14 @@ const SECURE_ADMIN_HASH =
   'e8f49a12c3b5706d:cf1abeb09a439092ef287e9a1f47c73eb260f2fb4612f8642f118444f4241f67:sha256'
 
 function getSecret(): string {
-  return process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || 'mapstar-user-session-fallback-secret'
+  const s = process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET
+  if (!s) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL: USER_SESSION_SECRET or ADMIN_SESSION_SECRET environment variable must be configured in production.')
+    }
+    return 'mapstar-user-session-fallback-secret'
+  }
+  return s
 }
 
 function sign(payload: string): string {
@@ -670,8 +677,9 @@ export async function resetPasswordWithCode(
       where: { email: normalizedEmail },
       data: { passwordHash: newHash } as any,
     })
-    tokens.splice(matchIndex, 1)
-    writeResetTokens(tokens)
+    // Invalidate ALL pending reset tokens for this user
+    const remainingTokens = tokens.filter((t) => t.email !== normalizedEmail)
+    writeResetTokens(remainingTokens)
     return {
       id: updated.id,
       email: updated.email,
@@ -697,8 +705,9 @@ export async function resetPasswordWithCode(
         .select()
         .single()
       if (updated && !error) {
-        tokens.splice(matchIndex, 1)
-        writeResetTokens(tokens)
+        // Invalidate ALL pending reset tokens for this user
+        const remainingTokens = tokens.filter((t) => t.email !== normalizedEmail)
+        writeResetTokens(remainingTokens)
         return {
           id: updated.id,
           email: updated.email,
@@ -723,8 +732,9 @@ export async function resetPasswordWithCode(
   user.passwordHash = newHash
   writeUsers(users)
 
-  tokens.splice(matchIndex, 1)
-  writeResetTokens(tokens)
+  // Invalidate ALL pending reset tokens for this user
+  const remainingTokens = tokens.filter((t) => t.email !== normalizedEmail)
+  writeResetTokens(remainingTokens)
 
   const { passwordHash: _, ...authed } = user
   return authed

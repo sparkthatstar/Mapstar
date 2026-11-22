@@ -10,6 +10,7 @@ import {
   ADMIN_COOKIE_NAME,
   ADMIN_COOKIE_OPTIONS,
 } from '@/lib/admin-auth'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,24 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(req: NextRequest) {
   try {
+    const limit = checkRateLimit(req, {
+      prefix: 'user-login',
+      maxAttempts: 10,
+      windowMs: 15 * 60 * 1000,
+    })
+
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many login attempts. Please wait ${limit.retryAfterSeconds} seconds before trying again.`,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(limit.retryAfterSeconds) },
+        }
+      )
+    }
+
     const { email, password } = await req.json()
 
     if (!email || !password) {

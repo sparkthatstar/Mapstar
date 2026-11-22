@@ -5,16 +5,36 @@ import {
   ADMIN_COOKIE_NAME,
   ADMIN_COOKIE_OPTIONS,
 } from '@/lib/admin-auth'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/admin/login
  * Body: { email, password }
- * Sets HTTP-only session cookie on success.
+ * Sets HTTP-only session cookie on success with brute-force rate limiting.
  */
 export async function POST(req: NextRequest) {
   try {
+    // 1. Rate limiting: 5 attempts per 15 minutes per IP
+    const limit = checkRateLimit(req, {
+      prefix: 'admin-login',
+      maxAttempts: 5,
+      windowMs: 15 * 60 * 1000,
+    })
+
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many login attempts. Please try again in ${limit.retryAfterSeconds} seconds.`,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(limit.retryAfterSeconds) },
+        }
+      )
+    }
+
     const { email, password } = await req.json()
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password required' }, { status: 400 })

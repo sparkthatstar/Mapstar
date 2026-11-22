@@ -32,6 +32,9 @@ export interface AdminSession {
 function getSecret(): string {
   const s = process.env.ADMIN_SESSION_SECRET
   if (!s) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL: ADMIN_SESSION_SECRET environment variable must be configured in production.')
+    }
     return 'mapstar-admin-session-fallback-secret'
   }
   return s
