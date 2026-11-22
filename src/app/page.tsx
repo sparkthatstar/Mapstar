@@ -40,13 +40,14 @@ import ListingDetail from '@/components/mapstar/listing-detail'
 import FilterPanel, { DEFAULT_FILTERS, FilterState } from '@/components/mapstar/filter-panel'
 import LoginSignupDialog, { AuthedUser } from '@/components/mapstar/login-signup-dialog'
 import ListPropertyDialog from '@/components/mapstar/list-property-dialog'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
 
 // Interactive Google Maps & Turn-by-Turn Directions Component
 const MapView = dynamic(() => import('@/components/mapstar/map-view'), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full flex flex-col items-center justify-center bg-[#070A12] text-sm text-slate-400 gap-2">
+    <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 dark:bg-[#070A12] text-sm text-slate-500 dark:text-slate-400 gap-2">
       <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
       <span>Loading Google Maps Navigation…</span>
     </div>
@@ -247,9 +248,9 @@ export default function Home() {
   }, [filters])
 
   return (
-    <div className="flex flex-col h-screen bg-[#070A12] text-slate-100 overflow-hidden">
-      {/* Top Header — Midnight Obsidian with Electric Blue accents */}
-      <header className="shrink-0 bg-[#090D18] border-b border-slate-800/90 px-3 py-2 sm:px-5 sm:py-2.5 z-20">
+    <div className="flex flex-col h-screen bg-[#F8FAFC] dark:bg-[#070A12] text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-200">
+      {/* Top Header — Clean Matured Slate in Light Mode / Obsidian Midnight in Dark Mode */}
+      <header className="shrink-0 bg-white/95 dark:bg-[#090D18] border-b border-slate-200 dark:border-slate-800/90 px-3 py-2 sm:px-5 sm:py-2.5 z-20 backdrop-blur-md transition-colors">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           {/* Logo */}
           <div className="flex items-center gap-2.5 shrink-0 cursor-pointer" onClick={() => resetFilters()}>
@@ -265,26 +266,26 @@ export default function Home() {
               </svg>
             </div>
             <div className="hidden sm:block">
-              <div className="text-base font-extrabold text-white tracking-tight flex items-center gap-1 leading-none">
-                Mapstar <span className="text-[10px] font-mono text-blue-400 bg-blue-950/80 px-1.5 py-0.2 rounded border border-blue-800/50">PRO</span>
+              <div className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-1 leading-none">
+                Mapstar <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-800/50">PRO</span>
               </div>
-              <div className="text-[10px] text-slate-400 leading-none mt-1">Verified Lodges · Regulated Fees</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-none mt-1">Verified Lodges · Regulated Fees</div>
             </div>
           </div>
 
           {/* Search bar */}
           <div className="flex-1 relative max-w-lg">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search lodge, area (e.g. Eziobodo, New Haven, Ikenegbu)..."
-              className="h-9 pl-9 pr-8 text-xs bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 rounded-xl"
+              className="h-9 pl-9 pr-8 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-blue-500 rounded-xl"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -297,8 +298,8 @@ export default function Home() {
             <Button
               variant="outline"
               size="sm"
-              className={`h-9 text-xs border-slate-800 bg-[#070A12] hover:bg-slate-850 hover:border-blue-500/60 cursor-pointer ${
-                activeFilterCount > 0 ? 'text-blue-400 border-blue-500/60 bg-blue-950/30' : 'text-slate-300'
+              className={`h-9 text-xs border-slate-200 dark:border-slate-800 bg-white hover:bg-slate-50 dark:bg-[#070A12] dark:hover:bg-slate-850 hover:border-blue-500/60 cursor-pointer shadow-xs ${
+                activeFilterCount > 0 ? 'text-blue-600 border-blue-300 bg-blue-50/80 dark:text-blue-400 dark:border-blue-500/60 dark:bg-blue-950/30' : 'text-slate-700 dark:text-slate-300'
               }`}
               onClick={() => setFilterOpen(true)}
             >
@@ -311,10 +312,13 @@ export default function Home() {
               )}
             </Button>
 
+            {/* Bright / Dark Theme Toggle Option */}
+            <ThemeToggle />
+
             {/* List Property Action Button */}
             <Button
               size="sm"
-              className="h-9 px-3 text-xs font-semibold text-blue-300 bg-blue-950/60 hover:bg-blue-900/60 border border-blue-700/60 shadow-xs cursor-pointer transition"
+              className="h-9 px-3 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-700/60 shadow-xs cursor-pointer transition"
               onClick={() => {
                 if (!user) {
                   setAuthMode('login')
@@ -324,7 +328,7 @@ export default function Home() {
                 }
               }}
             >
-              <Plus className="h-3.5 w-3.5 mr-1 text-blue-400" />
+              <Plus className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
               <span className="hidden md:inline">List Property</span>
               <span className="md:hidden">List</span>
             </Button>
@@ -333,7 +337,7 @@ export default function Home() {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 gap-1.5 pr-2 border-slate-800 bg-[#070A12] text-slate-200 hover:bg-slate-850">
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 pr-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-[#070A12] text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-850 shadow-xs">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-[10px] font-semibold text-white shadow-xs">
                       {(user.fullName || user.email || '?').charAt(0).toUpperCase()}
                     </span>
@@ -343,21 +347,21 @@ export default function Home() {
                     <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-[#090D18] border-slate-800 text-slate-100 shadow-2xl">
+                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#090D18] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-2xl">
                   <DropdownMenuLabel className="text-xs">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-white truncate">
+                      <span className="font-semibold text-slate-900 dark:text-white truncate">
                         {user.fullName || 'Unnamed user'}
                       </span>
-                      <span className="text-slate-400 font-normal truncate text-[11px]">{user.email}</span>
-                      <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-blue-950/80 border border-blue-800/60 px-2 py-0.5 text-[9px] font-semibold text-blue-300">
+                      <span className="text-slate-500 dark:text-slate-400 font-normal truncate text-[11px]">{user.email}</span>
+                      <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800/60 px-2 py-0.5 text-[9px] font-semibold text-blue-700 dark:text-blue-300">
                         {user.role === 'ADMIN' ? 'Administrator' : user.role === 'LANDLORD' ? 'Landlord / Owner' : user.role === 'AGENT' ? 'Verified Agent' : 'Student / Tenant'}
                       </span>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator className="bg-slate-800" />
+                  <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800" />
                   <DropdownMenuItem
-                    className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:bg-blue-950/40 cursor-pointer"
+                    className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
                     onClick={() => setListPropertyOpen(true)}
                   >
                     <Plus className="h-3.5 w-3.5 mr-2" /> List a Property
@@ -365,8 +369,8 @@ export default function Home() {
 
                   {user.role === 'ADMIN' && (
                     <>
-                      <DropdownMenuSeparator className="bg-slate-800" />
-                      <DropdownMenuItem asChild className="text-xs text-sky-400 font-semibold hover:bg-sky-950/40 cursor-pointer">
+                      <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800" />
+                      <DropdownMenuItem asChild className="text-xs text-sky-600 dark:text-sky-400 font-semibold hover:bg-sky-50 dark:hover:bg-sky-950/40 cursor-pointer">
                         <Link href="/admin">
                           <Shield className="h-3.5 w-3.5 mr-2" /> Admin Control Portal
                         </Link>
@@ -374,8 +378,8 @@ export default function Home() {
                     </>
                   )}
 
-                  <DropdownMenuSeparator className="bg-slate-800" />
-                  <DropdownMenuItem className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 cursor-pointer" onClick={handleLogout}>
+                  <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800" />
+                  <DropdownMenuItem className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer" onClick={handleLogout}>
                     <LogOut className="h-3.5 w-3.5 mr-2" /> Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -385,13 +389,13 @@ export default function Home() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 px-2.5 sm:px-3 text-xs font-medium text-slate-300 hover:text-white border-slate-800 bg-[#070A12] hover:bg-slate-850 cursor-pointer"
+                  className="h-9 px-2.5 sm:px-3 text-xs font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white border-slate-200 dark:border-slate-800 bg-white hover:bg-slate-50 dark:bg-[#070A12] dark:hover:bg-slate-850 cursor-pointer shadow-xs"
                   onClick={() => {
                     setAuthMode('login')
                     setAuthOpen(true)
                   }}
                 >
-                  <LogIn className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                  <LogIn className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
                   <span>Log in</span>
                 </Button>
                 <Button
@@ -411,14 +415,14 @@ export default function Home() {
         </div>
 
         {/* City Filter & Status Ticker */}
-        <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-850/80 overflow-x-auto text-xs">
+        <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-200 dark:border-slate-850/80 overflow-x-auto text-xs">
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setActiveCity(null)}
               className={`rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
                 activeCity === null
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30 font-semibold'
-                  : 'bg-[#070A12] text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-[#070A12] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800/80'
               }`}
             >
               All Cities
@@ -430,7 +434,7 @@ export default function Home() {
                 className={`rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
                   activeCity === c.id
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30 font-semibold'
-                    : 'bg-[#070A12] text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-[#070A12] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800/80'
                 }`}
               >
                 {c.label}
@@ -438,18 +442,18 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3 text-[11px] text-slate-400 shrink-0">
+          <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 shrink-0">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-xs shadow-emerald-400/50" />
-              <strong className="text-slate-200 font-semibold">{counts.available}</strong> Available
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs shadow-emerald-500/50" />
+              <strong className="text-slate-800 dark:text-slate-200 font-semibold">{counts.available}</strong> Available
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400 shadow-xs shadow-amber-400/50" />
-              <strong className="text-slate-200 font-semibold">{counts.comingSoon}</strong> Soon
+              <span className="w-2 h-2 rounded-full bg-amber-500 shadow-xs shadow-amber-500/50" />
+              <strong className="text-slate-800 dark:text-slate-200 font-semibold">{counts.comingSoon}</strong> Soon
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-400 shadow-xs shadow-blue-400/50" />
-              <strong className="text-slate-200 font-semibold">{counts.inspection}</strong> In Inspection
+              <span className="w-2 h-2 rounded-full bg-blue-500 shadow-xs shadow-blue-500/50" />
+              <strong className="text-slate-800 dark:text-slate-200 font-semibold">{counts.inspection}</strong> In Inspection
             </span>
           </div>
         </div>
@@ -458,15 +462,15 @@ export default function Home() {
       {/* Main Body — Rearranged Layout: Houses on the LEFT side, Balanced Map on the RIGHT side */}
       <main className="flex-1 min-h-0 relative flex flex-col">
         {/* Mobile View Toggle Bar (visible only below lg) */}
-        <div className="lg:hidden shrink-0 bg-[#090D18] border-b border-slate-800 px-3 py-1.5 flex items-center justify-between">
-          <div className="text-xs text-slate-400">
-            <span className="font-bold text-blue-400">{filtered.length}</span> lodges found
+        <div className="lg:hidden shrink-0 bg-white dark:bg-[#090D18] border-b border-slate-200 dark:border-slate-800 px-3 py-1.5 flex items-center justify-between">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="font-bold text-blue-600 dark:text-blue-400">{filtered.length}</span> lodges found
           </div>
-          <div className="inline-flex rounded-lg border border-slate-800 bg-[#070A12] p-0.5">
+          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-[#070A12] p-0.5">
             <button
               onClick={() => setView('split')}
               className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                view === 'split' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400'
+                view === 'split' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               <Columns2 className="h-3.5 w-3.5" /> Split
@@ -474,7 +478,7 @@ export default function Home() {
             <button
               onClick={() => setView('list')}
               className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                view === 'list' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400'
+                view === 'list' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               <List className="h-3.5 w-3.5" /> List
@@ -482,7 +486,7 @@ export default function Home() {
             <button
               onClick={() => setView('map')}
               className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                view === 'map' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400'
+                view === 'map' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               <MapIcon className="h-3.5 w-3.5" /> Map
@@ -496,7 +500,7 @@ export default function Home() {
               LEFT SIDE: Listed Houses Feed (Occupies the Left side as explicitly requested)
              ========================================================================= */}
           <div
-            className={`flex flex-col h-full bg-[#070A12] overflow-hidden transition-all duration-300 ${
+            className={`flex flex-col h-full bg-[#F8FAFC] dark:bg-[#070A12] overflow-hidden transition-all duration-300 ${
               view === 'map'
                 ? 'hidden'
                 : view === 'list'
@@ -505,13 +509,13 @@ export default function Home() {
             }`}
           >
             {/* Top Toolbar for the Left Listings Pane */}
-            <div className="shrink-0 bg-[#090D18] border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between gap-3 z-10">
+            <div className="shrink-0 bg-white dark:bg-[#090D18] border-b border-slate-200 dark:border-slate-800/80 px-4 py-2.5 flex items-center justify-between gap-3 z-10 transition-colors">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white tracking-wide">
+                <span className="text-xs font-bold text-slate-900 dark:text-white tracking-wide">
                   {filtered.length} {filtered.length === 1 ? 'Lodge' : 'Lodges'}
                 </span>
                 {activeCity && (
-                  <span className="text-xs text-blue-400 font-medium">in {activeCity}</span>
+                  <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">in {activeCity}</span>
                 )}
                 {filters.sort && (
                   <span className="hidden sm:inline text-[11px] text-slate-500">
@@ -530,7 +534,7 @@ export default function Home() {
                 <select
                   value={filters.sort}
                   onChange={(e) => patchFilters({ sort: e.target.value })}
-                  className="h-7 rounded-lg border border-slate-800 bg-[#070A12] px-2 text-[11px] text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  className="h-7 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#070A12] px-2 text-[11px] text-slate-800 dark:text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
                   <option value="newest">Newest First</option>
                   <option value="price_asc">Price: Low to High</option>
@@ -538,11 +542,11 @@ export default function Home() {
                 </select>
 
                 {/* Desktop View Switcher */}
-                <div className="hidden lg:inline-flex rounded-lg border border-slate-800 bg-[#070A12] p-0.5">
+                <div className="hidden lg:inline-flex rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-[#070A12] p-0.5">
                   <button
                     onClick={() => setView('split')}
                     className={`p-1 rounded transition cursor-pointer ${
-                      view === 'split' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+                      view === 'split' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                     title="Split view (List on left, map on right)"
                   >
@@ -551,7 +555,7 @@ export default function Home() {
                   <button
                     onClick={() => setView('list')}
                     className={`p-1 rounded transition cursor-pointer ${
-                      view === 'list' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+                      view === 'list' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                     title="Full listings view"
                   >
@@ -560,7 +564,7 @@ export default function Home() {
                   <button
                     onClick={() => setView('map')}
                     className={`p-1 rounded transition cursor-pointer ${
-                      view === 'map' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+                      view === 'map' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                     title="Full map view"
                   >
@@ -571,14 +575,14 @@ export default function Home() {
             </div>
 
             {/* Quick Filter Tag Chips */}
-            <div className="shrink-0 bg-[#070A12] px-4 py-1.5 border-b border-slate-850 flex items-center gap-1.5 overflow-x-auto text-[11px]">
+            <div className="shrink-0 bg-slate-100/70 dark:bg-[#070A12] px-4 py-1.5 border-b border-slate-200 dark:border-slate-850 flex items-center gap-1.5 overflow-x-auto text-[11px] transition-colors">
               <span className="text-[10px] uppercase font-bold text-slate-500 mr-1 shrink-0">Quick filters:</span>
               <button
                 onClick={() => patchFilters({ verifiedOnly: !filters.verifiedOnly })}
                 className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
                   filters.verifiedOnly
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
                 }`}
               >
                 Verified Only
@@ -587,8 +591,8 @@ export default function Home() {
                 onClick={() => patchFilters({ fairPriceOnly: !filters.fairPriceOnly })}
                 className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
                   filters.fairPriceOnly
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
                 }`}
               >
                 Fair Price
@@ -597,8 +601,8 @@ export default function Home() {
                 onClick={() => patchFilters({ hasBorehole: !filters.hasBorehole })}
                 className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
                   filters.hasBorehole
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
                 }`}
               >
                 Borehole Water
@@ -607,8 +611,8 @@ export default function Home() {
                 onClick={() => patchFilters({ hasPrepaidMeter: !filters.hasPrepaidMeter })}
                 className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
                   filters.hasPrepaidMeter
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
                 }`}
               >
                 Prepaid NEPA
@@ -617,8 +621,8 @@ export default function Home() {
                 onClick={() => patchFilters({ hasWiFi: !filters.hasWiFi })}
                 className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
                   filters.hasWiFi
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-[#0B1120] text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
                 }`}
               >
                 WiFi Ready
@@ -654,7 +658,7 @@ export default function Home() {
               RIGHT SIDE: Balanced, High-Tech Map (Framed on the Right side)
              ========================================================================= */}
           <div
-            className={`h-full relative overflow-hidden border-l border-slate-850 transition-all duration-300 ${
+            className={`h-full relative overflow-hidden border-l border-slate-200 dark:border-slate-850 transition-all duration-300 ${
               view === 'list'
                 ? 'hidden'
                 : view === 'map'
@@ -705,12 +709,12 @@ export default function Home() {
 
 function EmptyState({ onReset }: { onReset: () => void }) {
   return (
-    <div className="text-center py-16 px-4 rounded-2xl bg-[#090D18] border border-slate-800/80 my-4 max-w-md mx-auto">
-      <div className="mx-auto h-12 w-12 rounded-full bg-blue-950/60 border border-blue-800/60 flex items-center justify-center mb-3">
-        <Search className="h-5 w-5 text-blue-400" />
+    <div className="text-center py-16 px-4 rounded-2xl bg-white dark:bg-[#090D18] border border-slate-200 dark:border-slate-800/80 shadow-sm my-4 max-w-md mx-auto">
+      <div className="mx-auto h-12 w-12 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center mb-3">
+        <Search className="h-5 w-5 text-blue-600 dark:text-blue-400" />
       </div>
-      <h3 className="text-base font-bold text-white">No lodges match your filters</h3>
-      <p className="text-xs text-slate-400 mt-1.5 mb-5 max-w-xs mx-auto">
+      <h3 className="text-base font-bold text-slate-900 dark:text-white">No lodges match your filters</h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 mb-5 max-w-xs mx-auto">
         Try adjusting your budget range, changing the city, or removing amenity restrictions.
       </p>
       <Button

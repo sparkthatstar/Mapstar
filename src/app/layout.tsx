@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 
@@ -32,13 +33,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} antialiased bg-[#070A12] text-slate-100 min-h-screen`}
+        className={`${inter.variable} antialiased min-h-screen bg-[#F8FAFC] dark:bg-[#070A12] text-slate-800 dark:text-slate-100 transition-colors duration-200`}
       >
-        {children}
-        <Toaster />
-        <Sonner position="top-right" richColors />
+        <ThemeProvider>
+          {children}
+          <Toaster />
+          <Sonner position="top-right" richColors />
+        </ThemeProvider>
       </body>
     </html>
   );

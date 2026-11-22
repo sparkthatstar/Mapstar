@@ -155,19 +155,19 @@ export default function MapView({
   }, [activeLodge, travelMode])
 
   return (
-    <div className="relative h-full w-full flex flex-col bg-[#070A12] overflow-hidden select-none">
+    <div className="relative h-full w-full flex flex-col bg-slate-100 dark:bg-[#070A12] overflow-hidden select-none transition-colors duration-200">
       {/* =========================================================================
           TOP CONTROL BAR: Mode, Layers & Landmark Navigation
          ========================================================================= */}
-      <div className="z-20 bg-[#090D18]/95 border-b border-slate-800 p-2.5 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 shadow-lg">
+      <div className="z-20 bg-white/95 dark:bg-[#090D18]/95 border-b border-slate-200 dark:border-slate-800 p-2.5 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 shadow-sm dark:shadow-lg text-slate-800 dark:text-slate-100 transition-colors">
         {/* Left: Mode Switcher (Lodge Location vs Live Directions) */}
-        <div className="flex items-center gap-1 bg-[#070A12] p-1 rounded-xl border border-slate-800/90">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#070A12] p-1 rounded-xl border border-slate-200 dark:border-slate-800/90">
           <button
             onClick={() => setActiveMode('location')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
               activeMode === 'location'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <MapPin className="h-3.5 w-3.5" />
@@ -183,7 +183,7 @@ export default function MapView({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
               activeMode === 'directions'
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <Navigation className="h-3.5 w-3.5" />
@@ -199,7 +199,7 @@ export default function MapView({
               setTargetListingId(e.target.value)
               onSelect(e.target.value)
             }}
-            className="w-full text-xs bg-[#070A12] border border-slate-800 rounded-xl px-2.5 py-1.5 text-slate-200 font-medium focus:outline-none focus:border-blue-500 cursor-pointer truncate"
+            className="w-full text-xs bg-white dark:bg-[#070A12] border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:border-blue-500 cursor-pointer truncate shadow-xs"
           >
             {listings.map((l) => (
               <option key={l.id} value={l.id}>
@@ -211,13 +211,13 @@ export default function MapView({
 
         {/* Right: Map Layers Style (Roadmap, Satellite, Terrain) */}
         {activeMode === 'location' && (
-          <div className="flex items-center gap-1 bg-[#070A12] p-1 rounded-xl border border-slate-800/90">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#070A12] p-1 rounded-xl border border-slate-200 dark:border-slate-800/90">
             <button
               onClick={() => setLayerStyle('roadmap')}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                 layerStyle === 'roadmap'
-                  ? 'bg-slate-800 text-blue-400 font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-blue-600 shadow-2xs dark:bg-slate-800 dark:text-blue-400 font-semibold'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
               title="Street Roadmap"
             >
@@ -227,8 +227,8 @@ export default function MapView({
               onClick={() => setLayerStyle('satellite')}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                 layerStyle === 'satellite'
-                  ? 'bg-slate-800 text-blue-400 font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-blue-600 shadow-2xs dark:bg-slate-800 dark:text-blue-400 font-semibold'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
               title="Satellite View"
             >
@@ -238,8 +238,8 @@ export default function MapView({
               onClick={() => setLayerStyle('terrain')}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                 layerStyle === 'terrain'
-                  ? 'bg-slate-800 text-blue-400 font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-blue-600 shadow-2xs dark:bg-slate-800 dark:text-blue-400 font-semibold'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
               title="Terrain & Elevation"
             >
@@ -253,12 +253,12 @@ export default function MapView({
           DIRECTIONS PLANNER BAR (When Directions Mode is Active)
          ========================================================================= */}
       {activeMode === 'directions' && (
-        <div className="z-10 bg-[#0A0F1D]/95 border-b border-slate-800/90 p-3 text-slate-200 backdrop-blur-md animate-in fade-in slide-in-from-top-1 duration-200">
+        <div className="z-10 bg-white/95 dark:bg-[#0A0F1D]/95 border-b border-slate-200 dark:border-slate-800/90 p-3 text-slate-800 dark:text-slate-200 backdrop-blur-md animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm transition-colors">
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
             {/* Origin Landmark Selector */}
             <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 shrink-0 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 shrink-0 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 inline-block animate-ping" />
                 From:
               </span>
               <div className="flex-1 w-full flex items-center gap-1.5">
@@ -275,7 +275,7 @@ export default function MapView({
                       setCustomStartInput('')
                     }
                   }}
-                  className="flex-1 text-xs bg-[#070A12] border border-slate-800 rounded-xl px-2.5 py-1.5 text-slate-100 font-medium focus:outline-none focus:border-emerald-500 cursor-pointer"
+                  className="flex-1 text-xs bg-slate-50 dark:bg-[#070A12] border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-slate-900 dark:text-slate-100 font-medium focus:outline-none focus:border-emerald-500 cursor-pointer shadow-xs"
                 >
                   <option value="gps">🎯 My Current GPS Location</option>
                   <optgroup label="Popular Landmarks (Owerri & Enugu)">
@@ -290,7 +290,7 @@ export default function MapView({
                 <button
                   onClick={handleGetGpsLocation}
                   disabled={isUsingGps}
-                  className="flex items-center gap-1 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800/60 text-emerald-300 px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer shrink-0"
+                  className="flex items-center gap-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:border-emerald-800/60 dark:text-emerald-300 px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer shrink-0 shadow-xs"
                   title="Use live GPS location"
                 >
                   <Crosshair className={`h-3.5 w-3.5 ${isUsingGps ? 'animate-spin' : ''}`} />
@@ -300,13 +300,13 @@ export default function MapView({
             </div>
 
             {/* Travel Mode: Driving / Walking / Transit */}
-            <div className="flex items-center gap-1 bg-[#070A12] p-1 rounded-xl border border-slate-800 shrink-0">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#070A12] p-1 rounded-xl border border-slate-200 dark:border-slate-800 shrink-0">
               <button
                 onClick={() => setTravelMode('driving')}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                   travelMode === 'driving'
-                    ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
                 title="Drive / Keke / Bike"
               >
@@ -317,8 +317,8 @@ export default function MapView({
                 onClick={() => setTravelMode('walking')}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                   travelMode === 'walking'
-                    ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
                 title="Walking route"
               >
@@ -329,8 +329,8 @@ export default function MapView({
                 onClick={() => setTravelMode('transit')}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                   travelMode === 'transit'
-                    ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
                 title="Public Transit"
               >
@@ -344,7 +344,7 @@ export default function MapView({
               href={googleMapsExternalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold px-3.5 py-1.5 text-xs shadow-lg shadow-emerald-950/60 transition cursor-pointer shrink-0"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold px-3.5 py-1.5 text-xs shadow-md shadow-emerald-700/30 transition cursor-pointer shrink-0"
               title="Launch turn-by-turn spoken voice GPS navigation on your phone"
             >
               <Navigation className="h-3.5 w-3.5" />
@@ -358,7 +358,7 @@ export default function MapView({
       {/* =========================================================================
           MAIN MAP CANVAS: Interactive Google Maps Embed
          ========================================================================= */}
-      <div className="relative flex-1 w-full h-full bg-[#070A12]">
+      <div className="relative flex-1 w-full h-full bg-slate-100 dark:bg-[#070A12]">
         <iframe
           key={googleMapEmbedUrl}
           src={googleMapEmbedUrl}
@@ -369,11 +369,11 @@ export default function MapView({
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
           title="Mapstar Google Maps"
-          className="w-full h-full filter invert-[0.85] hue-rotate-[180deg] contrast-[1.15] brightness-[0.9] saturate-[0.8] transition-all duration-300"
+          className="w-full h-full filter-none dark:invert-[0.85] dark:hue-rotate-[180deg] dark:contrast-[1.15] dark:brightness-[0.9] dark:saturate-[0.8] transition-all duration-300"
         />
 
-        {/* Ambient Dark Overlay to match Mapstar Obsidian Style */}
-        <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_80px_rgba(7,10,18,0.7)]" />
+        {/* Ambient Dark Overlay to match Mapstar Obsidian Style in Dark Mode */}
+        <div className="absolute inset-0 pointer-events-none opacity-0 dark:opacity-100 shadow-[inset_0_0_80px_rgba(7,10,18,0.7)] transition-opacity duration-300" />
       </div>
 
       {/* =========================================================================
@@ -381,37 +381,37 @@ export default function MapView({
          ========================================================================= */}
       {activeLodge && (
         <div className="absolute bottom-3 left-3 right-3 z-20 pointer-events-none flex justify-center">
-          <div className="pointer-events-auto w-full max-w-xl rounded-2xl bg-[#090D18]/95 p-3 sm:p-4 shadow-2xl border border-slate-800/90 backdrop-blur-xl text-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="pointer-events-auto w-full max-w-xl rounded-2xl bg-white/95 dark:bg-[#090D18]/95 p-3 sm:p-4 shadow-xl dark:shadow-2xl border border-slate-200 dark:border-slate-800/90 backdrop-blur-xl text-slate-800 dark:text-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200 transition-colors">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className="inline-flex items-center gap-1 rounded-md bg-blue-950/80 border border-blue-800/70 px-2 py-0.5 text-[10px] font-bold text-blue-300 uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/80 dark:border-blue-800/70 px-2 py-0.5 text-[10px] font-bold dark:text-blue-300 uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
                   {activeLodge.status.replace('_', ' ')}
                 </span>
                 {activeLodge.physicallyVerified && (
-                  <span className="inline-flex items-center gap-1 rounded-md bg-sky-950/80 border border-sky-800/70 px-1.5 py-0.5 text-[9px] font-bold text-sky-300 uppercase">
-                    <ShieldCheck className="h-3 w-3 text-sky-400" /> Verified
+                  <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-950/80 dark:border-sky-800/70 px-1.5 py-0.5 text-[9px] font-bold dark:text-sky-300 uppercase">
+                    <ShieldCheck className="h-3 w-3 text-sky-600 dark:text-sky-400" /> Verified
                   </span>
                 )}
                 {activeLodge.featured && (
-                  <span className="rounded-md bg-amber-950/80 border border-amber-800/70 px-1.5 py-0.5 text-[9px] font-bold text-amber-300 uppercase">
+                  <span className="rounded-md bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/80 dark:border-amber-800/70 px-1.5 py-0.5 text-[9px] font-bold dark:text-amber-300 uppercase">
                     ⭐ Featured
                   </span>
                 )}
               </div>
 
-              <h4 className="text-sm sm:text-base font-bold text-white truncate leading-snug">
+              <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate leading-snug">
                 {activeLodge.title}
               </h4>
-              <p className="text-xs text-slate-400 truncate mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                 {PROPERTY_TYPE_LABELS[activeLodge.propertyType]} · {activeLodge.address}, {activeLodge.area}, {activeLodge.city}
               </p>
             </div>
 
             {/* Price & Actions */}
-            <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/80">
+            <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800/80">
               <div className="text-left sm:text-right">
-                <div className="text-base sm:text-lg font-extrabold text-blue-400 leading-none">
+                <div className="text-base sm:text-lg font-extrabold text-blue-600 dark:text-blue-400 leading-none">
                   {formatNaira(activeLodge.annualRent)}
                 </div>
                 <div className="text-[10px] text-slate-500 font-mono mt-0.5">per year</div>
@@ -426,7 +426,7 @@ export default function MapView({
                         handleGetGpsLocation()
                       }
                     }}
-                    className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-semibold shadow-md shadow-emerald-950/60 transition cursor-pointer"
+                    className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-semibold shadow-md shadow-emerald-700/30 transition cursor-pointer"
                   >
                     <Navigation className="h-3.5 w-3.5" />
                     <span>Directions</span>
@@ -436,7 +436,7 @@ export default function MapView({
                     href={googleMapsExternalUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-semibold shadow-md shadow-emerald-950/60 transition cursor-pointer"
+                    className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-semibold shadow-md shadow-emerald-700/30 transition cursor-pointer"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                     <span>Open Navigation</span>
@@ -445,7 +445,7 @@ export default function MapView({
 
                 <button
                   onClick={() => onSelect(activeLodge.id)}
-                  className="rounded-xl bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-semibold shadow-md shadow-blue-950/60 transition cursor-pointer"
+                  className="rounded-xl bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-semibold shadow-md shadow-blue-700/30 transition cursor-pointer"
                 >
                   Inspect
                 </button>
