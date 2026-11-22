@@ -24,6 +24,7 @@ import {
   Zap,
   ArrowUpDown,
   X,
+  HelpCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +41,8 @@ import ListingDetail from '@/components/mapstar/listing-detail'
 import FilterPanel, { DEFAULT_FILTERS, FilterState } from '@/components/mapstar/filter-panel'
 import LoginSignupDialog, { AuthedUser } from '@/components/mapstar/login-signup-dialog'
 import ListPropertyDialog from '@/components/mapstar/list-property-dialog'
+import WelcomeOnboardingModal from '@/components/mapstar/welcome-onboarding-modal'
+import NewUserBanner from '@/components/mapstar/new-user-banner'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
 
@@ -81,6 +84,22 @@ export default function Home() {
 
   // List property dialog state
   const [listPropertyOpen, setListPropertyOpen] = useState(false)
+
+  // Interactive Onboarding & User Guide Modal state
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+
+  // Automatically welcome new users on first visit (only once)
+  useEffect(() => {
+    try {
+      const hasSeen = localStorage.getItem('mapstar_has_seen_onboarding')
+      if (!hasSeen) {
+        const timer = setTimeout(() => {
+          setOnboardingOpen(true)
+        }, 750)
+        return () => clearTimeout(timer)
+      }
+    } catch {}
+  }, [])
 
   // Load fee config (admin-regulated) for the listing detail fee breakdown
   useEffect(() => {
@@ -314,6 +333,19 @@ export default function Home() {
 
             {/* Bright / Dark Theme Toggle Option */}
             <ThemeToggle />
+
+            {/* How it Works / Interactive Tour Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-2.5 sm:px-3 text-xs font-semibold border-slate-200 dark:border-slate-800 bg-white hover:bg-slate-50 dark:bg-[#070A12] dark:hover:bg-slate-850 text-slate-800 dark:text-slate-200 shadow-xs cursor-pointer transition"
+              onClick={() => setOnboardingOpen(true)}
+              title="How to use Mapstar & interactive guide"
+            >
+              <HelpCircle className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
+              <span className="hidden md:inline">How it Works</span>
+              <span className="md:hidden">Guide</span>
+            </Button>
 
             {/* List Property Action Button */}
             <Button
@@ -631,6 +663,9 @@ export default function Home() {
 
             {/* Scrollable Listings Feed */}
             <div className="flex-1 overflow-y-auto p-3.5 sm:p-4">
+              {/* Interactive Welcome Banner for New Users */}
+              <NewUserBanner onOpenGuide={() => setOnboardingOpen(true)} />
+
               {filtered.length === 0 ? (
                 <EmptyState onReset={resetFilters} />
               ) : (
@@ -702,6 +737,11 @@ export default function Home() {
         onOpenChange={setListPropertyOpen}
         user={user}
         onListingCreated={handleListingCreated}
+      />
+      <WelcomeOnboardingModal
+        open={onboardingOpen}
+        onOpenChange={setOnboardingOpen}
+        onSelectCity={(city) => setActiveCity(city)}
       />
     </div>
   )
