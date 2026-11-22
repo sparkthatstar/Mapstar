@@ -573,11 +573,6 @@ function FeeSnap({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
-      <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{label}</div>
-      <div className="text-base font-bold text-slate-900 mt-0.5">{value}</div>
-    </div>
-  )
-}
 
 /* ---------------- Fees ---------------- */
 
