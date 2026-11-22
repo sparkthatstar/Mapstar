@@ -207,6 +207,11 @@
   color: #38BDF8 !important;
 }
 
+/* Sleek Obsidian Dark styling for OpenStreetMap tiles (100% Free, No API Key Required) */
+.mapstar-dark-tiles .leaflet-tile {
+  filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.35) brightness(0.75) !important;
+}
+
 /* Custom Sleek Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
