@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Star, ShieldCheck, Video, Camera, Droplet, Zap, Toilet, Wifi, Car, Sparkles,
-  Home, MapPin, FileText, Calendar, CheckCircle2, AlertCircle, Building2,
+  Home, MapPin, FileText, Calendar, CheckCircle2, AlertCircle, Building2, Navigation,
 } from 'lucide-react'
 import { MockListing, formatNaira, PROPERTY_TYPE_LABELS } from '@/lib/mock-data'
 
@@ -193,11 +193,20 @@ export default function ListingDetail({ listing, open, onOpenChange, fees }: Lis
               >
                 {listing.status === 'COMING_SOON' ? 'Notify me when ready' : 'Request Lodge Inspection'}
               </Button>
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${listing.latitude},${listing.longitude}&travelmode=driving`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl border border-emerald-800/80 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60 transition cursor-pointer font-semibold text-xs"
+              >
+                <Navigation className="h-4 w-4" />
+                <span>Directions</span>
+              </a>
               <Button
                 variant="outline"
-                className="flex-1 h-11 border-slate-800 bg-[#070A12] text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
+                className="h-11 px-4 border-slate-800 bg-[#070A12] text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
               >
-                Save to favorites
+                Save
               </Button>
             </div>
             <p className="text-[10px] text-slate-500 mt-3 text-center">
