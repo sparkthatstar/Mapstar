@@ -9,10 +9,12 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   reactStrictMode: false,
-  allowedDevOrigins: [
-    "*.space-z.ai",
-    "*.chatglm.cn",
-  ],
+  experimental: {
+    allowedDevOrigins: [
+      "*.space-z.ai",
+      "*.chatglm.cn",
+    ],
+  },
 };
 
 export default nextConfig;
