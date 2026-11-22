@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none">
+  <defs>
+    <linearGradient id="mapstar-badge-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB" />
+      <stop offset="50%" stop-color="#1D4ED8" />
+      <stop offset="100%" stop-color="#0B132B" />
+    </linearGradient>
+    <filter id="star-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="0.8" flood-color="#0B132B" flood-opacity="0.4" />
+    </filter>
+  </defs>
+  <!-- Rounded Badge -->
+  <rect width="32" height="32" rx="7" fill="url(#mapstar-badge-grad)" />
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" stroke="#60A5FA" stroke-opacity="0.35" stroke-width="1" fill="none" />
+  <!-- Mapstar Star Icon -->
+  <g transform="translate(16, 16) scale(0.72) translate(-16, -15.65)" filter="url(#star-shadow)">
+    <path
+      d="M16 2 L19.6 12.2 L30.4 12.5 L21.7 19.0 L24.7 29.3 L16 23.2 L7.3 29.3 L10.3 19.0 L1.6 12.5 L12.4 12.2 Z"
+      fill="#60A5FA"
+      stroke="#1D4ED8"
+      stroke-width="1.2"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>
