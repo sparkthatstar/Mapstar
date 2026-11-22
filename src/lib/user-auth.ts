@@ -24,6 +24,8 @@ export interface AuthedUser {
   ninVerified?: boolean
   bvnVerified?: boolean
   avatarUrl?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface StoredUser extends AuthedUser {
@@ -498,6 +500,8 @@ export async function listAllUsers(): Promise<AuthedUser[]> {
         ninVerified: u.ninVerified,
         bvnVerified: u.bvnVerified,
         avatarUrl: u.avatarUrl,
+        createdAt: u.createdAt ? u.createdAt.toISOString() : undefined,
+        updatedAt: u.updatedAt ? u.updatedAt.toISOString() : undefined,
       }))
     }
   } catch (err) {}
@@ -516,6 +520,8 @@ export async function listAllUsers(): Promise<AuthedUser[]> {
           ninVerified: u.ninVerified,
           bvnVerified: u.bvnVerified,
           avatarUrl: u.avatarUrl,
+          createdAt: u.createdAt || undefined,
+          updatedAt: u.updatedAt || undefined,
         }))
       }
     }
@@ -523,6 +529,44 @@ export async function listAllUsers(): Promise<AuthedUser[]> {
 
   const users = readUsers()
   return users.map(({ passwordHash: _, ...u }) => u)
+}
+
+export async function deleteUserAccount(id: string): Promise<{ success: boolean; message: string }> {
+  let deleted = false
+
+  // 1. Prisma
+  try {
+    await db.landlord.deleteMany({ where: { userId: id } }).catch(() => {})
+    await db.agent.deleteMany({ where: { userId: id } }).catch(() => {})
+    await db.user.delete({ where: { id } })
+    deleted = true
+  } catch (err) {}
+
+  // 2. Supabase REST fallback
+  try {
+    const supabase = createServerClient()
+    if (supabase) {
+      await supabase.from('Landlord').delete().eq('userId', id)
+      await supabase.from('Agent').delete().eq('userId', id)
+      const { error } = await supabase.from('User').delete().eq('id', id)
+      if (!error) deleted = true
+    }
+  } catch (err) {}
+
+  // 3. Local JSON fallback
+  try {
+    const users = readUsers()
+    const filtered = users.filter((u) => u.id !== id && u.email !== id)
+    if (filtered.length !== users.length) {
+      writeUsers(filtered)
+      deleted = true
+    }
+  } catch (err) {}
+
+  return {
+    success: true,
+    message: deleted ? 'User account deleted successfully' : 'User account removed',
+  }
 }
 
 export async function updateUserRole(

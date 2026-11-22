@@ -45,6 +45,7 @@ import NewUserBanner from '@/components/mapstar/new-user-banner'
 import BottomNavigation, { NavTab } from '@/components/mapstar/bottom-navigation'
 import ChatView from '@/components/mapstar/chat-view'
 import MeView from '@/components/mapstar/me-view'
+import StarPowerView from '@/components/mapstar/star-power-view'
 import SettingsDialog from '@/components/mapstar/settings-dialog'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
@@ -335,6 +336,14 @@ export default function Home() {
           />
         )}
 
+        {/* TAB: Administrator Star Power Space */}
+        {bottomTab === 'star_power' && (
+          <StarPowerView
+            user={user}
+            onOpenListingDetail={openListing}
+          />
+        )}
+
         {/* TAB 2: User Profile / Me */}
         {bottomTab === 'me' && (
           <MeView
@@ -621,12 +630,13 @@ export default function Home() {
 
       {/* =========================================================================
           BOTTOM LAYER: Persistent Bottom Navigation Bar
-          (Listings · Chat · Me · Settings)
+          (Listings · Chat · [Star Power if Admin] · Me · Settings)
          ========================================================================= */}
       <BottomNavigation
         currentTab={settingsOpen ? 'settings' : bottomTab}
         onTabChange={handleTabChange}
         isLoggedIn={Boolean(user)}
+        isAdmin={user?.role === 'ADMIN'}
       />
 
       {/* Settings Dialog (Appearance theme, Login/Signup, Policies, Guide) */}
@@ -640,6 +650,7 @@ export default function Home() {
         }}
         onLogout={handleLogout}
         onOpenGuide={() => setOnboardingOpen(true)}
+        onOpenStarPower={() => setBottomTab('star_power')}
       />
 
       {/* Drawers & Dialogs */}

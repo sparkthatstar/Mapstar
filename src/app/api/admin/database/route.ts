@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAdminSession } from '@/lib/admin-auth'
+import { getUserSession } from '@/lib/user-auth'
 import { MOCK_LISTINGS } from '@/lib/mock-data'
 import { DEFAULT_FEES } from '@/lib/fees'
 import { createServerClient, isSupabaseConfigured, seedSupabaseViaSdk } from '@/lib/supabase'
@@ -27,8 +28,9 @@ function maskDatabaseUrl(url?: string): string {
  */
 export async function GET() {
   const session = await getAdminSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized — admin session required' }, { status: 401 })
+  const user = await getUserSession()
+  if (!session && (!user || user.role !== 'ADMIN')) {
+    return NextResponse.json({ error: 'Unauthorized — administrator privileges required' }, { status: 401 })
   }
 
   const rawDbUrl = process.env.DATABASE_URL
@@ -121,8 +123,9 @@ export async function GET() {
  */
 export async function POST(req: NextRequest) {
   const session = await getAdminSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized — admin session required' }, { status: 401 })
+  const user = await getUserSession()
+  if (!session && (!user || user.role !== 'ADMIN')) {
+    return NextResponse.json({ error: 'Unauthorized — administrator privileges required' }, { status: 401 })
   }
 
   try {

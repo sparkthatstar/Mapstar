@@ -22,6 +22,7 @@ import {
   Info,
   DollarSign,
   Scale,
+  Sparkles,
 } from 'lucide-react'
 import { AuthedUser } from '@/components/mapstar/login-signup-dialog'
 import Link from 'next/link'
@@ -33,6 +34,7 @@ interface SettingsDialogProps {
   onOpenAuth: (mode?: 'login' | 'signup') => void
   onLogout: () => void
   onOpenGuide: () => void
+  onOpenStarPower?: () => void
 }
 
 export default function SettingsDialog({
@@ -42,6 +44,7 @@ export default function SettingsDialog({
   onOpenAuth,
   onLogout,
   onOpenGuide,
+  onOpenStarPower,
 }: SettingsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -145,6 +148,21 @@ export default function SettingsDialog({
               <HelpCircle className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" />
               How Mapstar Works (User Guide)
             </Button>
+
+            {user?.role === 'ADMIN' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onOpenChange(false)
+                  onOpenStarPower?.()
+                }}
+                className="w-full h-9 justify-start text-xs border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-yellow-300 hover:bg-amber-500/20 cursor-pointer font-bold"
+              >
+                <Sparkles className="h-4 w-4 mr-2 text-amber-500" />
+                Star Power (Admin Database Center)
+              </Button>
+            )}
 
             <Button
               variant="outline"

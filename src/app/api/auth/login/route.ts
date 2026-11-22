@@ -11,6 +11,7 @@ import {
   ADMIN_COOKIE_OPTIONS,
 } from '@/lib/admin-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { recordLoginActivity } from '@/lib/activity-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +51,11 @@ export async function POST(req: NextRequest) {
     const user = await authenticateUser(email, password)
 
     if (!user) {
+      recordLoginActivity({
+        email,
+        status: 'FAILED',
+        details: 'Incorrect password attempt',
+      })
       // Artificial delay to prevent timing attacks
       await new Promise((r) => setTimeout(r, 400))
       return NextResponse.json(
@@ -57,6 +63,15 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       )
     }
+
+    recordLoginActivity({
+      userId: user.id,
+      email: user.email,
+      fullName: user.fullName || undefined,
+      role: user.role,
+      status: 'SUCCESS',
+      details: 'Authenticated successfully',
+    })
 
     const sessionCookie = createUserSessionCookie(user)
     const response = NextResponse.json({ ok: true, user })
