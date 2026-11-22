@@ -42,14 +42,13 @@ import LoginSignupDialog, { AuthedUser } from '@/components/mapstar/login-signup
 import ListPropertyDialog from '@/components/mapstar/list-property-dialog'
 import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
 
-// MapView uses react-leaflet which assumes `window` exists.
-// Disable SSR so it only renders on the client.
+// Interactive Google Maps & Turn-by-Turn Directions Component
 const MapView = dynamic(() => import('@/components/mapstar/map-view'), {
   ssr: false,
   loading: () => (
     <div className="h-full w-full flex flex-col items-center justify-center bg-[#070A12] text-sm text-slate-400 gap-2">
       <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      <span>Loading Mapstar Radar…</span>
+      <span>Loading Google Maps Navigation…</span>
     </div>
   ),
 })
