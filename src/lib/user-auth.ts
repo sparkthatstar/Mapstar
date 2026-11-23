@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { createHmac, createHash, scryptSync, randomBytes, timingSafeEqual } from 'crypto'
 import fs from 'fs'
 import path from 'path'
-import { db } from './db'
+import { db, directDb } from './db'
 import { createServerClient } from './supabase'
 
 export const USER_COOKIE_NAME = 'mapstar_user_session'
@@ -268,7 +268,9 @@ function logOutboxEmail(to: string, subject: string, body: string): void {
 }
 
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
-  const normalized = email.trim().toLowerCase()
+  const normalized = (email || '').trim().toLowerCase()
+  if (!normalized) return null
+
   const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
 
   // Dedicated Master Admin
@@ -287,7 +289,7 @@ export async function findUserByEmail(email: string): Promise<StoredUser | null>
     }
   }
 
-  // 1. Try querying Supabase PostgreSQL database via Prisma
+  // 1. Try querying Supabase PostgreSQL database via Prisma (pooled)
   try {
     const dbUser = await db.user.findUnique({
       where: { email: normalized },
@@ -306,8 +308,30 @@ export async function findUserByEmail(email: string): Promise<StoredUser | null>
         createdAt: dbUser.createdAt.toISOString(),
       }
     }
-  } catch (err) {
-    // Prisma offline or connection issue
+  } catch (err: any) {
+    console.error('db.user.findUnique pooled error:', err?.message || err)
+    // Try direct connection if pooled connection failed
+    try {
+      const dbUser = await directDb.user.findUnique({
+        where: { email: normalized },
+      })
+      if (dbUser) {
+        return {
+          id: dbUser.id,
+          email: dbUser.email,
+          fullName: dbUser.fullName,
+          phone: dbUser.phone,
+          role: dbUser.role as any,
+          ninVerified: dbUser.ninVerified,
+          bvnVerified: dbUser.bvnVerified,
+          avatarUrl: dbUser.avatarUrl,
+          passwordHash: (dbUser as any).passwordHash || '',
+          createdAt: dbUser.createdAt.toISOString(),
+        }
+      }
+    } catch (directErr: any) {
+      console.error('directDb.user.findUnique error:', directErr?.message || directErr)
+    }
   }
 
   // 2. Try querying Supabase PostgreSQL via REST SDK
@@ -334,7 +358,9 @@ export async function findUserByEmail(email: string): Promise<StoredUser | null>
         }
       }
     }
-  } catch (err) {}
+  } catch (err: any) {
+    console.error('supabase REST findUserByEmail error:', err?.message || err)
+  }
 
   const users = readUsers()
   return users.find((u) => u.email.toLowerCase() === normalized) ?? null
@@ -347,21 +373,36 @@ export async function registerUser(data: {
   phone?: string
   role?: 'TENANT' | 'LANDLORD' | 'AGENT' | 'ADMIN'
 }): Promise<AuthedUser> {
-  const normalizedEmail = data.email.trim().toLowerCase()
-  const passwordHash = hashPassword(data.password)
+  const normalizedEmail = (data.email || '').trim().toLowerCase()
+  if (!normalizedEmail) {
+    throw new Error('Email is required')
+  }
 
-  // 1. Try saving to Supabase / PostgreSQL via Prisma
+  // 1. Check if user already exists
+  const existing = await findUserByEmail(normalizedEmail)
+  if (existing) {
+    throw new Error('An account with this email already exists')
+  }
+
+  const passwordHash = hashPassword(data.password)
+  const trimmedName = (data.fullName || '').trim()
+  const sanitizedPhone = data.phone?.trim() || null
+  const role = (data.role || 'TENANT') as any
+
+  let authedUser: AuthedUser | null = null
+
+  // 2. Try saving to Supabase / PostgreSQL via Prisma (pooled)
   try {
     const created = await db.user.create({
       data: {
         email: normalizedEmail,
-        fullName: data.fullName.trim(),
-        phone: data.phone?.trim() || null,
-        role: (data.role || 'TENANT') as any,
+        fullName: trimmedName,
+        phone: sanitizedPhone,
+        role,
         passwordHash,
       } as any,
     })
-    return {
+    authedUser = {
       id: created.id,
       email: created.email,
       fullName: created.fullName,
@@ -371,72 +412,139 @@ export async function registerUser(data: {
       bvnVerified: created.bvnVerified,
       avatarUrl: created.avatarUrl,
     }
-  } catch (err) {
-    // If Prisma connection fails, try direct Supabase REST client
-  }
+  } catch (err: any) {
+    console.error('Prisma pooled db.user.create failed:', err?.message || err)
+    if (err?.code === 'P2002' || err?.message?.includes('Unique constraint')) {
+      throw new Error('An account with this email already exists')
+    }
 
-  // 2. Try saving to Supabase / PostgreSQL via REST SDK
-  try {
-    const supabase = createServerClient()
-    if (supabase) {
-      const newId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-      const { data: created, error } = await supabase
-        .from('User')
-        .insert({
-          id: newId,
+    // Try direct connection if pooled connection failed
+    try {
+      const created = await directDb.user.create({
+        data: {
           email: normalizedEmail,
-          fullName: data.fullName.trim(),
-          phone: data.phone?.trim() || null,
-          role: data.role || 'TENANT',
+          fullName: trimmedName,
+          phone: sanitizedPhone,
+          role,
           passwordHash,
-          ninVerified: false,
-          bvnVerified: false,
-          updatedAt: new Date().toISOString(),
-        })
-        .select()
-        .single()
-      if (created && !error) {
-        return {
-          id: created.id,
-          email: created.email,
-          fullName: created.fullName,
-          phone: created.phone,
-          role: created.role as any,
-          ninVerified: created.ninVerified,
-          bvnVerified: created.bvnVerified,
-          avatarUrl: created.avatarUrl,
-        }
+        } as any,
+      })
+      authedUser = {
+        id: created.id,
+        email: created.email,
+        fullName: created.fullName,
+        phone: created.phone,
+        role: created.role as any,
+        ninVerified: created.ninVerified,
+        bvnVerified: created.bvnVerified,
+        avatarUrl: created.avatarUrl,
+      }
+    } catch (directErr: any) {
+      console.error('directDb.user.create failed:', directErr?.message || directErr)
+      if (directErr?.code === 'P2002' || directErr?.message?.includes('Unique constraint')) {
+        throw new Error('An account with this email already exists')
       }
     }
-  } catch (err) {}
-
-  const users = readUsers()
-  const existing = users.find((u) => u.email.toLowerCase() === normalizedEmail)
-  if (existing) {
-    throw new Error('An account with this email already exists')
   }
 
-  const newUser: StoredUser = {
-    id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    email: normalizedEmail,
-    fullName: data.fullName.trim(),
-    phone: data.phone?.trim() || null,
-    role: data.role || 'TENANT',
-    ninVerified: false,
-    bvnVerified: false,
-    passwordHash,
-    createdAt: new Date().toISOString(),
+  // 3. Try saving to Supabase / PostgreSQL via REST SDK if Prisma was unreachable
+  if (!authedUser) {
+    try {
+      const supabase = createServerClient()
+      if (supabase) {
+        const newId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+        const { data: created, error } = await supabase
+          .from('User')
+          .insert({
+            id: newId,
+            email: normalizedEmail,
+            fullName: trimmedName,
+            phone: sanitizedPhone,
+            role,
+            passwordHash,
+            ninVerified: false,
+            bvnVerified: false,
+            updatedAt: new Date().toISOString(),
+          })
+          .select()
+          .single()
+        if (created && !error) {
+          authedUser = {
+            id: created.id,
+            email: created.email,
+            fullName: created.fullName,
+            phone: created.phone,
+            role: created.role as any,
+            ninVerified: created.ninVerified,
+            bvnVerified: created.bvnVerified,
+            avatarUrl: created.avatarUrl,
+          }
+        } else if (error) {
+          console.error('Supabase REST insert error:', error.message)
+        }
+      }
+    } catch (restErr: any) {
+      console.error('Supabase REST registerUser error:', restErr?.message || restErr)
+    }
   }
 
-  users.push(newUser)
-  writeUsers(users)
+  // 4. Fallback to local storage if remote databases failed
+  if (!authedUser) {
+    const newUser: StoredUser = {
+      id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      email: normalizedEmail,
+      fullName: trimmedName,
+      phone: sanitizedPhone,
+      role,
+      ninVerified: false,
+      bvnVerified: false,
+      passwordHash,
+      createdAt: new Date().toISOString(),
+    }
 
-  const { passwordHash: _, ...authed } = newUser
-  return authed
+    const users = readUsers()
+    users.push(newUser)
+    writeUsers(users)
+
+    authedUser = {
+      id: newUser.id,
+      email: newUser.email,
+      fullName: newUser.fullName,
+      phone: newUser.phone,
+      role: newUser.role,
+      ninVerified: newUser.ninVerified,
+      bvnVerified: newUser.bvnVerified,
+      avatarUrl: newUser.avatarUrl,
+    }
+  } else {
+    // Keep local storage mirror in sync with database record
+    try {
+      const users = readUsers()
+      if (!users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
+        users.push({
+          id: authedUser.id,
+          email: authedUser.email,
+          fullName: authedUser.fullName,
+          phone: authedUser.phone,
+          role: authedUser.role,
+          ninVerified: authedUser.ninVerified,
+          bvnVerified: authedUser.bvnVerified,
+          avatarUrl: authedUser.avatarUrl,
+          passwordHash,
+          createdAt: new Date().toISOString(),
+        })
+        writeUsers(users)
+      }
+    } catch {}
+  }
+
+  return authedUser
 }
 
 export async function authenticateUser(email: string, password: string): Promise<AuthedUser | null> {
-  const normalizedEmail = email.trim().toLowerCase()
+  const normalizedEmail = (email || '').trim().toLowerCase()
+  if (!normalizedEmail || !password) return null
+
   const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
 
   // 1. Check if user is logging in with the admin account
@@ -452,7 +560,9 @@ export async function authenticateUser(email: string, password: string): Promise
 
     // Otherwise verify against the secure cryptographic one-way hash
     if (!passwordMatches) {
-      passwordMatches = verifyPassword(inputPassword, SECURE_ADMIN_HASH) || verifyPassword(password, SECURE_ADMIN_HASH)
+      passwordMatches =
+        verifyPassword(inputPassword, SECURE_ADMIN_HASH) ||
+        verifyPassword(password, SECURE_ADMIN_HASH)
     }
 
     if (passwordMatches) {
@@ -470,11 +580,20 @@ export async function authenticateUser(email: string, password: string): Promise
   }
 
   // 2. Regular user authentication
-  const user = await findUserByEmail(email)
-  if (!user || !user.passwordHash) return null
+  const user = await findUserByEmail(normalizedEmail)
+  if (!user || !user.passwordHash) {
+    console.warn(`authenticateUser: user not found or missing passwordHash for ${normalizedEmail}`)
+    return null
+  }
 
-  const isMatch = verifyPassword(password, user.passwordHash)
-  if (!isMatch) return null
+  const isMatch =
+    verifyPassword(password, user.passwordHash) ||
+    verifyPassword(password.trim(), user.passwordHash)
+
+  if (!isMatch) {
+    console.warn(`authenticateUser: password mismatch for ${normalizedEmail}`)
+    return null
+  }
 
   const { passwordHash: _, ...authed } = user
   return authed
@@ -497,7 +616,25 @@ export async function listAllUsers(): Promise<AuthedUser[]> {
         updatedAt: u.updatedAt ? u.updatedAt.toISOString() : undefined,
       }))
     }
-  } catch (err) {}
+  } catch (err: any) {
+    try {
+      const dbUsers = await directDb.user.findMany()
+      if (dbUsers && dbUsers.length > 0) {
+        return dbUsers.map((u) => ({
+          id: u.id,
+          email: u.email,
+          fullName: u.fullName,
+          phone: u.phone,
+          role: u.role as any,
+          ninVerified: u.ninVerified,
+          bvnVerified: u.bvnVerified,
+          avatarUrl: u.avatarUrl,
+          createdAt: u.createdAt ? u.createdAt.toISOString() : undefined,
+          updatedAt: u.updatedAt ? u.updatedAt.toISOString() : undefined,
+        }))
+      }
+    } catch {}
+  }
 
   try {
     const supabase = createServerClient()
@@ -537,7 +674,12 @@ export async function deleteUserAccount(id: string): Promise<{ success: boolean;
     await db.agent.deleteMany({ where: { userId: id } }).catch(() => {})
     await db.user.delete({ where: { id } })
     deleted = true
-  } catch (err) {}
+  } catch (err) {
+    try {
+      await directDb.user.delete({ where: { id } })
+      deleted = true
+    } catch {}
+  }
 
   // 2. Supabase REST fallback
   try {
@@ -592,7 +734,26 @@ export async function updateUserRole(
         avatarUrl: updated.avatarUrl,
       }
     }
-  } catch (err) {}
+  } catch (err) {
+    try {
+      const updated = await directDb.user.update({
+        where: { id: userId },
+        data: { role: newRole as any },
+      })
+      if (updated) {
+        return {
+          id: updated.id,
+          email: updated.email,
+          fullName: updated.fullName,
+          phone: updated.phone,
+          role: updated.role as any,
+          ninVerified: updated.ninVerified,
+          bvnVerified: updated.bvnVerified,
+          avatarUrl: updated.avatarUrl,
+        }
+      }
+    } catch {}
+  }
 
   // 2. Try updating via Supabase REST SDK
   try {
@@ -726,7 +887,24 @@ export async function resetPasswordWithCode(
       avatarUrl: updated.avatarUrl,
     }
   } catch (err) {
-    // If Prisma connection fails, try direct Supabase REST client
+    try {
+      const updated = await directDb.user.update({
+        where: { email: normalizedEmail },
+        data: { passwordHash: newHash } as any,
+      })
+      const remainingTokens = tokens.filter((t) => t.email !== normalizedEmail)
+      writeResetTokens(remainingTokens)
+      return {
+        id: updated.id,
+        email: updated.email,
+        fullName: updated.fullName,
+        phone: updated.phone,
+        role: updated.role as any,
+        ninVerified: updated.ninVerified,
+        bvnVerified: updated.bvnVerified,
+        avatarUrl: updated.avatarUrl,
+      }
+    } catch {}
   }
 
   // 2. Try updating via Supabase REST SDK

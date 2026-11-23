@@ -99,7 +99,12 @@ delete from "Agent" where id is not null;
 delete from "VerificationApplication" where id is not null;
 delete from "User" where id != 'user_admin_01' and email != 'mapstar777@gmail.com';
 
--- 9. Row-Level Security (RLS) Policies for Mapstar Full Application Access
+-- 9. Row-Level Security (RLS) Policies & Schema Permissions for Mapstar
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables in schema public to anon, authenticated, service_role;
+grant all on all sequences in schema public to anon, authenticated, service_role;
+grant all on all routines in schema public to anon, authenticated, service_role;
+
 alter table "User" enable row level security;
 drop policy if exists "Mapstar full user access" on "User";
 create policy "Mapstar full user access" on "User" for all using (true) with check (true);

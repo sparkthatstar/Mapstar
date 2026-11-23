@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, directDb } from '@/lib/db'
 import { getAdminSession } from '@/lib/admin-auth'
 import { getUserSession } from '@/lib/user-auth'
 import { MOCK_LISTINGS } from '@/lib/mock-data'
@@ -77,7 +77,28 @@ export async function GET() {
         feeConfigs: fCount,
       }
     } catch (err: any) {
-      errorMessage = err.message || 'Prisma PostgreSQL connection error'
+      try {
+        await directDb.$queryRaw`SELECT 1`
+        latencyMs = Date.now() - start
+        prismaConnected = true
+        connected = true
+
+        const [uCount, pCount, lCount, fCount] = await Promise.all([
+          directDb.user.count().catch(() => 0),
+          directDb.property.count().catch(() => 0),
+          directDb.listing.count().catch(() => 0),
+          directDb.feeConfig.count().catch(() => 0),
+        ])
+
+        counts = {
+          users: uCount,
+          properties: pCount,
+          listings: lCount,
+          feeConfigs: fCount,
+        }
+      } catch (directErr: any) {
+        errorMessage = directErr.message || err.message || 'Prisma PostgreSQL connection error'
+      }
     }
   }
 

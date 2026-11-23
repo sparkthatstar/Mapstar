@@ -40,19 +40,20 @@ export async function POST(req: NextRequest) {
     }
 
     const { email, password } = await req.json()
+    const trimmedEmail = (email || '').trim().toLowerCase()
 
-    if (!email || !password) {
+    if (!trimmedEmail || !password) {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
       )
     }
 
-    const user = await authenticateUser(email, password)
+    const user = await authenticateUser(trimmedEmail, password)
 
     if (!user) {
       recordLoginActivity({
-        email,
+        email: trimmedEmail,
         status: 'FAILED',
         details: 'Incorrect password attempt',
       })
