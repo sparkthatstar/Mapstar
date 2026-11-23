@@ -114,8 +114,8 @@ export async function GET() {
     }
   } catch (err) {}
 
-  // 3. Fallback to mock data if empty
-  return NextResponse.json({ listings: MOCK_LISTINGS, count: MOCK_LISTINGS.length, fromDatabase: false })
+  // 3. Database is clean/empty (no fake mock listings in real software)
+  return NextResponse.json({ listings: [], count: 0, fromDatabase: true })
 }
 
 /**

@@ -143,6 +143,8 @@ export default function ListPropertyDialog({
     }
   }
 
+  const canPost = Boolean(user && (user.role === 'ADMIN' || user.role === 'LANDLORD' || user.role === 'AGENT'))
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto p-0 bg-white dark:bg-[#090D18] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-2xl z-[9999] transition-colors">
@@ -161,7 +163,30 @@ export default function ListPropertyDialog({
         </div>
 
         <div className="p-6">
-          {success ? (
+          {!canPost ? (
+            <div className="py-6 text-center space-y-4">
+              <div className="mx-auto h-14 w-14 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/60 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                <Building className="h-7 w-7" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Listing Approval Required
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+                  To protect tenants from fake listings and unauthorized middleman fees, properties on Mapstar can only be published by approved Landlords, Verified Agents, or Administrators.
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 text-left text-xs text-amber-800 dark:text-amber-300">
+                <strong>How to get approved:</strong> Apply for Landlord or Agent verification in your profile under <strong>&apos;Me&apos;</strong>. Mapstar administrators verify identity and approve your listing privileges promptly.
+              </div>
+              <Button
+                onClick={() => onOpenChange(false)}
+                className="w-full h-10 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold"
+              >
+                Go to Profile &apos;Me&apos; to Apply
+              </Button>
+            </div>
+          ) : success ? (
             <div className="py-8 text-center space-y-3">
               <div className="mx-auto h-12 w-12 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center">
                 <CheckCircle2 className="h-7 w-7 text-blue-600 dark:text-blue-400" />

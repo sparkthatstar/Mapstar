@@ -104,9 +104,9 @@ export async function fetchListingsFromSupabase(): Promise<MockListing[] | null>
         hasVideoWalkthrough: !!l.hasVideoWalkthrough,
         fairPriceBadge: !!l.fairPriceBadge,
         inspectionCount: l.inspectionCount || 0,
-        rating: 4.9,
-        reviewsCount: 1,
-        photoUrls: photos.length > 0 ? photos : ['/lodge-exterior.jpg', '/lodge-room.jpg'],
+        rating: 5.0,
+        reviewsCount: 0,
+        photoUrls: photos,
       }
     })
   } catch (err) {

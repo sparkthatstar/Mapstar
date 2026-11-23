@@ -78,8 +78,8 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [fees, setFees] = useState<any>(null)
 
-  // Listings state (includes custom listings)
-  const [listingsData, setListingsData] = useState<MockListing[]>(MOCK_LISTINGS)
+  // Listings state (fetched live from Supabase PostgreSQL database)
+  const [listingsData, setListingsData] = useState<MockListing[]>([])
 
   // User auth state
   const [user, setUser] = useState<AuthedUser | null>(null)
@@ -680,7 +680,6 @@ export default function Home() {
         }}
         onLogout={handleLogout}
         onOpenGuide={() => setOnboardingOpen(true)}
-        onOpenStarPower={() => setBottomTab('star_power')}
       />
 
       {/* Drawers & Dialogs */}

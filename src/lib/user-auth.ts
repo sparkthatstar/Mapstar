@@ -126,11 +126,37 @@ export function verifyUserSessionCookie(cookieValue: string | undefined): Authed
 export async function getUserSession(): Promise<AuthedUser | null> {
   const cookieStore = await cookies()
   const cookie = cookieStore.get(USER_COOKIE_NAME)?.value
-  return verifyUserSessionCookie(cookie)
+  const user = verifyUserSessionCookie(cookie)
+  if (user) return user
+
+  // Admin session fallback: allow seamless admin access on main app
+  try {
+    const adminCookie = cookieStore.get('mapstar_admin_session')?.value
+    if (adminCookie) {
+      const parts = adminCookie.split('.')
+      if (parts.length === 3) {
+        const [emailB64, expiryStr] = parts
+        const expiresAt = Number(expiryStr)
+        if (expiresAt && Date.now() <= expiresAt) {
+          const email = Buffer.from(emailB64, 'base64url').toString('utf8').toLowerCase()
+          return {
+            id: 'user_admin_01',
+            email,
+            fullName: process.env.ADMIN_NAME || 'Mapking',
+            role: 'ADMIN',
+            ninVerified: true,
+            bvnVerified: true,
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return null
 }
 
 // ---------------------------------------------------------------------
-// Built-in Seed Users & Local Persistence for instant sandbox/offline fallback
+// Built-in Admin & Supabase Integration (No dummy seed users)
 // ---------------------------------------------------------------------
 
 const SEED_USERS: StoredUser[] = [
@@ -143,39 +169,6 @@ const SEED_USERS: StoredUser[] = [
     ninVerified: true,
     bvnVerified: true,
     passwordHash: SECURE_ADMIN_HASH,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_tenant_01',
-    email: 'tenant@mapstar.ng',
-    fullName: 'Chinedu Okeke',
-    phone: '08031234567',
-    role: 'TENANT',
-    ninVerified: true,
-    bvnVerified: false,
-    passwordHash: hashPassword('password123'),
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_landlord_01',
-    email: 'landlord@mapstar.ng',
-    fullName: 'Chief Emeka Eze',
-    phone: '08029876543',
-    role: 'LANDLORD',
-    ninVerified: true,
-    bvnVerified: true,
-    passwordHash: hashPassword('password123'),
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_agent_01',
-    email: 'agent@mapstar.ng',
-    fullName: 'Amaka Obi (Verified Agent)',
-    phone: '08051239876',
-    role: 'AGENT',
-    ninVerified: true,
-    bvnVerified: true,
-    passwordHash: hashPassword('password123'),
     createdAt: new Date().toISOString(),
   },
 ]
@@ -534,8 +527,12 @@ export async function listAllUsers(): Promise<AuthedUser[]> {
 export async function deleteUserAccount(id: string): Promise<{ success: boolean; message: string }> {
   let deleted = false
 
-  // 1. Prisma
+  // 1. Prisma: cascade delete dependent relational records first to protect FK constraints
   try {
+    await db.review.deleteMany({ where: { authorId: id } }).catch(() => {})
+    await db.report.deleteMany({ where: { reporterId: id } }).catch(() => {})
+    await db.savedSearch.deleteMany({ where: { userId: id } }).catch(() => {})
+    await db.referral.deleteMany({ where: { referrerId: id } }).catch(() => {})
     await db.landlord.deleteMany({ where: { userId: id } }).catch(() => {})
     await db.agent.deleteMany({ where: { userId: id } }).catch(() => {})
     await db.user.delete({ where: { id } })
@@ -546,6 +543,10 @@ export async function deleteUserAccount(id: string): Promise<{ success: boolean;
   try {
     const supabase = createServerClient()
     if (supabase) {
+      await supabase.from('Review').delete().eq('authorId', id)
+      await supabase.from('Report').delete().eq('reporterId', id)
+      await supabase.from('SavedSearch').delete().eq('userId', id)
+      await supabase.from('Referral').delete().eq('referrerId', id)
       await supabase.from('Landlord').delete().eq('userId', id)
       await supabase.from('Agent').delete().eq('userId', id)
       const { error } = await supabase.from('User').delete().eq('id', id)

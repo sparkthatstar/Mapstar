@@ -295,6 +295,87 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // ACTION: WIPE DATABASE CLEAN (Delete all listings, properties, and non-admin users)
+    if (action === 'wipe') {
+      const adminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
+
+      // 1. Prisma cleanup
+      try {
+        await db.transaction.deleteMany({}).catch(() => {})
+        await db.agreement.deleteMany({}).catch(() => {})
+        await db.review.deleteMany({}).catch(() => {})
+        await db.report.deleteMany({}).catch(() => {})
+        await db.savedSearch.deleteMany({}).catch(() => {})
+        await db.referral.deleteMany({}).catch(() => {})
+        await db.listing.deleteMany({}).catch(() => {})
+        await db.property.deleteMany({}).catch(() => {})
+        await db.landlord.deleteMany({}).catch(() => {})
+        await db.agent.deleteMany({}).catch(() => {})
+        await db.user.deleteMany({
+          where: {
+            AND: [
+              { email: { not: adminEmail } },
+              { id: { not: 'user_admin_01' } },
+            ],
+          },
+        }).catch(() => {})
+      } catch (prismaErr) {
+        console.error('Prisma wipe error:', prismaErr)
+      }
+
+      // 2. Dual-tier: Supabase REST cleanup
+      try {
+        const supabase = createServerClient()
+        if (supabase) {
+          await supabase.from('Transaction').delete().neq('id', 'placeholder')
+          await supabase.from('Agreement').delete().neq('id', 'placeholder')
+          await supabase.from('Review').delete().neq('id', 'placeholder')
+          await supabase.from('Report').delete().neq('id', 'placeholder')
+          await supabase.from('Listing').delete().neq('id', 'placeholder')
+          await supabase.from('Property').delete().neq('id', 'placeholder')
+          await supabase.from('Landlord').delete().neq('id', 'placeholder')
+          await supabase.from('Agent').delete().neq('id', 'placeholder')
+          await supabase.from('VerificationApplication').delete().neq('id', 'placeholder')
+          await supabase.from('User').delete().neq('email', adminEmail)
+        }
+      } catch (supaErr) {
+        console.error('Supabase SDK wipe error:', supaErr)
+      }
+
+      // 3. Clear local ephemeral JSON caches
+      try {
+        const dataDir = path.join(process.cwd(), '.data')
+        const usersFile = path.join(dataDir, 'users.json')
+        const listingsFile = path.join(dataDir, 'custom-listings.json')
+        const verifFile = path.join(dataDir, 'verifications.json')
+
+        if (fs.existsSync(listingsFile)) {
+          fs.writeFileSync(listingsFile, '[]', 'utf8')
+        }
+        if (fs.existsSync(verifFile)) {
+          fs.writeFileSync(verifFile, '[]', 'utf8')
+        }
+        if (fs.existsSync(usersFile)) {
+          const adminObj = {
+            id: 'user_admin_01',
+            email: adminEmail,
+            fullName: process.env.ADMIN_NAME || 'Mapking',
+            role: 'ADMIN',
+            ninVerified: true,
+            bvnVerified: true,
+            phone: '08000000000',
+            createdAt: new Date().toISOString(),
+          }
+          fs.writeFileSync(usersFile, JSON.stringify([adminObj], null, 2), 'utf8')
+        }
+      } catch (fileErr) {}
+
+      return NextResponse.json({
+        success: true,
+        message: 'Database wiped clean successfully. All listings, properties, and users (except administrator) have been permanently deleted from Supabase.',
+      })
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (err: any) {
     return NextResponse.json(

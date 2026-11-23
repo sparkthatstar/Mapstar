@@ -164,7 +164,7 @@ export async function GET(req: NextRequest) {
     } catch {}
   }
 
-  // 2. Read local custom listings & seed mock data
+  // 2. Read local custom listings (clean slate: do NOT inject dummy mock listings)
   const custom = readCustomListings()
   let results: MockListing[] = []
 
@@ -174,7 +174,8 @@ export async function GET(req: NextRequest) {
     const uniqueCustom = custom.filter((l) => !existingIds.has(l.id))
     results = [...dbResults, ...uniqueCustom]
   } else {
-    results = [...custom, ...MOCK_LISTINGS]
+    // Real software: only return actual stored listings, empty array when clean
+    results = custom
   }
 
   // Filtering
@@ -230,6 +231,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await getUserSession()
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'You must be logged in to post a property listing.' },
+        { status: 401 }
+      )
+    }
+
+    // Enforce listing permission: only Admin, Landlord, or Agent can post listings
+    const isAuthorized = user.role === 'ADMIN' || user.role === 'LANDLORD' || user.role === 'AGENT'
+    if (!isAuthorized) {
+      return NextResponse.json(
+        {
+          error:
+            'Only approved Landlords, Verified Agents, and Administrators can post listings on Mapstar. Please apply for Landlord or Agent verification under your profile in "Me".',
+        },
+        { status: 403 }
+      )
+    }
+
     const body = await req.json()
 
     const {
@@ -259,7 +280,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const assignedRole = role === 'AGENT' ? 'AGENT' : 'LANDLORD'
+    const assignedRole = user.role === 'ADMIN' ? (role === 'AGENT' ? 'AGENT' : 'LANDLORD') : user.role
 
     // Determine approximate coordinates with a slight random jitter
     const baseCoords = AREA_COORDINATES[area] || AREA_COORDINATES[city] || [5.497, 7.025]

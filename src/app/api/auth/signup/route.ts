@@ -64,10 +64,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 4. Password strength validation
-    if (!password || typeof password !== 'string' || password.length < 8) {
+    // 4. Password strength validation (minimum 6 characters)
+    if (!password || typeof password !== 'string' || password.length < 6) {
       return NextResponse.json(
-        { error: 'Password must be at least 8 characters long' },
+        { error: 'Password must be at least 6 characters long' },
         { status: 400 }
       )
     }
