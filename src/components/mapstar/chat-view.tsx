@@ -85,8 +85,6 @@ const INITIAL_MESSAGES: ChatMessage[] = [
 ]
 
 export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
-  const [demoUser, setDemoUser] = useState<AuthedUser | null>(null)
-  const activeUser = user || demoUser
   const [activeChannel, setActiveChannel] = useState(CHANNELS[0].id)
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window !== 'undefined') {
@@ -112,14 +110,14 @@ export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
 
   function handleSend(e: React.FormEvent) {
     e.preventDefault()
-    if (!input.trim() || !activeUser) return
+    if (!input.trim() || !user) return
 
     const newMsg: ChatMessage = {
       id: `msg_${Date.now()}`,
       channelId: activeChannel,
-      senderId: activeUser.id,
-      senderName: activeUser.fullName || activeUser.email,
-      senderRole: activeUser.role,
+      senderId: user.id,
+      senderName: user.fullName || user.email,
+      senderRole: user.role,
       content: input.trim(),
       createdAt: new Date().toISOString(),
     }
@@ -129,7 +127,7 @@ export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
   }
 
   // Logged-out state: "log in to use feature"
-  if (!activeUser) {
+  if (!user) {
     return (
       <div className="flex-1 flex items-center justify-center p-6 bg-[#F8FAFC] dark:bg-[#070A12]">
         <div className="max-w-md w-full bg-white dark:bg-[#090D18] border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xl">
@@ -157,21 +155,6 @@ export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
               onClick={() => onOpenAuth('signup')}
             >
               Create a free Mapstar account
-            </Button>
-            <Button
-              variant="secondary"
-              className="w-full h-9 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 text-xs font-semibold cursor-pointer"
-              onClick={() => {
-                setDemoUser({
-                  id: 'demo_guest',
-                  email: 'guest@mapstar.ng',
-                  fullName: 'Guest Student',
-                  role: 'TENANT',
-                })
-              }}
-            >
-              <Sparkles className="h-3.5 w-3.5 mr-1.5 text-blue-600 dark:text-blue-400" />
-              Explore Live Chat as Guest Student
             </Button>
           </div>
         </div>

@@ -57,8 +57,10 @@ export default function BottomNavigation({
     },
   ]
 
-  // 'Star Power' is positioned uniquely between 'chat' and 'me' as requested
-  const tabs = [...baseTabs, starPowerTab, ...trailingTabs]
+  // Insert 'Star Power' between 'chat' and 'me' exclusively for Administrators
+  const tabs = isAdmin
+    ? [...baseTabs, starPowerTab, ...trailingTabs]
+    : [...baseTabs, ...trailingTabs]
 
   return (
     <nav

@@ -371,7 +371,6 @@ export default function Home() {
           <StarPowerView
             user={user}
             onOpenListingDetail={openListing}
-            onAuthed={(u) => updateUser(u)}
           />
         )}
 
