@@ -25,6 +25,7 @@ import {
   UserX,
   Server,
   Zap,
+  LogIn,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,12 +46,22 @@ import {
 interface StarPowerViewProps {
   user: AuthedUser | null
   onOpenListingDetail?: (id: string) => void
+  onAuthed?: (user: AuthedUser) => void
 }
 
 type StarPowerTab = 'users' | 'listings' | 'database' | 'activity'
 
-export default function StarPowerView({ user, onOpenListingDetail }: StarPowerViewProps) {
+export default function StarPowerView({
+  user,
+  onOpenListingDetail,
+  onAuthed,
+}: StarPowerViewProps) {
   const [activeTab, setActiveTab] = useState<StarPowerTab>('users')
+
+  // Gateway login state
+  const [loggingInAdmin, setLoggingInAdmin] = useState(false)
+  const [adminEmailInput, setAdminEmailInput] = useState('mapstar777@gmail.com')
+  const [adminPasswordInput, setAdminPasswordInput] = useState('Mapking001')
 
   // Database status state
   const [dbStatus, setDbStatus] = useState<any>(null)
@@ -76,12 +87,14 @@ export default function StarPowerView({ user, onOpenListingDetail }: StarPowerVi
   // Seed state
   const [seeding, setSeeding] = useState(false)
 
-  // Fetch initial data
+  // Fetch initial data when user is ADMIN
   useEffect(() => {
-    fetchDbStatus()
-    fetchUsers()
-    fetchListings()
-  }, [])
+    if (user?.role === 'ADMIN') {
+      fetchDbStatus()
+      fetchUsers()
+      fetchListings()
+    }
+  }, [user?.role])
 
   // 1. Fetch Database Health
   async function fetchDbStatus() {
@@ -130,6 +143,63 @@ export default function StarPowerView({ user, onOpenListingDetail }: StarPowerVi
       toast.error('Failed to load listings')
     } finally {
       setLoadingListings(false)
+    }
+  }
+
+  // Gateway Action: Quick 1-Click Master Admin Login
+  async function handleQuickAdminLogin() {
+    setLoggingInAdmin(true)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'mapstar777@gmail.com',
+          password: 'Mapking001',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.user) {
+        toast.success('⚡ Star Power Activated! Authenticated as Master Administrator.')
+        onAuthed?.(data.user)
+      } else {
+        toast.error(data.error || 'Authentication failed. Please check credentials.')
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error authenticating as administrator.')
+    } finally {
+      setLoggingInAdmin(false)
+    }
+  }
+
+  // Gateway Action: Manual Admin Login
+  async function handleManualAdminLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoggingInAdmin(true)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: adminEmailInput.trim(),
+          password: adminPasswordInput.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.user) {
+        if (data.user.role === 'ADMIN') {
+          toast.success('⚡ Star Power Activated! Welcome back, Administrator.')
+        } else {
+          toast.info('Signed in, but this account is not an Administrator.')
+        }
+        onAuthed?.(data.user)
+      } else {
+        toast.error(data.error || 'Invalid admin credentials.')
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error signing in.')
+    } finally {
+      setLoggingInAdmin(false)
     }
   }
 
@@ -233,7 +303,7 @@ export default function StarPowerView({ user, onOpenListingDetail }: StarPowerVi
       })
       const data = await res.json()
       if (res.ok && data.success) {
-        toast.success(data.message || 'All database listings cleared.')
+        toast.success(data.message || 'All database listings cleared directly from Supabase.')
         setListings([])
         setConfirmClearAllListings(false)
         fetchDbStatus()
@@ -295,6 +365,92 @@ export default function StarPowerView({ user, onOpenListingDetail }: StarPowerVi
     )
   }, [listings, listingSearch])
 
+  // =========================================================================
+  // GATEWAY VIEW: UNLOCK STAR POWER IF NOT LOGGED IN AS ADMIN
+  // =========================================================================
+  if (user?.role !== 'ADMIN') {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 bg-[#070A12] text-slate-100 overflow-y-auto">
+        <div className="max-w-md w-full bg-[#090D18] border border-amber-500/30 rounded-3xl p-6 sm:p-8 text-center shadow-2xl relative overflow-hidden">
+          {/* Ambient gold glow */}
+          <div className="absolute -top-12 left-1/4 w-64 h-24 bg-amber-500/15 blur-3xl pointer-events-none" />
+
+          {/* Shiny Glassy Yellow Star Emblem */}
+          <div className="relative mx-auto h-16 w-16 rounded-3xl bg-gradient-to-br from-yellow-300 via-amber-400 to-amber-500 p-1 shadow-xl shadow-amber-500/40 border border-yellow-100/90 backdrop-blur-md mb-5">
+            <div className="absolute inset-0 rounded-[22px] bg-gradient-to-b from-white/70 via-white/20 to-transparent pointer-events-none" />
+            <div className="h-full w-full rounded-[22px] flex items-center justify-center bg-gradient-to-b from-amber-200/40 to-amber-600/40 relative">
+              <svg viewBox="0 0 24 24" className="h-9 w-9 text-amber-950 fill-amber-950 drop-shadow-md">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-white shadow-xs animate-ping" />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 mb-1.5">
+            <h2 className="text-xl font-black text-white tracking-tight">Star Power</h2>
+            <Badge className="bg-amber-500/20 text-amber-300 border-amber-400/40 font-mono text-[10px] uppercase font-bold">
+              Admin Exclusive
+            </Badge>
+          </div>
+          <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+            Direct database control center. Authenticate as Master Administrator to manage Supabase PostgreSQL, view user login activity, delete accounts, and clear database listings directly.
+          </p>
+
+          {/* Quick 1-Click Master Admin Access */}
+          <div className="space-y-3">
+            <Button
+              className="w-full h-11 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 cursor-pointer transition transform active:scale-98"
+              onClick={handleQuickAdminLogin}
+              disabled={loggingInAdmin}
+            >
+              <Zap className={`h-4 w-4 mr-2 text-slate-950 ${loggingInAdmin ? 'animate-spin' : ''}`} />
+              {loggingInAdmin ? 'Connecting to Supabase...' : '⚡ Unlock with Master Admin (Mapking)'}
+            </Button>
+
+            <div className="flex items-center gap-2 my-3">
+              <Separator className="flex-1 bg-slate-800" />
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">or manual sign in</span>
+              <Separator className="flex-1 bg-slate-800" />
+            </div>
+
+            <form onSubmit={handleManualAdminLogin} className="space-y-2.5 text-left">
+              <div>
+                <label className="text-[11px] text-slate-400 font-medium">Admin Email</label>
+                <Input
+                  value={adminEmailInput}
+                  onChange={(e) => setAdminEmailInput(e.target.value)}
+                  placeholder="mapstar777@gmail.com"
+                  className="h-9 text-xs bg-slate-900 border-slate-800 text-white rounded-xl focus:border-amber-400"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-400 font-medium">Admin Password</label>
+                <Input
+                  type="password"
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  placeholder="Mapking001"
+                  className="h-9 text-xs bg-slate-900 border-slate-800 text-white rounded-xl focus:border-amber-400"
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="outline"
+                className="w-full h-9 border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-xs text-slate-200 font-semibold cursor-pointer mt-1"
+                disabled={loggingInAdmin}
+              >
+                <Lock className="h-3.5 w-3.5 mr-1.5 text-amber-400" /> Sign In to Star Power
+              </Button>
+            </form>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // =========================================================================
+  // MAIN STAR POWER DASHBOARD: ACTIVE WHEN USER IS ADMIN
+  // =========================================================================
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#070A12] text-slate-100 overflow-hidden">
       {/* Top Glassy Star Power Banner */}
@@ -330,7 +486,7 @@ export default function StarPowerView({ user, onOpenListingDetail }: StarPowerVi
                 </Badge>
               </div>
               <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
-                <span>Manage Supabase PostgreSQL database directly</span>
+                <span>Direct Supabase PostgreSQL control</span>
                 <span className="text-slate-600">·</span>
                 <span className="text-emerald-400 flex items-center gap-1 font-mono text-[11px]">
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />

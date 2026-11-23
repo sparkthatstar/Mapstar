@@ -17,6 +17,60 @@ async function verifyIsAdmin(): Promise<{ isAuthorized: boolean; email?: string 
   return { isAuthorized: false }
 }
 
+function mapDatabaseRecordToMock(l: any): MockListing {
+  const prop = l.property || {}
+  let photos: string[] = []
+  try {
+    photos = JSON.parse(l.photoUrlsJson || '[]')
+  } catch {
+    photos = []
+  }
+
+  return {
+    id: l.id,
+    propertyId: l.propertyId,
+    title: prop.title || 'Verified Lodge',
+    description: prop.description || '',
+    propertyType: prop.propertyType || 'SELF_CONTAINED',
+    city: prop.city || 'Owerri',
+    state: prop.state || 'Imo',
+    area: prop.area || 'Eziobodo',
+    address: prop.address || '',
+    latitude: prop.latitude || 5.497,
+    longitude: prop.longitude || 7.025,
+    bedrooms: prop.bedrooms ?? 1,
+    bathrooms: prop.bathrooms ?? 1,
+    toilets: prop.toilets ?? 1,
+    parkingSpaces: prop.parkingSpaces ?? 0,
+    furnished: !!prop.furnished,
+    hasBorehole: !!prop.hasBorehole,
+    hasPrepaidMeter: !!prop.hasPrepaidMeter,
+    hasInsideToilet: !!prop.hasInsideToilet,
+    hasCCTV: !!prop.hasCCTV,
+    hasGenerator: !!prop.hasGenerator,
+    hasWiFi: !!prop.hasWiFi,
+    status: l.status as any,
+    annualRent: l.annualRent,
+    cautionFee: l.cautionFee,
+    legalFee: l.legalFee,
+    agentFeeCap: l.agentFeeCap,
+    availableFrom: l.availableFrom || new Date().toISOString(),
+    vacatingDate: l.vacatingDate || undefined,
+    comingSoon: !!l.comingSoon,
+    featured: !!l.featured,
+    physicallyVerified: !!l.physicallyVerified,
+    lastVerifiedAt: l.lastVerifiedAt || undefined,
+    photoCount: l.photoCount || photos.length,
+    has360Tour: !!l.has360Tour,
+    hasVideoWalkthrough: !!l.hasVideoWalkthrough,
+    fairPriceBadge: !!l.fairPriceBadge,
+    inspectionCount: l.inspectionCount || 0,
+    rating: 4.8,
+    reviewsCount: 0,
+    photoUrls: photos,
+  }
+}
+
 /**
  * GET /api/admin/listings
  * Returns listings with their full property details from Supabase PostgreSQL.
@@ -27,6 +81,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized — administrator privileges required' }, { status: 401 })
   }
 
+  // 1. Try Prisma first
   try {
     const dbListings = await db.listing.findMany({
       include: {
@@ -38,73 +93,28 @@ export async function GET() {
     })
 
     if (dbListings && dbListings.length > 0) {
-      const mapped: MockListing[] = dbListings.map((l) => {
-        let photos: string[] = []
-        try {
-          photos = JSON.parse(l.photoUrlsJson || '[]')
-        } catch {
-          photos = []
-        }
-
-        return {
-          id: l.id,
-          propertyId: l.propertyId,
-          title: l.property.title,
-          description: l.property.description,
-          propertyType: l.property.propertyType,
-          city: l.property.city,
-          state: l.property.state,
-          area: l.property.area,
-          address: l.property.address,
-          latitude: l.property.latitude,
-          longitude: l.property.longitude,
-          bedrooms: l.property.bedrooms,
-          bathrooms: l.property.bathrooms,
-          toilets: l.property.toilets,
-          parkingSpaces: l.property.parkingSpaces,
-          furnished: l.property.furnished,
-          hasBorehole: l.property.hasBorehole,
-          hasPrepaidMeter: l.property.hasPrepaidMeter,
-          hasInsideToilet: l.property.hasInsideToilet,
-          hasCCTV: l.property.hasCCTV,
-          hasGenerator: l.property.hasGenerator,
-          hasWiFi: l.property.hasWiFi,
-          status: l.status as any,
-          annualRent: l.annualRent,
-          cautionFee: l.cautionFee,
-          legalFee: l.legalFee,
-          agentFeeCap: l.agentFeeCap,
-          availableFrom: l.availableFrom ? l.availableFrom.toISOString() : new Date().toISOString(),
-          vacatingDate: l.vacatingDate ? l.vacatingDate.toISOString() : undefined,
-          comingSoon: l.comingSoon,
-          featured: l.featured,
-          physicallyVerified: l.physicallyVerified,
-          lastVerifiedAt: l.lastVerifiedAt ? l.lastVerifiedAt.toISOString() : undefined,
-          photoCount: l.photoCount || photos.length,
-          has360Tour: l.has360Tour,
-          hasVideoWalkthrough: l.hasVideoWalkthrough,
-          fairPriceBadge: l.fairPriceBadge,
-          inspectionCount: l.inspectionCount,
-          rating: 4.8,
-          reviewsCount: 0,
-          photoUrls: photos,
-        }
-      })
+      const mapped = dbListings.map(mapDatabaseRecordToMock)
       return NextResponse.json({ listings: mapped, count: mapped.length, fromDatabase: true })
     }
-  } catch (err) {
-    // Dual-tier fallback to Supabase REST client
-    try {
-      const supabase = createServerClient()
-      if (supabase) {
-        const { data: listings } = await supabase.from('Listing').select('*, property:Property(*)')
-        if (listings && listings.length > 0) {
-          return NextResponse.json({ listings, count: listings.length, fromDatabase: true })
-        }
-      }
-    } catch {}
-  }
+  } catch (err) {}
 
+  // 2. Dual-tier: Query live Supabase PostgreSQL REST Client
+  try {
+    const supabase = createServerClient()
+    if (supabase) {
+      const { data: dbRows, error } = await supabase
+        .from('Listing')
+        .select('*, property:Property(*)')
+        .order('createdAt', { ascending: false })
+
+      if (dbRows && !error && dbRows.length > 0) {
+        const mapped = dbRows.map(mapDatabaseRecordToMock)
+        return NextResponse.json({ listings: mapped, count: mapped.length, fromDatabase: true })
+      }
+    }
+  } catch (err) {}
+
+  // 3. Fallback to mock data if empty
   return NextResponse.json({ listings: MOCK_LISTINGS, count: MOCK_LISTINGS.length, fromDatabase: false })
 }
 
@@ -130,7 +140,7 @@ export async function PATCH(req: NextRequest) {
     if (typeof physicallyVerified === 'boolean') {
       data.physicallyVerified = physicallyVerified
       if (physicallyVerified) {
-        data.lastVerifiedAt = new Date()
+        data.lastVerifiedAt = new Date().toISOString()
       }
     }
     if (typeof featured === 'boolean') {
@@ -197,14 +207,16 @@ export async function DELETE(req: NextRequest) {
         const res = await db.listing.deleteMany({})
         await db.property.deleteMany({})
         deletedListingsCount = res.count
-      } catch (prismaErr) {
-        // 2. Supabase REST fallback
+      } catch (prismaErr) {}
+
+      // 2. Supabase REST cleanup
+      try {
         const supabase = createServerClient()
         if (supabase) {
-          await supabase.from('Listing').delete().neq('id', '0')
-          await supabase.from('Property').delete().neq('id', '0')
+          await supabase.from('Listing').delete().neq('id', 'placeholder')
+          await supabase.from('Property').delete().neq('id', 'placeholder')
         }
-      }
+      } catch (supaErr) {}
 
       return NextResponse.json({
         success: true,

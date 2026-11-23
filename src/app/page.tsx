@@ -137,26 +137,56 @@ export default function Home() {
       .catch(() => {})
   }, [])
 
-  // Load current user (if any) on mount
+  // Load current user on mount with instant local cache rehydration
   useEffect(() => {
+    try {
+      const cached = localStorage.getItem('mapstar_user')
+      if (cached) {
+        setUser(JSON.parse(cached))
+      }
+    } catch {}
+
     fetch('/api/auth/me', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d) => setUser(d.user ?? null))
-      .catch(() => setUser(null))
+      .then((d) => {
+        if (d.user) {
+          setUser(d.user)
+          try {
+            localStorage.setItem('mapstar_user', JSON.stringify(d.user))
+          } catch {}
+        } else {
+          setUser(null)
+          try {
+            localStorage.removeItem('mapstar_user')
+          } catch {}
+        }
+      })
+      .catch(() => {})
   }, [])
+
+  function updateUser(newUser: AuthedUser | null) {
+    setUser(newUser)
+    try {
+      if (newUser) {
+        localStorage.setItem('mapstar_user', JSON.stringify(newUser))
+      } else {
+        localStorage.removeItem('mapstar_user')
+      }
+    } catch {}
+  }
 
   async function handleLogout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
     } finally {
-      setUser(null)
+      updateUser(null)
     }
   }
 
   function handleListingCreated(newListing: MockListing, updatedUser?: AuthedUser) {
     setListingsData((prev) => [newListing, ...prev])
     if (updatedUser) {
-      setUser(updatedUser)
+      updateUser(updatedUser)
     }
     openListing(newListing.id)
   }
@@ -341,6 +371,7 @@ export default function Home() {
           <StarPowerView
             user={user}
             onOpenListingDetail={openListing}
+            onAuthed={(u) => updateUser(u)}
           />
         )}
 
@@ -671,7 +702,7 @@ export default function Home() {
         open={authOpen}
         onOpenChange={setAuthOpen}
         defaultMode={authMode}
-        onAuthed={(u) => setUser(u)}
+        onAuthed={(u) => updateUser(u)}
       />
       <ListPropertyDialog
         open={listPropertyOpen}
