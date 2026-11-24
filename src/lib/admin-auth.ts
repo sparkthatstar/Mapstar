@@ -18,8 +18,13 @@ export interface AdminSession {
   expiresAt: number
 }
 
+const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET?.trim()
+if (!ADMIN_SESSION_SECRET) {
+  throw new Error('ADMIN_SESSION_SECRET must be set')
+}
+
 function getSecret(): string {
-  return process.env.ADMIN_SESSION_SECRET || 'mapstar-admin-session-secure-key-982103847'
+  return ADMIN_SESSION_SECRET
 }
 
 function sign(payload: string): string {

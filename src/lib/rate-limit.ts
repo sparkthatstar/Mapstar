@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
-import { spawnSync } from 'child_process'
 
 export interface RateLimitOptions {
   maxAttempts?: number
@@ -14,7 +13,6 @@ export interface RateLimitResult {
   remaining: number
   resetAt: number
   retryAfterSeconds: number
-  then?: (onfulfilled?: (value: RateLimitResult) => any, onrejected?: (reason: any) => any) => Promise<any>
 }
 
 // ---------------------------------------------------------------------
@@ -115,128 +113,6 @@ export const redis = redisConfig
   : null
 
 /**
- * Upstash Ratelimit slidingWindow instance backed by Redis.
- */
-export const ratelimit = redis
-  ? new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(10, '15 m'),
-      prefix: '@upstash/ratelimit:mapstar',
-    })
-  : null
-
-// Sliding Window Counter Lua script matching @upstash/ratelimit algorithm
-const UPSTASH_SLIDING_WINDOW_LUA = `
-local currentKey = KEYS[1]
-local previousKey = KEYS[2]
-local tokens = tonumber(ARGV[1])
-local now = tonumber(ARGV[2])
-local window = tonumber(ARGV[3])
-local incrementBy = tonumber(ARGV[4] or 1)
-
-local requestsInCurrentWindow = tonumber(redis.call('GET', currentKey) or 0)
-local requestsInPreviousWindow = tonumber(redis.call('GET', previousKey) or 0)
-
-local percentageInCurrent = (now % window) / window
-requestsInPreviousWindow = math.floor((1 - percentageInCurrent) * requestsInPreviousWindow)
-
-if incrementBy > 0 and (requestsInPreviousWindow + requestsInCurrentWindow) >= tokens then
-    return {-1, tokens}
-end
-
-local newValue = redis.call('INCRBY', currentKey, incrementBy)
-if newValue == incrementBy then
-    redis.call('PEXPIRE', currentKey, math.floor(window * 2 / 1000))
-end
-
-return {requestsInPreviousWindow + newValue, tokens}
-`.trim()
-
-/**
- * Executes the Upstash sliding window algorithm synchronously against the Upstash REST endpoint.
- * Ensures serverless route handlers calling checkRateLimit synchronously remain fully shared across instances.
- */
-function checkUpstashRateLimitSync(
-  url: string,
-  token: string,
-  prefix: string,
-  ip: string,
-  maxAttempts: number,
-  windowMs: number
-): RateLimitResult | null {
-  try {
-    const now = Date.now()
-    const currentWindow = Math.floor(now / windowMs)
-    const currentKey = `@upstash/ratelimit:${prefix}:${ip}:${currentWindow}`
-    const previousKey = `@upstash/ratelimit:${prefix}:${ip}:${currentWindow - 1}`
-    const resetAt = (currentWindow + 1) * windowMs
-
-    const commandPayload = JSON.stringify([
-      'EVAL',
-      UPSTASH_SLIDING_WINDOW_LUA,
-      '2',
-      currentKey,
-      previousKey,
-      maxAttempts.toString(),
-      now.toString(),
-      windowMs.toString(),
-      '1',
-    ])
-
-    const curlCmd = process.platform === 'win32' ? 'curl.exe' : 'curl'
-    const proc = spawnSync(
-      curlCmd,
-      [
-        '-s',
-        '-m',
-        '2',
-        '-X',
-        'POST',
-        url,
-        '-H',
-        `Authorization: Bearer ${token}`,
-        '-H',
-        'Content-Type: application/json',
-        '-d',
-        commandPayload,
-      ],
-      { timeout: 2500, encoding: 'utf8' }
-    )
-
-    if (proc.error || proc.status !== 0 || !proc.stdout) {
-      return null
-    }
-
-    const response = JSON.parse(proc.stdout)
-    if (!response || response.error || !Array.isArray(response.result)) {
-      return null
-    }
-
-    const [count, effectiveLimit] = response.result
-    if (count === -1) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - now) / 1000))
-      return {
-        allowed: false,
-        remaining: 0,
-        resetAt,
-        retryAfterSeconds,
-      }
-    }
-
-    const remaining = Math.max(0, Number(effectiveLimit) - Number(count))
-    return {
-      allowed: true,
-      remaining,
-      resetAt,
-      retryAfterSeconds: 0,
-    }
-  } catch (err) {
-    console.error('[RATE_LIMIT] Sync Upstash Redis call error:', err)
-    return null
-  }
-}
-
-/**
  * Extracts client IP safely from NextRequest headers.
  */
 export function getClientIp(req: NextRequest): string {
@@ -253,52 +129,10 @@ export function getClientIp(req: NextRequest): string {
 
 /**
  * Checks and increments rate limit for an IP and prefix.
- * Standardized on Upstash Redis slidingWindow across serverless instances,
+ * Uses the @upstash/ratelimit SDK slidingWindow backed by Upstash Redis across serverless instances,
  * with resilient in-memory fallback if Redis is unconfigured or unreachable.
  */
-export function checkRateLimit(
-  req: NextRequest,
-  options: RateLimitOptions = {}
-): RateLimitResult {
-  const {
-    maxAttempts = 5,
-    windowMs = 15 * 60 * 1000,
-    prefix = 'global',
-  } = options
-
-  const ip = getClientIp(req)
-  const currentConfig = getRedisConfig()
-
-  let result: RateLimitResult | null = null
-
-  if (currentConfig) {
-    result = checkUpstashRateLimitSync(
-      currentConfig.url,
-      currentConfig.token,
-      prefix,
-      ip,
-      maxAttempts,
-      windowMs
-    )
-  }
-
-  // Fallback to in-memory store if Redis was unconfigured or timed out
-  if (!result) {
-    result = checkInMemoryRateLimit(ip, prefix, maxAttempts, windowMs)
-  }
-
-  // Attach thenable interface so that callers with or without await execute seamlessly
-  return Object.assign(result, {
-    then(onfulfilled?: (val: RateLimitResult) => any, onrejected?: (err: any) => any) {
-      return Promise.resolve(result!).then(onfulfilled, onrejected)
-    },
-  })
-}
-
-/**
- * Asynchronous rate limit check using the official @upstash/ratelimit SDK directly.
- */
-export async function checkRateLimitAsync(
+export async function checkRateLimit(
   req: NextRequest,
   options: RateLimitOptions = {}
 ): Promise<RateLimitResult> {
@@ -331,7 +165,7 @@ export async function checkRateLimitAsync(
         retryAfterSeconds,
       }
     } catch (err) {
-      console.error('[RATE_LIMIT] Async Upstash Redis call error:', err)
+      console.error('[RATE_LIMIT] Upstash Redis call error:', err)
     }
   }
 

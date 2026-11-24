@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(req: NextRequest) {
   try {
-    const limit = checkRateLimit(req, {
+    const limit = await checkRateLimit(req, {
       prefix: 'user-login',
       maxAttempts: 10,
       windowMs: 15 * 60 * 1000,

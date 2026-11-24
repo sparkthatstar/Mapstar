@@ -20,7 +20,7 @@ const PHONE_REGEX = /^\+?[0-9\s\-()]{7,20}$/
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate limiting: 6 signup attempts per 30 minutes per IP
-    const limit = checkRateLimit(req, {
+    const limit = await checkRateLimit(req, {
       prefix: 'signup',
       maxAttempts: 6,
       windowMs: 30 * 60 * 1000,
