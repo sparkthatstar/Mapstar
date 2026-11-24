@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { createHmac, createHash, scryptSync, randomBytes, timingSafeEqual } from 'crypto'
 import { db } from './db'
+import { sendEmail } from './email'
 
 export const USER_COOKIE_NAME = 'mapstar_user_session'
 
@@ -355,7 +356,14 @@ export async function createPasswordResetRequest(email: string): Promise<{
     createdAt: new Date().toISOString(),
   })
 
-  console.log(`[PASSWORD_RESET] Code generated for ${normalizedEmail}: ${code}`)
+  const subject = 'Reset Your Mapstar Password'
+  const message = `Hello ${user.fullName || 'Mapstar User'},\n\nYour 6-digit password reset code is: ${code}\nAlternatively, use token: ${token}\nThis code expires in 15 minutes.`
+
+  await sendEmail({
+    to: normalizedEmail,
+    subject,
+    body: message,
+  })
 
   return { code, token, expiresAt }
 }
