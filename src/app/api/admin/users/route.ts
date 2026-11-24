@@ -3,7 +3,6 @@ import { getAdminSession } from '@/lib/admin-auth'
 import { listAllUsers, getUserSession, deleteUserAccount } from '@/lib/user-auth'
 import { getRecentLoginActivity } from '@/lib/activity-log'
 import { db } from '@/lib/db'
-import { createServerClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,13 +37,14 @@ export async function GET() {
       loginActivity,
     })
   } catch (err: any) {
+    console.error('Failed to fetch users:', err)
     return NextResponse.json({ error: err.message || 'Failed to fetch users' }, { status: 500 })
   }
 }
 
 /**
  * PATCH /api/admin/users
- * Update user verification (NIN / BVN), role, or details in Supabase with role whitelisting.
+ * Update user verification (NIN / BVN), role, or details directly in PostgreSQL via Prisma.
  */
 export async function PATCH(req: NextRequest) {
   const auth = await verifyIsAdmin()
@@ -73,30 +73,13 @@ export async function PATCH(req: NextRequest) {
       data.role = role
     }
 
-    // 1. Try Prisma update
-    try {
-      const updated = await db.user.update({
-        where: { id },
-        data: data as any,
-      })
-      return NextResponse.json({ success: true, user: updated })
-    } catch (prismaErr) {
-      // 2. Dual-tier fallback: Try Supabase REST Client
-      const supabase = createServerClient()
-      if (supabase) {
-        const { data: updated, error } = await supabase
-          .from('User')
-          .update({ ...data, updatedAt: new Date().toISOString() })
-          .eq('id', id)
-          .select()
-          .single()
-        if (updated && !error) {
-          return NextResponse.json({ success: true, user: updated })
-        }
-      }
-      throw prismaErr
-    }
+    const updated = await db.user.update({
+      where: { id },
+      data: data as any,
+    })
+    return NextResponse.json({ success: true, user: updated })
   } catch (err: any) {
+    console.error('Failed to update user:', err)
     return NextResponse.json(
       { error: err.message || 'Failed to update user' },
       { status: 500 }
@@ -140,6 +123,7 @@ export async function DELETE(req: NextRequest) {
     const result = await deleteUserAccount(id)
     return NextResponse.json(result)
   } catch (err: any) {
+    console.error('Failed to delete user account:', err)
     return NextResponse.json(
       { error: err.message || 'Failed to delete user account' },
       { status: 500 }

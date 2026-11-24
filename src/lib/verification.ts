@@ -1,8 +1,5 @@
 import { db } from './db'
-import { createServerClient } from './supabase'
 import { recordLoginActivity } from './activity-log'
-import fs from 'fs'
-import path from 'path'
 
 export interface VerificationApplication {
   id: string
@@ -23,33 +20,30 @@ export interface VerificationApplication {
   updatedAt: string
 }
 
-const DATA_DIR = path.join(process.cwd(), '.data')
-const VERIFICATIONS_FILE = path.join(DATA_DIR, 'verifications.json')
-
-function readVerifications(): VerificationApplication[] {
-  try {
-    if (!fs.existsSync(VERIFICATIONS_FILE)) return []
-    const content = fs.readFileSync(VERIFICATIONS_FILE, 'utf8')
-    const parsed = JSON.parse(content)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function writeVerifications(apps: VerificationApplication[]) {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    }
-    fs.writeFileSync(VERIFICATIONS_FILE, JSON.stringify(apps, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Failed to write verifications:', err)
+function formatApplication(record: any): VerificationApplication {
+  return {
+    id: record.id,
+    userId: record.userId,
+    userEmail: record.userEmail,
+    fullName: record.fullName,
+    phone: record.phone || undefined,
+    type: record.type as any,
+    nin: record.nin || undefined,
+    bvn: record.bvn || undefined,
+    businessName: record.businessName || undefined,
+    propertyOrOfficeAddress: record.propertyOrOfficeAddress || undefined,
+    notes: record.notes || undefined,
+    status: record.status as any,
+    reviewedAt: record.reviewedAt ? new Date(record.reviewedAt).toISOString() : undefined,
+    reviewedBy: record.reviewedBy || undefined,
+    createdAt: new Date(record.createdAt).toISOString(),
+    updatedAt: new Date(record.updatedAt).toISOString(),
   }
 }
 
 /**
  * Submit a verification application (NIN, BVN, or Landlord/Agent listing license)
+ * Persisted directly to Supabase PostgreSQL via Prisma.
  */
 export async function submitVerificationApplication(data: {
   userId: string
@@ -63,76 +57,73 @@ export async function submitVerificationApplication(data: {
   propertyOrOfficeAddress?: string
   notes?: string
 }): Promise<VerificationApplication> {
-  const newApp: VerificationApplication = {
-    id: `verif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    userId: data.userId,
-    userEmail: data.userEmail.toLowerCase().trim(),
-    fullName: data.fullName.trim(),
-    phone: data.phone?.trim(),
-    type: data.type,
-    nin: data.nin?.trim(),
-    bvn: data.bvn?.trim(),
-    businessName: data.businessName?.trim(),
-    propertyOrOfficeAddress: data.propertyOrOfficeAddress?.trim(),
-    notes: data.notes?.trim(),
-    status: 'PENDING',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-
-  // 1. Try Supabase REST insertion
   try {
-    const supabase = createServerClient()
-    if (supabase) {
-      await supabase.from('VerificationApplication').insert(newApp)
-    }
-  } catch (err) {}
+    const created = await db.verificationApplication.create({
+      data: {
+        userId: data.userId,
+        userEmail: data.userEmail.toLowerCase().trim(),
+        fullName: data.fullName.trim(),
+        phone: data.phone?.trim() || null,
+        type: data.type,
+        nin: data.nin?.trim() || null,
+        bvn: data.bvn?.trim() || null,
+        businessName: data.businessName?.trim() || null,
+        propertyOrOfficeAddress: data.propertyOrOfficeAddress?.trim() || null,
+        notes: data.notes?.trim() || null,
+        status: 'PENDING',
+      },
+    })
 
-  // 2. Local persistence fallback
-  const list = readVerifications()
-  list.unshift(newApp)
-  writeVerifications(list)
+    // Log to activity audit stream
+    recordLoginActivity({
+      userId: data.userId,
+      email: data.userEmail,
+      fullName: data.fullName,
+      status: 'SUCCESS',
+      details: `Applied for ${data.type} verification (NIN: ${data.nin ? 'Provided' : 'None'}, BVN: ${data.bvn ? 'Provided' : 'None'})`,
+    })
 
-  // 3. Log to activity audit stream
-  recordLoginActivity({
-    userId: data.userId,
-    email: data.userEmail,
-    fullName: data.fullName,
-    status: 'SUCCESS',
-    details: `Applied for ${data.type} verification (NIN: ${data.nin ? 'Provided' : 'None'}, BVN: ${data.bvn ? 'Provided' : 'None'})`,
-  })
-
-  return newApp
+    return formatApplication(created)
+  } catch (err: any) {
+    console.error('submitVerificationApplication database error:', err)
+    throw err
+  }
 }
 
 /**
  * Get all verification applications (for Star Power admin management)
+ * Loaded directly from PostgreSQL via Prisma.
  */
 export async function getAllVerificationApplications(): Promise<VerificationApplication[]> {
-  // 1. Try Supabase REST
   try {
-    const supabase = createServerClient()
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('VerificationApplication')
-        .select('*')
-        .order('createdAt', { ascending: false })
-      if (data && !error && data.length > 0) {
-        return data as VerificationApplication[]
-      }
-    }
-  } catch (err) {}
+    const list = await db.verificationApplication.findMany({
+      orderBy: { createdAt: 'desc' },
+    })
 
-  // 2. Local store
-  return readVerifications()
+    return list.map(formatApplication)
+  } catch (err: any) {
+    console.error('getAllVerificationApplications database error:', err)
+    throw err
+  }
 }
 
 /**
  * Get applications for a single user
  */
 export async function getUserVerificationApplications(userId: string): Promise<VerificationApplication[]> {
-  const all = await getAllVerificationApplications()
-  return all.filter((a) => a.userId === userId || a.userEmail === userId)
+  try {
+    const list = await db.verificationApplication.findMany({
+      where: {
+        OR: [{ userId }, { userEmail: userId }],
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    return list.map(formatApplication)
+  } catch (err: any) {
+    console.error('getUserVerificationApplications database error:', err)
+    throw err
+  }
 }
 
 /**
@@ -141,6 +132,7 @@ export async function getUserVerificationApplications(userId: string): Promise<V
  * - Grant BVN verification
  * - Approve listing permission (upgrade to LANDLORD or AGENT)
  * - Revoke verification
+ * Fully atomic in PostgreSQL via Prisma.
  */
 export async function processVerificationApplication(params: {
   applicationId: string
@@ -148,110 +140,86 @@ export async function processVerificationApplication(params: {
   adminEmail: string
 }): Promise<{ success: boolean; application?: VerificationApplication; message: string }> {
   const { applicationId, action, adminEmail } = params
-  const list = readVerifications()
-  const appIndex = list.findIndex((a) => a.id === applicationId)
-  const app = appIndex >= 0 ? list[appIndex] : null
 
-  if (!app) {
-    return { success: false, message: 'Verification application not found.' }
-  }
+  try {
+    const app = await db.verificationApplication.findUnique({
+      where: { id: applicationId },
+    })
 
-  const userId = app.userId
-  const now = new Date().toISOString()
+    if (!app) {
+      return { success: false, message: 'Verification application not found.' }
+    }
 
-  let userUpdate: { ninVerified?: boolean; bvnVerified?: boolean; role?: 'LANDLORD' | 'AGENT' | 'TENANT' } = {}
-  let newAppStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED' = 'APPROVED'
-  let msg = 'Verification updated successfully.'
+    const userId = app.userId
+    const now = new Date()
 
-  switch (action) {
-    case 'APPROVE_NIN':
-      userUpdate = { ninVerified: true }
-      msg = `NIN verified for ${app.fullName || app.userEmail}.`
-      break
-    case 'APPROVE_BVN':
-      userUpdate = { bvnVerified: true }
-      msg = `BVN verified for ${app.fullName || app.userEmail}.`
-      break
-    case 'APPROVE_ALL':
-      userUpdate = { ninVerified: true, bvnVerified: true }
-      if (app.type === 'LANDLORD') userUpdate.role = 'LANDLORD'
-      if (app.type === 'AGENT') userUpdate.role = 'AGENT'
-      msg = `Full verification & listing approval granted to ${app.fullName || app.userEmail}.`
-      break
-    case 'APPROVE_LANDLORD':
-      userUpdate = { ninVerified: true, bvnVerified: true, role: 'LANDLORD' }
-      msg = `Approved ${app.fullName || app.userEmail} as Verified Landlord with listing privileges.`
-      break
-    case 'APPROVE_AGENT':
-      userUpdate = { ninVerified: true, bvnVerified: true, role: 'AGENT' }
-      msg = `Approved ${app.fullName || app.userEmail} as Mapstar-Verified Agent with listing privileges.`
-      break
-    case 'REJECT':
-      newAppStatus = 'REJECTED'
-      msg = `Application rejected for ${app.fullName || app.userEmail}.`
-      break
-    case 'REVOKE':
-      newAppStatus = 'REVOKED'
-      userUpdate = { ninVerified: false, bvnVerified: false, role: 'TENANT' }
-      msg = `Verification and listing privileges revoked for ${app.fullName || app.userEmail}.`
-      break
-  }
+    let userUpdate: { ninVerified?: boolean; bvnVerified?: boolean; role?: 'LANDLORD' | 'AGENT' | 'TENANT' } = {}
+    let newAppStatus = 'APPROVED'
+    let msg = 'Verification updated successfully.'
 
-  // 1. Update User in Prisma PostgreSQL
-  if (Object.keys(userUpdate).length > 0) {
-    try {
+    switch (action) {
+      case 'APPROVE_NIN':
+        userUpdate = { ninVerified: true }
+        msg = `NIN verified for ${app.fullName || app.userEmail}.`
+        break
+      case 'APPROVE_BVN':
+        userUpdate = { bvnVerified: true }
+        msg = `BVN verified for ${app.fullName || app.userEmail}.`
+        break
+      case 'APPROVE_ALL':
+        userUpdate = { ninVerified: true, bvnVerified: true }
+        if (app.type === 'LANDLORD') userUpdate.role = 'LANDLORD'
+        if (app.type === 'AGENT') userUpdate.role = 'AGENT'
+        msg = `Full verification & listing approval granted to ${app.fullName || app.userEmail}.`
+        break
+      case 'APPROVE_LANDLORD':
+        userUpdate = { ninVerified: true, bvnVerified: true, role: 'LANDLORD' }
+        msg = `Approved ${app.fullName || app.userEmail} as Verified Landlord with listing privileges.`
+        break
+      case 'APPROVE_AGENT':
+        userUpdate = { ninVerified: true, bvnVerified: true, role: 'AGENT' }
+        msg = `Approved ${app.fullName || app.userEmail} as Mapstar-Verified Agent with listing privileges.`
+        break
+      case 'REJECT':
+        newAppStatus = 'REJECTED'
+        msg = `Application rejected for ${app.fullName || app.userEmail}.`
+        break
+      case 'REVOKE':
+        newAppStatus = 'REVOKED'
+        userUpdate = { ninVerified: false, bvnVerified: false, role: 'TENANT' }
+        msg = `Verification and listing privileges revoked for ${app.fullName || app.userEmail}.`
+        break
+    }
+
+    // 1. Update User in Prisma PostgreSQL if verification state or role changed
+    if (Object.keys(userUpdate).length > 0) {
       await db.user.update({
         where: { id: userId },
         data: userUpdate as any,
       })
-    } catch (err) {}
-
-    // 2. Dual-tier: Update User via Supabase REST
-    try {
-      const supabase = createServerClient()
-      if (supabase) {
-        await supabase
-          .from('User')
-          .update({ ...userUpdate, updatedAt: now })
-          .eq('id', userId)
-      }
-    } catch (err) {}
-  }
-
-  // 3. Update application state
-  app.status = newAppStatus
-  app.reviewedAt = now
-  app.reviewedBy = adminEmail
-  app.updatedAt = now
-
-  if (appIndex >= 0) {
-    list[appIndex] = app
-    writeVerifications(list)
-  }
-
-  // Try updating application in Supabase
-  try {
-    const supabase = createServerClient()
-    if (supabase) {
-      await supabase
-        .from('VerificationApplication')
-        .update({
-          status: newAppStatus,
-          reviewedAt: now,
-          reviewedBy: adminEmail,
-          updatedAt: now,
-        })
-        .eq('id', applicationId)
     }
-  } catch (err) {}
 
-  // 4. Record to Audit Log
-  recordLoginActivity({
-    email: adminEmail,
-    role: 'ADMIN',
-    status: 'SUCCESS',
-    details: `Admin processed verification application ${applicationId} (${action}) for ${app.userEmail}`,
-  })
+    // 2. Update application status in PostgreSQL
+    const updatedApp = await db.verificationApplication.update({
+      where: { id: applicationId },
+      data: {
+        status: newAppStatus,
+        reviewedAt: now,
+        reviewedBy: adminEmail,
+      },
+    })
 
-  return { success: true, application: app, message: msg }
+    // 3. Record to Audit Log
+    recordLoginActivity({
+      email: adminEmail,
+      role: 'ADMIN',
+      status: 'SUCCESS',
+      details: `Admin processed verification application ${applicationId} (${action}) for ${app.userEmail}`,
+    })
+
+    return { success: true, application: formatApplication(updatedApp), message: msg }
+  } catch (err: any) {
+    console.error('processVerificationApplication database error:', err)
+    throw err
+  }
 }

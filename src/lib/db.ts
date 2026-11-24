@@ -2,7 +2,6 @@ import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
-  directPrisma: PrismaClient | undefined
 }
 
 /**
@@ -20,10 +19,9 @@ function ensureSsl(url?: string): string | undefined {
 }
 
 const pooledUrl = ensureSsl(process.env.DATABASE_URL)
-const directUrl = ensureSsl(process.env.DIRECT_URL)
 
 /**
- * Primary Prisma Client connected via Supabase PgBouncer pooled connection (port 6543).
+ * Prisma Client connected to Supabase PostgreSQL database.
  */
 export const db =
   globalForPrisma.prisma ??
@@ -32,19 +30,6 @@ export const db =
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   })
 
-/**
- * Direct fallback Prisma Client connected to Supabase PostgreSQL (port 5432).
- * Used as fallback if PgBouncer pooler experiences connection throttling.
- */
-export const directDb =
-  globalForPrisma.directPrisma ??
-  new PrismaClient({
-    datasources: directUrl ? { db: { url: directUrl } } : (pooledUrl ? { db: { url: pooledUrl } } : undefined),
-    log: ['error'],
-  })
-
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = db
-  globalForPrisma.directPrisma = directDb
 }
-

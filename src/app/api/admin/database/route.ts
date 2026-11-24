@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, directDb } from '@/lib/db'
+import { db } from '@/lib/db'
 import { getAdminSession } from '@/lib/admin-auth'
 import { getUserSession } from '@/lib/user-auth'
 import { MOCK_LISTINGS } from '@/lib/mock-data'
 import { DEFAULT_FEES } from '@/lib/fees'
-import { createServerClient, isSupabaseConfigured, seedSupabaseViaSdk } from '@/lib/supabase'
 import fs from 'fs'
 import path from 'path'
 
@@ -24,7 +23,7 @@ function maskDatabaseUrl(url?: string): string {
 
 /**
  * GET /api/admin/database
- * Inspects live Supabase PostgreSQL connectivity, REST client status, and table counts.
+ * Inspects live Supabase PostgreSQL connectivity and table counts via Prisma.
  */
 export async function GET() {
   const session = await getAdminSession()
@@ -40,11 +39,9 @@ export async function GET() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   const isPrismaConfigured = Boolean(rawDbUrl && !rawDbUrl.includes('[YOUR-'))
-  const isSdkConfigured = isSupabaseConfigured()
 
   let connected = false
   let prismaConnected = false
-  let sdkConnected = false
   let latencyMs = 0
   let errorMessage: string | null = null
   let counts = {
@@ -54,7 +51,7 @@ export async function GET() {
     feeConfigs: 0,
   }
 
-  // 1. Test Prisma PostgreSQL connection
+  // Test Prisma PostgreSQL connection
   if (isPrismaConfigured) {
     const start = Date.now()
     try {
@@ -77,52 +74,15 @@ export async function GET() {
         feeConfigs: fCount,
       }
     } catch (err: any) {
-      try {
-        await directDb.$queryRaw`SELECT 1`
-        latencyMs = Date.now() - start
-        prismaConnected = true
-        connected = true
-
-        const [uCount, pCount, lCount, fCount] = await Promise.all([
-          directDb.user.count().catch(() => 0),
-          directDb.property.count().catch(() => 0),
-          directDb.listing.count().catch(() => 0),
-          directDb.feeConfig.count().catch(() => 0),
-        ])
-
-        counts = {
-          users: uCount,
-          properties: pCount,
-          listings: lCount,
-          feeConfigs: fCount,
-        }
-      } catch (directErr: any) {
-        errorMessage = directErr.message || err.message || 'Prisma PostgreSQL connection error'
-      }
+      console.error('Prisma PostgreSQL connection error:', err)
+      errorMessage = err.message || 'Prisma PostgreSQL connection error'
     }
   }
 
-  // 2. Test Supabase Client REST connection
-  if (isSdkConfigured) {
-    try {
-      const client = createServerClient()
-      if (client) {
-        const start = Date.now()
-        const { data, error } = await client.from('Listing').select('id', { count: 'exact', head: true })
-        if (!error) {
-          sdkConnected = true
-          connected = true
-          if (!latencyMs) latencyMs = Date.now() - start
-        }
-      }
-    } catch {}
-  }
-
   return NextResponse.json({
-    status: connected ? 'connected' : (isPrismaConfigured || isSdkConfigured) ? 'error' : 'unconfigured',
+    status: connected ? 'connected' : isPrismaConfigured ? 'error' : 'unconfigured',
     connected,
     prismaConnected,
-    sdkConnected,
     latencyMs,
     errorMessage,
     provider: 'PostgreSQL (Supabase)',
@@ -138,9 +98,9 @@ export async function GET() {
 /**
  * POST /api/admin/database
  * Actions:
- *  - 'seed': Populates initial anchor properties, listings, and fee config in Supabase
- *  - 'configure': Updates Supabase environment variables (.env / .env.local) and live runtime
- *  - 'test': Tests the current live connection
+ *  - 'seed': Populates initial anchor properties, listings, and fee config in Supabase via Prisma
+ *  - 'configure': Updates Supabase environment variables (.env) and live runtime
+ *  - 'wipe': Cleans all listings, properties, and non-admin users from PostgreSQL via Prisma
  */
 export async function POST(req: NextRequest) {
   const session = await getAdminSession()
@@ -211,13 +171,11 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // ACTION: SEED DATA
+    // ACTION: SEED DATA VIA PRISMA
     if (action === 'seed') {
       let createdProperties = 0
       let createdListings = 0
 
-      // 1. Try Prisma seeding
-      let prismaSuccess = false
       try {
         await db.feeConfig.upsert({
           where: { id: 'fee_config_default' },
@@ -292,20 +250,12 @@ export async function POST(req: NextRequest) {
           })
           createdListings++
         }
-        prismaSuccess = true
-      } catch (prismaErr) {
-        // Fall back to Supabase SDK
-      }
-
-      // 2. If Prisma failed or additionally, seed via Supabase REST SDK
-      if (!prismaSuccess) {
-        const sdkRes = await seedSupabaseViaSdk()
-        if (sdkRes.success) {
-          createdProperties = sdkRes.properties
-          createdListings = sdkRes.listings
-        } else {
-          throw new Error(sdkRes.error || 'Failed to seed via Supabase SDK')
-        }
+      } catch (prismaErr: any) {
+        console.error('Prisma seed error:', prismaErr)
+        return NextResponse.json(
+          { error: prismaErr.message || 'Failed to seed database via Prisma' },
+          { status: 500 }
+        )
       }
 
       return NextResponse.json({
@@ -316,11 +266,10 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // ACTION: WIPE DATABASE CLEAN (Delete all listings, properties, and non-admin users)
+    // ACTION: WIPE DATABASE CLEAN (Delete all listings, properties, and non-admin users via Prisma)
     if (action === 'wipe') {
       const adminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
 
-      // 1. Prisma cleanup
       try {
         await db.transaction.deleteMany({}).catch(() => {})
         await db.agreement.deleteMany({}).catch(() => {})
@@ -328,10 +277,11 @@ export async function POST(req: NextRequest) {
         await db.report.deleteMany({}).catch(() => {})
         await db.savedSearch.deleteMany({}).catch(() => {})
         await db.referral.deleteMany({}).catch(() => {})
-        await db.listing.deleteMany({}).catch(() => {})
-        await db.property.deleteMany({}).catch(() => {})
+        await db.listing.deleteMany({})
+        await db.property.deleteMany({})
         await db.landlord.deleteMany({}).catch(() => {})
         await db.agent.deleteMany({}).catch(() => {})
+        await db.verificationApplication.deleteMany({}).catch(() => {})
         await db.user.deleteMany({
           where: {
             AND: [
@@ -339,66 +289,24 @@ export async function POST(req: NextRequest) {
               { id: { not: 'user_admin_01' } },
             ],
           },
-        }).catch(() => {})
-      } catch (prismaErr) {
+        })
+      } catch (prismaErr: any) {
         console.error('Prisma wipe error:', prismaErr)
+        return NextResponse.json(
+          { error: prismaErr.message || 'Failed to wipe database clean' },
+          { status: 500 }
+        )
       }
-
-      // 2. Dual-tier: Supabase REST cleanup
-      try {
-        const supabase = createServerClient()
-        if (supabase) {
-          await supabase.from('Transaction').delete().neq('id', 'placeholder')
-          await supabase.from('Agreement').delete().neq('id', 'placeholder')
-          await supabase.from('Review').delete().neq('id', 'placeholder')
-          await supabase.from('Report').delete().neq('id', 'placeholder')
-          await supabase.from('Listing').delete().neq('id', 'placeholder')
-          await supabase.from('Property').delete().neq('id', 'placeholder')
-          await supabase.from('Landlord').delete().neq('id', 'placeholder')
-          await supabase.from('Agent').delete().neq('id', 'placeholder')
-          await supabase.from('VerificationApplication').delete().neq('id', 'placeholder')
-          await supabase.from('User').delete().neq('email', adminEmail)
-        }
-      } catch (supaErr) {
-        console.error('Supabase SDK wipe error:', supaErr)
-      }
-
-      // 3. Clear local ephemeral JSON caches
-      try {
-        const dataDir = path.join(process.cwd(), '.data')
-        const usersFile = path.join(dataDir, 'users.json')
-        const listingsFile = path.join(dataDir, 'custom-listings.json')
-        const verifFile = path.join(dataDir, 'verifications.json')
-
-        if (fs.existsSync(listingsFile)) {
-          fs.writeFileSync(listingsFile, '[]', 'utf8')
-        }
-        if (fs.existsSync(verifFile)) {
-          fs.writeFileSync(verifFile, '[]', 'utf8')
-        }
-        if (fs.existsSync(usersFile)) {
-          const adminObj = {
-            id: 'user_admin_01',
-            email: adminEmail,
-            fullName: process.env.ADMIN_NAME || 'Mapking',
-            role: 'ADMIN',
-            ninVerified: true,
-            bvnVerified: true,
-            phone: '08000000000',
-            createdAt: new Date().toISOString(),
-          }
-          fs.writeFileSync(usersFile, JSON.stringify([adminObj], null, 2), 'utf8')
-        }
-      } catch (fileErr) {}
 
       return NextResponse.json({
         success: true,
-        message: 'Database wiped clean successfully. All listings, properties, and users (except administrator) have been permanently deleted from Supabase.',
+        message: 'Database wiped clean successfully. All listings, properties, and non-admin users have been permanently deleted from Supabase PostgreSQL.',
       })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (err: any) {
+    console.error('Database operation failed:', err)
     return NextResponse.json(
       { error: err.message || 'Database operation failed' },
       { status: 500 }

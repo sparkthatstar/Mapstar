@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { MOCK_LISTINGS, MockListing } from '@/lib/mock-data'
+import { MockListing } from '@/lib/mock-data'
 import {
   getUserSession,
   updateUserRole,
@@ -8,36 +8,8 @@ import {
   USER_COOKIE_OPTIONS,
 } from '@/lib/user-auth'
 import { db } from '@/lib/db'
-import { fetchListingsFromSupabase, insertListingToSupabase } from '@/lib/supabase'
-import fs from 'fs'
-import path from 'path'
 
 export const dynamic = 'force-dynamic'
-
-const DATA_DIR = path.join(process.cwd(), '.data')
-const LISTINGS_FILE = path.join(DATA_DIR, 'custom-listings.json')
-
-function readCustomListings(): MockListing[] {
-  try {
-    if (!fs.existsSync(LISTINGS_FILE)) return []
-    const raw = fs.readFileSync(LISTINGS_FILE, 'utf8')
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function writeCustomListings(listings: MockListing[]): void {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    }
-    fs.writeFileSync(LISTINGS_FILE, JSON.stringify(listings, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Failed to save custom listings:', err)
-  }
-}
 
 // Coordinates map for center of cities/areas
 const AREA_COORDINATES: Record<string, [number, number]> = {
@@ -56,8 +28,7 @@ const AREA_COORDINATES: Record<string, [number, number]> = {
 
 /**
  * GET /api/listings
- * Reads live listings from Supabase PostgreSQL via Prisma,
- * merged with any saved custom listings and fallback mock listings.
+ * Reads live listings directly from Supabase PostgreSQL via Prisma.
  *
  * Query params: city, area, type, minRent, maxRent, verified, featured, status, sort, userLat, userLng
  */
@@ -80,10 +51,9 @@ export async function GET(req: NextRequest) {
   const userLat = searchParams.get('userLat') ? Number(searchParams.get('userLat')) : null
   const userLng = searchParams.get('userLng') ? Number(searchParams.get('userLng')) : null
 
-  let dbResults: MockListing[] = []
-  let fromDatabase = false
+  let results: MockListing[] = []
 
-  // 1. Fetch live listings from Supabase PostgreSQL via Prisma
+  // Fetch live listings from Supabase PostgreSQL via Prisma
   try {
     const dbListings = await db.listing.findMany({
       include: {
@@ -94,88 +64,64 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    if (dbListings && dbListings.length > 0) {
-      dbResults = dbListings.map((l) => {
-        let photos: string[] = []
-        try {
-          photos = JSON.parse(l.photoUrlsJson || '[]')
-        } catch {
-          photos = []
-        }
-
-        return {
-          id: l.id,
-          propertyId: l.propertyId,
-          title: l.property.title,
-          description: l.property.description,
-          propertyType: l.property.propertyType,
-          city: l.property.city,
-          state: l.property.state,
-          area: l.property.area,
-          address: l.property.address,
-          latitude: l.property.latitude,
-          longitude: l.property.longitude,
-          bedrooms: l.property.bedrooms,
-          bathrooms: l.property.bathrooms,
-          toilets: l.property.toilets,
-          parkingSpaces: l.property.parkingSpaces,
-          furnished: l.property.furnished,
-          hasBorehole: l.property.hasBorehole,
-          hasPrepaidMeter: l.property.hasPrepaidMeter,
-          hasInsideToilet: l.property.hasInsideToilet,
-          hasCCTV: l.property.hasCCTV,
-          hasGenerator: l.property.hasGenerator,
-          hasWiFi: l.property.hasWiFi,
-          status: l.status as any,
-          annualRent: l.annualRent,
-          cautionFee: l.cautionFee,
-          legalFee: l.legalFee,
-          agentFeeCap: l.agentFeeCap,
-          availableFrom: l.availableFrom ? l.availableFrom.toISOString() : new Date().toISOString(),
-          vacatingDate: l.vacatingDate ? l.vacatingDate.toISOString() : undefined,
-          comingSoon: l.comingSoon,
-          featured: l.featured,
-          physicallyVerified: l.physicallyVerified,
-          lastVerifiedAt: l.lastVerifiedAt ? l.lastVerifiedAt.toISOString() : undefined,
-          photoCount: l.photoCount || photos.length,
-          has360Tour: l.has360Tour,
-          hasVideoWalkthrough: l.hasVideoWalkthrough,
-          fairPriceBadge: l.fairPriceBadge,
-          inspectionCount: l.inspectionCount,
-          rating: 4.8,
-          reviewsCount: 0,
-          photoUrls: photos,
-        }
-      })
-      fromDatabase = true
-    }
-  } catch (err) {
-    // Database connection or table not yet initialized; fallback
-  }
-
-  // 1b. If Prisma returned nothing, try fetching directly from Supabase via REST client
-  if (!fromDatabase) {
-    try {
-      const supabaseListings = await fetchListingsFromSupabase()
-      if (supabaseListings && supabaseListings.length > 0) {
-        dbResults = supabaseListings
-        fromDatabase = true
+    results = dbListings.map((l) => {
+      let photos: string[] = []
+      try {
+        photos = JSON.parse(l.photoUrlsJson || '[]')
+      } catch {
+        photos = []
       }
-    } catch {}
-  }
 
-  // 2. Read local custom listings (clean slate: do NOT inject dummy mock listings)
-  const custom = readCustomListings()
-  let results: MockListing[] = []
-
-  if (fromDatabase) {
-    // Deduplicate against custom listings
-    const existingIds = new Set(dbResults.map((l) => l.id))
-    const uniqueCustom = custom.filter((l) => !existingIds.has(l.id))
-    results = [...dbResults, ...uniqueCustom]
-  } else {
-    // Real software: only return actual stored listings, empty array when clean
-    results = custom
+      return {
+        id: l.id,
+        propertyId: l.propertyId,
+        title: l.property.title,
+        description: l.property.description,
+        propertyType: l.property.propertyType,
+        city: l.property.city,
+        state: l.property.state,
+        area: l.property.area,
+        address: l.property.address,
+        latitude: l.property.latitude,
+        longitude: l.property.longitude,
+        bedrooms: l.property.bedrooms,
+        bathrooms: l.property.bathrooms,
+        toilets: l.property.toilets,
+        parkingSpaces: l.property.parkingSpaces,
+        furnished: l.property.furnished,
+        hasBorehole: l.property.hasBorehole,
+        hasPrepaidMeter: l.property.hasPrepaidMeter,
+        hasInsideToilet: l.property.hasInsideToilet,
+        hasCCTV: l.property.hasCCTV,
+        hasGenerator: l.property.hasGenerator,
+        hasWiFi: l.property.hasWiFi,
+        status: l.status as any,
+        annualRent: l.annualRent,
+        cautionFee: l.cautionFee,
+        legalFee: l.legalFee,
+        agentFeeCap: l.agentFeeCap,
+        availableFrom: l.availableFrom ? l.availableFrom.toISOString() : new Date().toISOString(),
+        vacatingDate: l.vacatingDate ? l.vacatingDate.toISOString() : undefined,
+        comingSoon: l.comingSoon,
+        featured: l.featured,
+        physicallyVerified: l.physicallyVerified,
+        lastVerifiedAt: l.lastVerifiedAt ? l.lastVerifiedAt.toISOString() : undefined,
+        photoCount: l.photoCount || photos.length,
+        has360Tour: l.has360Tour,
+        hasVideoWalkthrough: l.hasVideoWalkthrough,
+        fairPriceBadge: l.fairPriceBadge,
+        inspectionCount: l.inspectionCount,
+        rating: 4.8,
+        reviewsCount: 0,
+        photoUrls: photos,
+      }
+    })
+  } catch (err: any) {
+    console.error('GET /api/listings database error:', err)
+    return NextResponse.json(
+      { error: err.message || 'Failed to fetch listings from database' },
+      { status: 500 }
+    )
   }
 
   // Filtering
@@ -210,23 +156,19 @@ export async function GET(req: NextRequest) {
       break
     case 'newest':
     default:
-      if (!fromDatabase) {
-        results.reverse()
-      }
       break
   }
 
   return NextResponse.json({
     listings: results,
     count: results.length,
-    fromDatabase,
+    fromDatabase: true,
   })
 }
 
 /**
  * POST /api/listings
- * Create a new property listing in Supabase PostgreSQL via Prisma,
- * with automatic fallback persistence and user role updating.
+ * Create a new property listing directly in Supabase PostgreSQL via Prisma.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -335,67 +277,53 @@ export async function POST(req: NextRequest) {
       photoUrls: ['/lodge-exterior.jpg', '/lodge-room.jpg'],
     }
 
-    // 1. Try persisting directly to Supabase PostgreSQL via Prisma
-    try {
-      await db.property.create({
-        data: {
-          id: newListing.propertyId,
-          title: newListing.title,
-          description: newListing.description,
-          propertyType: newListing.propertyType as any,
-          city: newListing.city,
-          state: newListing.state,
-          area: newListing.area,
-          address: newListing.address,
-          latitude: newListing.latitude,
-          longitude: newListing.longitude,
-          bedrooms: newListing.bedrooms,
-          bathrooms: newListing.bathrooms,
-          toilets: newListing.toilets,
-          parkingSpaces: newListing.parkingSpaces,
-          furnished: newListing.furnished,
-          hasBorehole: newListing.hasBorehole,
-          hasPrepaidMeter: newListing.hasPrepaidMeter,
-          hasInsideToilet: newListing.hasInsideToilet,
-          hasCCTV: newListing.hasCCTV,
-          hasGenerator: newListing.hasGenerator,
-          hasWiFi: newListing.hasWiFi,
-          listings: {
-            create: {
-              id: newListing.id,
-              status: newListing.status as any,
-              annualRent: newListing.annualRent,
-              cautionFee: newListing.cautionFee,
-              legalFee: newListing.legalFee,
-              agentFeeCap: newListing.agentFeeCap,
-              comingSoon: newListing.comingSoon,
-              featured: newListing.featured,
-              physicallyVerified: newListing.physicallyVerified,
-              fairPriceBadge: newListing.fairPriceBadge,
-              photoUrlsJson: JSON.stringify(newListing.photoUrls),
-            },
+    // Persist directly to Supabase PostgreSQL via Prisma
+    await db.property.create({
+      data: {
+        id: newListing.propertyId,
+        title: newListing.title,
+        description: newListing.description,
+        propertyType: newListing.propertyType as any,
+        city: newListing.city,
+        state: newListing.state,
+        area: newListing.area,
+        address: newListing.address,
+        latitude: newListing.latitude,
+        longitude: newListing.longitude,
+        bedrooms: newListing.bedrooms,
+        bathrooms: newListing.bathrooms,
+        toilets: newListing.toilets,
+        parkingSpaces: newListing.parkingSpaces,
+        furnished: newListing.furnished,
+        hasBorehole: newListing.hasBorehole,
+        hasPrepaidMeter: newListing.hasPrepaidMeter,
+        hasInsideToilet: newListing.hasInsideToilet,
+        hasCCTV: newListing.hasCCTV,
+        hasGenerator: newListing.hasGenerator,
+        hasWiFi: newListing.hasWiFi,
+        listings: {
+          create: {
+            id: newListing.id,
+            status: newListing.status as any,
+            annualRent: newListing.annualRent,
+            cautionFee: newListing.cautionFee,
+            legalFee: newListing.legalFee,
+            agentFeeCap: newListing.agentFeeCap,
+            comingSoon: newListing.comingSoon,
+            featured: newListing.featured,
+            physicallyVerified: newListing.physicallyVerified,
+            fairPriceBadge: newListing.fairPriceBadge,
+            photoUrlsJson: JSON.stringify(newListing.photoUrls),
           },
         },
-      })
-    } catch (dbErr) {
-      // If DB is offline, continue to fallback store
-    }
+      },
+    })
 
-    // 1b. Also persist directly to Supabase via REST client
-    try {
-      await insertListingToSupabase(newListing)
-    } catch {}
-
-    // 2. Persist in fallback store
-    const custom = readCustomListings()
-    custom.unshift(newListing)
-    writeCustomListings(custom)
-
-    // 3. Update user role if user is logged in
+    // Update user role if needed
     let updatedUser = user
     const response = NextResponse.json({ ok: true, listing: newListing, user: updatedUser })
 
-    if (user) {
+    if (user && user.role !== assignedRole) {
       const updated = await updateUserRole(user.id, assignedRole)
       if (updated) {
         updatedUser = updated
@@ -406,9 +334,9 @@ export async function POST(req: NextRequest) {
 
     return response
   } catch (err: any) {
-    console.error('Failed to create listing:', err)
+    console.error('POST /api/listings database error:', err)
     return NextResponse.json(
-      { error: err.message || 'Failed to create listing' },
+      { error: err.message || 'Failed to create listing in database' },
       { status: 500 }
     )
   }

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAdminSession } from '@/lib/admin-auth'
 import { getUserSession } from '@/lib/user-auth'
-import { createServerClient } from '@/lib/supabase'
-import { MOCK_LISTINGS, MockListing } from '@/lib/mock-data'
+import { MockListing } from '@/lib/mock-data'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,7 +72,7 @@ function mapDatabaseRecordToMock(l: any): MockListing {
 
 /**
  * GET /api/admin/listings
- * Returns listings with their full property details from Supabase PostgreSQL.
+ * Returns listings with their full property details from Supabase PostgreSQL via Prisma.
  */
 export async function GET() {
   const auth = await verifyIsAdmin()
@@ -81,7 +80,6 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized — administrator privileges required' }, { status: 401 })
   }
 
-  // 1. Try Prisma first
   try {
     const dbListings = await db.listing.findMany({
       include: {
@@ -92,35 +90,20 @@ export async function GET() {
       },
     })
 
-    if (dbListings && dbListings.length > 0) {
-      const mapped = dbListings.map(mapDatabaseRecordToMock)
-      return NextResponse.json({ listings: mapped, count: mapped.length, fromDatabase: true })
-    }
-  } catch (err) {}
-
-  // 2. Dual-tier: Query live Supabase PostgreSQL REST Client
-  try {
-    const supabase = createServerClient()
-    if (supabase) {
-      const { data: dbRows, error } = await supabase
-        .from('Listing')
-        .select('*, property:Property(*)')
-        .order('createdAt', { ascending: false })
-
-      if (dbRows && !error && dbRows.length > 0) {
-        const mapped = dbRows.map(mapDatabaseRecordToMock)
-        return NextResponse.json({ listings: mapped, count: mapped.length, fromDatabase: true })
-      }
-    }
-  } catch (err) {}
-
-  // 3. Database is clean/empty (no fake mock listings in real software)
-  return NextResponse.json({ listings: [], count: 0, fromDatabase: true })
+    const mapped = dbListings.map(mapDatabaseRecordToMock)
+    return NextResponse.json({ listings: mapped, count: mapped.length, fromDatabase: true })
+  } catch (err: any) {
+    console.error('Failed to fetch admin listings:', err)
+    return NextResponse.json(
+      { error: err.message || 'Failed to fetch listings from database' },
+      { status: 500 }
+    )
+  }
 }
 
 /**
  * PATCH /api/admin/listings
- * Update verification, feature status, or moderation status on a listing in Supabase.
+ * Update an existing listing (toggle featured, verified status, fair price, availability) via Prisma.
  */
 export async function PATCH(req: NextRequest) {
   const auth = await verifyIsAdmin()
@@ -130,48 +113,32 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { id, physicallyVerified, featured, status } = body
+    const { id, featured, physicallyVerified, fairPriceBadge, status } = body
 
-    if (!id) {
-      return NextResponse.json({ error: 'Listing ID is required' }, { status: 400 })
+    if (!id || typeof id !== 'string') {
+      return NextResponse.json({ error: 'Valid listing ID is required' }, { status: 400 })
     }
 
     const data: Record<string, any> = {}
+    if (typeof featured === 'boolean') data.featured = featured
     if (typeof physicallyVerified === 'boolean') {
       data.physicallyVerified = physicallyVerified
       if (physicallyVerified) {
-        data.lastVerifiedAt = new Date().toISOString()
+        data.lastVerifiedAt = new Date()
       }
     }
-    if (typeof featured === 'boolean') {
-      data.featured = featured
-    }
+    if (typeof fairPriceBadge === 'boolean') data.fairPriceBadge = fairPriceBadge
     if (typeof status === 'string') {
       data.status = status
     }
 
-    try {
-      const updated = await db.listing.update({
-        where: { id },
-        data,
-      })
-      return NextResponse.json({ success: true, listing: updated })
-    } catch (prismaErr) {
-      const supabase = createServerClient()
-      if (supabase) {
-        const { data: updated, error } = await supabase
-          .from('Listing')
-          .update(data)
-          .eq('id', id)
-          .select()
-          .single()
-        if (updated && !error) {
-          return NextResponse.json({ success: true, listing: updated })
-        }
-      }
-      throw prismaErr
-    }
+    const updated = await db.listing.update({
+      where: { id },
+      data,
+    })
+    return NextResponse.json({ success: true, listing: updated })
   } catch (err: any) {
+    console.error('Failed to update listing:', err)
     return NextResponse.json(
       { error: err.message || 'Failed to update listing' },
       { status: 500 }
@@ -181,7 +148,7 @@ export async function PATCH(req: NextRequest) {
 
 /**
  * DELETE /api/admin/listings
- * Delete an individual listing OR clear all listings directly from the database.
+ * Delete an individual listing OR clear all listings directly from PostgreSQL via Prisma.
  */
 export async function DELETE(req: NextRequest) {
   const auth = await verifyIsAdmin()
@@ -198,30 +165,15 @@ export async function DELETE(req: NextRequest) {
     const id = urlId || body.id
     const isClearAll = clearAllParam || body.clearAll === true
 
-    // Action 1: Clear all listings and properties directly from the database
+    // Action 1: Clear all listings and properties directly from PostgreSQL
     if (isClearAll) {
-      let deletedListingsCount = 0
-
-      // 1. Prisma cleanup
-      try {
-        const res = await db.listing.deleteMany({})
-        await db.property.deleteMany({})
-        deletedListingsCount = res.count
-      } catch (prismaErr) {}
-
-      // 2. Supabase REST cleanup
-      try {
-        const supabase = createServerClient()
-        if (supabase) {
-          await supabase.from('Listing').delete().neq('id', 'placeholder')
-          await supabase.from('Property').delete().neq('id', 'placeholder')
-        }
-      } catch (supaErr) {}
+      const res = await db.listing.deleteMany({})
+      await db.property.deleteMany({})
 
       return NextResponse.json({
         success: true,
         message: 'All listings and properties have been cleared from the database directly.',
-        count: deletedListingsCount,
+        count: res.count,
       })
     }
 
@@ -230,20 +182,10 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Valid listing ID is required' }, { status: 400 })
     }
 
-    try {
-      await db.listing.delete({ where: { id } })
-      return NextResponse.json({ success: true, message: `Listing ${id} deleted successfully.` })
-    } catch (prismaErr) {
-      const supabase = createServerClient()
-      if (supabase) {
-        const { error } = await supabase.from('Listing').delete().eq('id', id)
-        if (!error) {
-          return NextResponse.json({ success: true, message: `Listing ${id} deleted from Supabase.` })
-        }
-      }
-      throw prismaErr
-    }
+    await db.listing.delete({ where: { id } })
+    return NextResponse.json({ success: true, message: `Listing ${id} deleted successfully.` })
   } catch (err: any) {
+    console.error('Failed to delete listing(s):', err)
     return NextResponse.json(
       { error: err.message || 'Failed to delete listing(s)' },
       { status: 500 }
