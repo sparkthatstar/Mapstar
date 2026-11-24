@@ -22,8 +22,8 @@ let activityLogs: LoginActivityEntry[] = [
   {
     id: 'log-seed-1',
     userId: 'user_admin_01',
-    email: 'mapstar777@gmail.com',
-    fullName: 'Mapking',
+    email: 'admin@mapstar.ng',
+    fullName: 'Administrator',
     role: 'ADMIN',
     status: 'SUCCESS',
     ip: '127.0.0.1',

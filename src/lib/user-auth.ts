@@ -41,7 +41,7 @@ interface PasswordResetRecord {
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000 // 15 minutes
 
-// In-memory store for pending password reset requests (no flat JSON file dependencies)
+// In-memory store for pending password reset requests
 const resetTokenStore = new Map<string, PasswordResetRecord>()
 
 function cleanExpiredResetTokens(): void {
@@ -52,10 +52,6 @@ function cleanExpiredResetTokens(): void {
     }
   }
 }
-
-// Salted cryptographic one-way hash (irreversible; cannot be read from code)
-const SECURE_ADMIN_HASH =
-  'e8f49a12c3b5706d:cf1abeb09a439092ef287e9a1f47c73eb260f2fb4612f8642f118444f4241f67:sha256'
 
 function getSecret(): string {
   return process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || 'mapstar-user-session-secure-key-749201948'
@@ -148,13 +144,10 @@ export async function getUserSession(): Promise<AuthedUser | null> {
         const expiresAt = Number(expiryStr)
         if (expiresAt && Date.now() <= expiresAt) {
           const email = Buffer.from(emailB64, 'base64url').toString('utf8').toLowerCase()
-          return {
-            id: 'user_admin_01',
-            email,
-            fullName: process.env.ADMIN_NAME || 'Mapking',
-            role: 'ADMIN',
-            ninVerified: true,
-            bvnVerified: true,
+          const adminUser = await findUserByEmail(email)
+          if (adminUser && adminUser.role === 'ADMIN') {
+            const { passwordHash: _, ...authed } = adminUser
+            return authed
           }
         }
       }
@@ -167,24 +160,6 @@ export async function getUserSession(): Promise<AuthedUser | null> {
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
   const normalized = (email || '').trim().toLowerCase()
   if (!normalized) return null
-
-  const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
-
-  // Dedicated Master Admin
-  if (normalized === expectedAdminEmail) {
-    return {
-      id: 'user_admin_01',
-      email: expectedAdminEmail,
-      fullName: process.env.ADMIN_NAME || 'Mapking',
-      phone: '08000000000',
-      role: 'ADMIN',
-      ninVerified: true,
-      bvnVerified: true,
-      avatarUrl: null,
-      passwordHash: process.env.ADMIN_PASSWORD ? hashPassword(process.env.ADMIN_PASSWORD) : SECURE_ADMIN_HASH,
-      createdAt: new Date().toISOString(),
-    }
-  }
 
   try {
     const dbUser = await db.user.findUnique({
@@ -262,41 +237,6 @@ export async function authenticateUser(email: string, password: string): Promise
   const normalizedEmail = (email || '').trim().toLowerCase()
   if (!normalizedEmail || !password) return null
 
-  const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
-
-  // 1. Check if user is logging in with the admin account
-  if (normalizedEmail === expectedAdminEmail) {
-    let passwordMatches = false
-    const inputPassword = (password || '').trim()
-
-    // Check custom plaintext password in environment variable if explicitly configured
-    const envPassword = (process.env.ADMIN_PASSWORD || '').trim()
-    if (envPassword && (inputPassword === envPassword || password === process.env.ADMIN_PASSWORD)) {
-      passwordMatches = true
-    }
-
-    // Otherwise verify against the secure cryptographic one-way hash
-    if (!passwordMatches) {
-      passwordMatches =
-        verifyPassword(inputPassword, SECURE_ADMIN_HASH) ||
-        verifyPassword(password, SECURE_ADMIN_HASH)
-    }
-
-    if (passwordMatches) {
-      return {
-        id: 'user_admin_01',
-        email: expectedAdminEmail,
-        fullName: process.env.ADMIN_NAME || 'Mapking',
-        phone: '08000000000',
-        role: 'ADMIN',
-        ninVerified: true,
-        bvnVerified: true,
-        avatarUrl: null,
-      }
-    }
-  }
-
-  // 2. Regular user authentication via single Prisma path
   const user = await findUserByEmail(normalizedEmail)
   if (!user || !user.passwordHash) {
     return null

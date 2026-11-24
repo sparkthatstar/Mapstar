@@ -593,8 +593,7 @@ export default function StarPowerView({
               {/* Users List Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 {filteredUsers.map((u) => {
-                  const isMasterAdmin =
-                    u.email.toLowerCase() === 'mapstar777@gmail.com' || u.role === 'ADMIN'
+                  const isMasterAdmin = u.role === 'ADMIN'
                   const recentLogins = loginActivity.filter((a) => a.email.toLowerCase() === u.email.toLowerCase())
                   const lastActive = recentLogins[0]?.timestamp || u.createdAt
 
@@ -1357,7 +1356,7 @@ export default function StarPowerView({
           </DialogHeader>
 
           <div className="p-3 rounded-xl bg-rose-950/30 border border-rose-800/40 text-[11px] text-rose-300 my-2">
-            <strong>Permanent Action:</strong> Supabase tables will be completely cleared. Only master admin <span className="font-mono text-white">mapstar777@gmail.com</span> will be preserved.
+            <strong>Permanent Action:</strong> Supabase tables will be completely cleared. Only administrator accounts will be preserved.
           </div>
 
           <div className="flex items-center justify-end gap-2.5 mt-4">

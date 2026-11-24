@@ -107,15 +107,15 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Valid user ID is required' }, { status: 400 })
     }
 
-    // Safety: prevent deleting master administrator account
-    if (
-      id === auth.email ||
-      id.toLowerCase() === 'mapstar777@gmail.com' ||
-      id === 'admin-root' ||
-      id === 'user_admin_01'
-    ) {
+    // Safety: prevent deleting administrator accounts
+    const target = await db.user.findFirst({
+      where: {
+        OR: [{ id }, { email: id.toLowerCase() }],
+      },
+    })
+    if (target?.role === 'ADMIN' || id === auth.email) {
       return NextResponse.json(
-        { error: 'Cannot delete the master administrator account.' },
+        { error: 'Cannot delete an administrator account.' },
         { status: 400 }
       )
     }

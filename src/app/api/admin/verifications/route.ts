@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     const result = await processVerificationApplication({
       applicationId,
       action,
-      adminEmail: auth.email || 'mapstar777@gmail.com',
+      adminEmail: auth.email || process.env.ADMIN_EMAIL || 'admin@mapstar.ng',
     })
 
     return NextResponse.json(result)

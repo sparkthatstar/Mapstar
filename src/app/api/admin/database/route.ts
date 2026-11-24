@@ -268,7 +268,7 @@ export async function POST(req: NextRequest) {
 
     // ACTION: WIPE DATABASE CLEAN (Delete all listings, properties, and non-admin users via Prisma)
     if (action === 'wipe') {
-      const adminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
+      const adminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.trim().toLowerCase() : ''
 
       try {
         await db.transaction.deleteMany({}).catch(() => {})
@@ -285,8 +285,8 @@ export async function POST(req: NextRequest) {
         await db.user.deleteMany({
           where: {
             AND: [
-              { email: { not: adminEmail } },
-              { id: { not: 'user_admin_01' } },
+              { role: { not: 'ADMIN' } },
+              ...(adminEmail ? [{ email: { not: adminEmail } }] : []),
             ],
           },
         })

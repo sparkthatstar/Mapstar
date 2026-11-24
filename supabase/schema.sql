@@ -65,27 +65,7 @@ insert into "FeeConfig" (
 )
 on conflict (id) do nothing;
 
--- 7. Seed & Preserve Master Administrator Account
-insert into "User" (
-  id, email, "fullName", phone, role, "ninVerified", "bvnVerified", "passwordHash", "createdAt", "updatedAt"
-) values (
-  'user_admin_01',
-  'mapstar777@gmail.com',
-  'Mapking',
-  '08000000000',
-  'ADMIN',
-  true,
-  true,
-  'e8f49a12c3b5706d:cf1abeb09a439092ef287e9a1f47c73eb260f2fb4612f8642f118444f4241f67:sha256',
-  now(),
-  now()
-)
-on conflict (email) do update set
-  role = 'ADMIN',
-  "ninVerified" = true,
-  "bvnVerified" = true;
-
--- 8. CLEAN DATABASE WIPE: Purge all mock listings, properties, and non-admin users
+-- 7. CLEAN DATABASE WIPE: Purge all mock listings, properties, and non-admin users
 delete from "Transaction" where id is not null;
 delete from "Agreement" where id is not null;
 delete from "Review" where id is not null;
@@ -97,7 +77,7 @@ delete from "Property" where id is not null;
 delete from "Landlord" where id is not null;
 delete from "Agent" where id is not null;
 delete from "VerificationApplication" where id is not null;
-delete from "User" where id != 'user_admin_01' and email != 'mapstar777@gmail.com';
+delete from "User" where role != 'ADMIN';
 
 -- 9. Row-Level Security (RLS) Policies & Schema Permissions for Mapstar
 grant usage on schema public to anon, authenticated, service_role;
