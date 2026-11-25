@@ -18,13 +18,12 @@ export interface AdminSession {
   expiresAt: number
 }
 
-const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET?.trim()
-if (!ADMIN_SESSION_SECRET) {
-  throw new Error('ADMIN_SESSION_SECRET must be set')
-}
-
 function getSecret(): string {
-  return ADMIN_SESSION_SECRET
+  const secret = process.env.ADMIN_SESSION_SECRET?.trim()
+  if (!secret) {
+    throw new Error('ADMIN_SESSION_SECRET must be set at runtime')
+  }
+  return secret
 }
 
 function sign(payload: string): string {

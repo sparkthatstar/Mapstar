@@ -54,13 +54,12 @@ function cleanExpiredResetTokens(): void {
   }
 }
 
-const USER_SESSION_SECRET = (process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET)?.trim()
-if (!USER_SESSION_SECRET) {
-  throw new Error('ADMIN_SESSION_SECRET must be set')
-}
-
 function getSecret(): string {
-  return USER_SESSION_SECRET
+  const secret = (process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET)?.trim()
+  if (!secret) {
+    throw new Error('USER_SESSION_SECRET (or ADMIN_SESSION_SECRET) must be set at runtime')
+  }
+  return secret
 }
 
 function sign(payload: string): string {
