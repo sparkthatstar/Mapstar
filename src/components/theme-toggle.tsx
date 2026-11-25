@@ -21,13 +21,13 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
         className={`h-9 px-2.5 sm:px-3 text-xs border-[#E5DAC8] dark:border-[#382618] bg-white dark:bg-[#1A120B] text-[#5C4535] dark:text-[#C5B4A5] opacity-70 ${className}`}
         aria-label="Toggle theme"
       >
-        <Moon className="h-3.5 w-3.5" />
+        <Moon className="h-3.5 w-3.5 text-[#78350F]" />
         <span className="hidden sm:inline ml-1.5 font-medium">Theme</span>
       </Button>
     )
   }
 
-  const isDark = (theme === 'system' ? resolvedTheme : theme) !== 'light'
+  const isDark = (theme === 'system' ? resolvedTheme : theme) === 'dark'
 
   return (
     <Button
