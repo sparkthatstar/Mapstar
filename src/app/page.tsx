@@ -50,8 +50,8 @@ import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
 const MapView = dynamic(() => import('@/components/mapstar/map-view'), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 dark:bg-[#070A12] text-sm text-slate-500 dark:text-slate-400 gap-2">
-      <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    <div className="h-full w-full flex flex-col items-center justify-center bg-[#FAF7F2] dark:bg-[#120C08] text-sm text-[#7C6859] dark:text-[#A8988B] gap-2">
+      <div className="h-6 w-6 border-2 border-[#78350F] dark:border-[#C2783B] border-t-transparent rounded-full animate-spin" />
       <span>Loading Google Maps Navigation…</span>
     </div>
   ),
@@ -267,44 +267,44 @@ export default function Home() {
   }, [filters])
 
   return (
-    <div className="flex flex-col h-screen bg-[#F8FAFC] dark:bg-[#070A12] text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-200">
-      {/* Top Header — Clean Matured Slate in Light Mode / Obsidian Midnight in Dark Mode */}
-      <header className="shrink-0 bg-white/95 dark:bg-[#090D18] border-b border-slate-200 dark:border-slate-800/90 px-3 py-2 sm:px-5 sm:py-2.5 z-20 backdrop-blur-md transition-colors">
+    <div className="flex flex-col h-screen bg-[#FAF7F2] dark:bg-[#120C08] text-[#271810] dark:text-[#FAF6F0] overflow-hidden transition-colors duration-200">
+      {/* Top Header — Furniture Brown and White Accents */}
+      <header className="shrink-0 bg-white/95 dark:bg-[#1A120B]/95 border-b border-[#E5DAC8] dark:border-[#382618] px-3 py-2 sm:px-5 sm:py-2.5 z-20 backdrop-blur-md transition-colors">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
-          {/* Logo */}
+          {/* Logo with Furniture Brown and White Star */}
           <div className="flex items-center gap-2.5 shrink-0 cursor-pointer" onClick={() => resetFilters()}>
-            <div className="relative h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-950 p-1 flex items-center justify-center shadow-lg shadow-blue-600/30 border border-blue-500/40">
+            <div className="relative h-8 w-8 rounded-lg bg-gradient-to-br from-[#78350F] via-[#854D0E] to-[#451A03] p-1 flex items-center justify-center shadow-md shadow-amber-950/20 border border-amber-600/30">
               <svg viewBox="0 0 32 32" className="h-5 w-5">
                 <path
                   d="M16 2 L19.6 12.2 L30.4 12.5 L21.7 19.0 L24.7 29.3 L16 23.2 L7.3 29.3 L10.3 19.0 L1.6 12.5 L12.4 12.2 Z"
-                  fill="#60A5FA"
-                  stroke="#1D4ED8"
+                  fill="#FFFFFF"
+                  stroke="#451A03"
                   strokeWidth="1.2"
                   strokeLinejoin="round"
                 />
               </svg>
             </div>
             <div className="hidden sm:block">
-              <div className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-1 leading-none">
-                Mapstar <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-800/50">PRO</span>
+              <div className="text-base font-extrabold text-[#271810] dark:text-white tracking-tight flex items-center gap-1 leading-none">
+                Mapstar <span className="text-[10px] font-mono text-amber-900 dark:text-amber-200 bg-amber-100/90 dark:bg-[#382618] px-1.5 py-0.2 rounded border border-amber-300 dark:border-amber-700/50 font-bold">PRO</span>
               </div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-none mt-1">Verified Lodges · Regulated Fees</div>
+              <div className="text-[10px] text-[#7C6859] dark:text-[#A8988B] leading-none mt-1">Verified Lodges · Regulated Fees</div>
             </div>
           </div>
 
           {/* Search bar */}
           <div className="flex-1 relative max-w-lg">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8C7A6D]" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search lodge, area (e.g. Eziobodo, New Haven, Ikenegbu)..."
-              className="h-9 pl-9 pr-8 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-blue-500 rounded-xl"
+              className="h-9 pl-9 pr-8 text-xs bg-white dark:bg-[#160F0A] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#8C7A6D] focus:border-[#78350F] dark:focus:border-[#C2783B] rounded-xl shadow-2xs"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8C7A6D] hover:text-[#271810] dark:hover:text-white"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -317,32 +317,32 @@ export default function Home() {
             <Button
               variant="outline"
               size="sm"
-              className={`h-9 text-xs border-slate-200 dark:border-slate-800 bg-white hover:bg-slate-50 dark:bg-[#070A12] dark:hover:bg-slate-850 hover:border-blue-500/60 cursor-pointer shadow-xs ${
-                activeFilterCount > 0 ? 'text-blue-600 border-blue-300 bg-blue-50/80 dark:text-blue-400 dark:border-blue-500/60 dark:bg-blue-950/30' : 'text-slate-700 dark:text-slate-300'
+              className={`h-9 text-xs border-[#E5DAC8] dark:border-[#382618] bg-white hover:bg-[#F5EFEB] dark:bg-[#1A120B] dark:hover:bg-[#271A12] cursor-pointer shadow-xs transition ${
+                activeFilterCount > 0 ? 'text-white bg-[#78350F] border-[#78350F] dark:bg-[#B45309] dark:border-[#B45309]' : 'text-[#4A3222] dark:text-[#E2D4C8]'
               }`}
               onClick={() => setFilterOpen(true)}
             >
               <SlidersHorizontal className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Filters</span>
+              <span className="hidden sm:inline font-semibold">Filters</span>
               {activeFilterCount > 0 && (
-                <span className="ml-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white">
+                <span className="ml-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[9px] font-bold text-[#78350F]">
                   {activeFilterCount}
                 </span>
               )}
             </Button>
 
-            {/* Bright / Dark Theme Toggle Option */}
+            {/* Theme Toggle */}
             <ThemeToggle />
 
             {/* How it Works / Interactive Tour Button */}
             <Button
               variant="outline"
               size="sm"
-              className="h-9 px-2.5 sm:px-3 text-xs font-semibold border-slate-200 dark:border-slate-800 bg-white hover:bg-slate-50 dark:bg-[#070A12] dark:hover:bg-slate-850 text-slate-800 dark:text-slate-200 shadow-xs cursor-pointer transition"
+              className="h-9 px-2.5 sm:px-3 text-xs font-semibold border-[#E5DAC8] dark:border-[#382618] bg-white hover:bg-[#F5EFEB] dark:bg-[#1A120B] dark:hover:bg-[#271A12] text-[#271810] dark:text-[#FAF6F0] shadow-xs cursor-pointer transition"
               onClick={() => setOnboardingOpen(true)}
               title="How to use Mapstar & interactive guide"
             >
-              <HelpCircle className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
+              <HelpCircle className="h-3.5 w-3.5 mr-1 text-[#78350F] dark:text-[#E0904E]" />
               <span className="hidden md:inline">How it Works</span>
               <span className="md:hidden">Guide</span>
             </Button>
@@ -350,7 +350,7 @@ export default function Home() {
             {/* List Property Action Button */}
             <Button
               size="sm"
-              className="h-9 px-3 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-700/60 shadow-xs cursor-pointer transition"
+              className="h-9 px-3 text-xs font-semibold text-white bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] dark:hover:bg-[#C2783B] border border-amber-800/40 shadow-xs cursor-pointer transition"
               onClick={() => {
                 if (!user) {
                   setAuthMode('login')
@@ -360,7 +360,7 @@ export default function Home() {
                 }
               }}
             >
-              <Plus className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
+              <Plus className="h-3.5 w-3.5 mr-1 text-white" />
               <span className="hidden md:inline">List Property</span>
               <span className="md:hidden">List</span>
             </Button>
@@ -369,31 +369,31 @@ export default function Home() {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 gap-1.5 pr-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-[#070A12] text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-850 shadow-xs">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-[10px] font-semibold text-white shadow-xs">
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 pr-2 border-[#E5DAC8] dark:border-[#382618] bg-white dark:bg-[#1A120B] text-[#271810] dark:text-[#FAF6F0] hover:bg-[#F5EFEB] dark:hover:bg-[#271A12] shadow-xs">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#78350F] text-[10px] font-semibold text-white shadow-xs">
                       {(user.fullName || user.email || '?').charAt(0).toUpperCase()}
                     </span>
                     <span className="hidden sm:inline max-w-[100px] truncate text-xs font-medium">
                       {user.fullName || user.email}
                     </span>
-                    <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                    <ChevronDown className="h-3.5 w-3.5 text-[#8C7A6D]" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#090D18] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-2xl">
+                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1A120B] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] shadow-xl">
                   <DropdownMenuLabel className="text-xs">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-slate-900 dark:text-white truncate">
+                      <span className="font-semibold text-[#271810] dark:text-white truncate">
                         {user.fullName || 'Unnamed user'}
                       </span>
-                      <span className="text-slate-500 dark:text-slate-400 font-normal truncate text-[11px]">{user.email}</span>
-                      <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800/60 px-2 py-0.5 text-[9px] font-semibold text-blue-700 dark:text-blue-300">
+                      <span className="text-[#7C6859] dark:text-[#A8988B] font-normal truncate text-[11px]">{user.email}</span>
+                      <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-amber-50 dark:bg-[#2A1C13] border border-amber-200 dark:border-amber-800/60 px-2 py-0.5 text-[9px] font-semibold text-amber-900 dark:text-amber-200">
                         {user.role === 'ADMIN' ? 'Administrator' : user.role === 'LANDLORD' ? 'Landlord / Owner' : user.role === 'AGENT' ? 'Verified Agent' : 'Student / Tenant'}
                       </span>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800" />
+                  <DropdownMenuSeparator className="bg-[#E5DAC8] dark:bg-[#382618]" />
                   <DropdownMenuItem
-                    className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
+                    className="text-xs font-medium text-[#78350F] dark:text-[#E0904E] hover:text-[#854D0E] hover:bg-amber-50 dark:hover:bg-[#271A12] cursor-pointer"
                     onClick={() => setListPropertyOpen(true)}
                   >
                     <Plus className="h-3.5 w-3.5 mr-2" /> List a Property
@@ -401,8 +401,8 @@ export default function Home() {
 
                   {user.role === 'ADMIN' && (
                     <>
-                      <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800" />
-                      <DropdownMenuItem asChild className="text-xs text-sky-600 dark:text-sky-400 font-semibold hover:bg-sky-50 dark:hover:bg-sky-950/40 cursor-pointer">
+                      <DropdownMenuSeparator className="bg-[#E5DAC8] dark:bg-[#382618]" />
+                      <DropdownMenuItem asChild className="text-xs text-amber-800 dark:text-amber-300 font-semibold hover:bg-amber-50 dark:hover:bg-[#271A12] cursor-pointer">
                         <Link href="/admin">
                           <Shield className="h-3.5 w-3.5 mr-2" /> Admin Control Portal
                         </Link>
@@ -410,8 +410,8 @@ export default function Home() {
                     </>
                   )}
 
-                  <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800" />
-                  <DropdownMenuItem className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer" onClick={handleLogout}>
+                  <DropdownMenuSeparator className="bg-[#E5DAC8] dark:bg-[#382618]" />
+                  <DropdownMenuItem className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer" onClick={handleLogout}>
                     <LogOut className="h-3.5 w-3.5 mr-2" /> Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -421,24 +421,24 @@ export default function Home() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 px-2.5 sm:px-3 text-xs font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white border-slate-200 dark:border-slate-800 bg-white hover:bg-slate-50 dark:bg-[#070A12] dark:hover:bg-slate-850 cursor-pointer shadow-xs"
+                  className="h-9 px-2.5 sm:px-3 text-xs font-semibold text-[#4A3222] hover:text-[#271810] dark:text-[#FAF6F0] border-[#E5DAC8] dark:border-[#382618] bg-white hover:bg-[#F5EFEB] dark:bg-[#1A120B] dark:hover:bg-[#271A12] cursor-pointer shadow-xs"
                   onClick={() => {
                     setAuthMode('login')
                     setAuthOpen(true)
                   }}
                 >
-                  <LogIn className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
+                  <LogIn className="h-3.5 w-3.5 mr-1 text-[#78350F] dark:text-[#E0904E]" />
                   <span>Log in</span>
                 </Button>
                 <Button
                   size="sm"
-                  className="h-9 px-2.5 sm:px-3 bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/30 cursor-pointer transition"
+                  className="h-9 px-2.5 sm:px-3 bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] dark:hover:bg-[#C2783B] text-xs font-semibold text-white shadow-md shadow-amber-950/20 cursor-pointer transition"
                   onClick={() => {
                     setAuthMode('signup')
                     setAuthOpen(true)
                   }}
                 >
-                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                  <UserPlus className="h-3.5 w-3.5 mr-1 text-white" />
                   <span>Sign up</span>
                 </Button>
               </div>
@@ -447,14 +447,14 @@ export default function Home() {
         </div>
 
         {/* City Filter & Status Ticker */}
-        <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-200 dark:border-slate-850/80 overflow-x-auto text-xs">
+        <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-[#E5DAC8] dark:border-[#382618] overflow-x-auto text-xs">
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setActiveCity(null)}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
                 activeCity === null
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30 font-semibold'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-[#070A12] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800/80'
+                  ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                  : 'bg-white hover:bg-[#F5EFEB] text-[#4A3222] border border-[#E5DAC8] dark:bg-[#1A120B] dark:hover:bg-[#271A12] dark:text-[#A8988B] dark:border-[#382618]'
               }`}
             >
               All Cities
@@ -463,10 +463,10 @@ export default function Home() {
               <button
                 key={c.id}
                 onClick={() => setActiveCity(c.id)}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
                   activeCity === c.id
-                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30 font-semibold'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-[#070A12] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800/80'
+                    ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                    : 'bg-white hover:bg-[#F5EFEB] text-[#4A3222] border border-[#E5DAC8] dark:bg-[#1A120B] dark:hover:bg-[#271A12] dark:text-[#A8988B] dark:border-[#382618]'
                 }`}
               >
                 {c.label}
@@ -474,51 +474,51 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 shrink-0">
+          <div className="flex items-center gap-3 text-[11px] text-[#7C6859] dark:text-[#A8988B] shrink-0">
             <span className="inline-flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs shadow-emerald-500/50" />
-              <strong className="text-slate-800 dark:text-slate-200 font-semibold">{counts.available}</strong> Available
+              <strong className="text-[#271810] dark:text-[#FAF6F0] font-semibold">{counts.available}</strong> Available
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-500 shadow-xs shadow-amber-500/50" />
-              <strong className="text-slate-800 dark:text-slate-200 font-semibold">{counts.comingSoon}</strong> Soon
+              <strong className="text-[#271810] dark:text-[#FAF6F0] font-semibold">{counts.comingSoon}</strong> Soon
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-500 shadow-xs shadow-blue-500/50" />
-              <strong className="text-slate-800 dark:text-slate-200 font-semibold">{counts.inspection}</strong> In Inspection
+              <span className="w-2 h-2 rounded-full bg-[#78350F] dark:bg-[#C2783B] shadow-xs" />
+              <strong className="text-[#271810] dark:text-[#FAF6F0] font-semibold">{counts.inspection}</strong> In Inspection
             </span>
           </div>
         </div>
       </header>
 
-      {/* Main Body — Rearranged Layout: Houses on the LEFT side, Balanced Map on the RIGHT side */}
+      {/* Main Body */}
       <main className="flex-1 min-h-0 relative flex flex-col">
         {/* Mobile View Toggle Bar (visible only below lg) */}
-        <div className="lg:hidden shrink-0 bg-white dark:bg-[#090D18] border-b border-slate-200 dark:border-slate-800 px-3 py-1.5 flex items-center justify-between">
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            <span className="font-bold text-blue-600 dark:text-blue-400">{filtered.length}</span> lodges found
+        <div className="lg:hidden shrink-0 bg-white dark:bg-[#1A120B] border-b border-[#E5DAC8] dark:border-[#382618] px-3 py-1.5 flex items-center justify-between">
+          <div className="text-xs text-[#7C6859] dark:text-[#A8988B]">
+            <span className="font-bold text-[#78350F] dark:text-[#E0904E]">{filtered.length}</span> lodges found
           </div>
-          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-[#070A12] p-0.5">
+          <div className="inline-flex rounded-lg border border-[#E5DAC8] dark:border-[#382618] bg-[#F3ECE2] dark:bg-[#140E0A] p-0.5">
             <button
               onClick={() => setView('split')}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                view === 'split' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                view === 'split' ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]' : 'text-[#7C6859] dark:text-[#A8988B]'
               }`}
             >
               <Columns2 className="h-3.5 w-3.5" /> Split
             </button>
             <button
               onClick={() => setView('list')}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                view === 'list' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                view === 'list' ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]' : 'text-[#7C6859] dark:text-[#A8988B]'
               }`}
             >
               <List className="h-3.5 w-3.5" /> List
             </button>
             <button
               onClick={() => setView('map')}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                view === 'map' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                view === 'map' ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]' : 'text-[#7C6859] dark:text-[#A8988B]'
               }`}
             >
               <MapIcon className="h-3.5 w-3.5" /> Map
@@ -528,11 +528,9 @@ export default function Home() {
 
         {/* Workspace Container */}
         <div className="flex-1 min-h-0 relative flex overflow-hidden">
-          {/* =========================================================================
-              LEFT SIDE: Listed Houses Feed (Occupies the Left side as explicitly requested)
-             ========================================================================= */}
+          {/* LEFT SIDE: Listed Houses Feed */}
           <div
-            className={`flex flex-col h-full bg-[#F8FAFC] dark:bg-[#070A12] overflow-hidden transition-all duration-300 ${
+            className={`flex flex-col h-full bg-[#FAF7F2] dark:bg-[#120C08] overflow-hidden transition-all duration-300 ${
               view === 'map'
                 ? 'hidden'
                 : view === 'list'
@@ -541,16 +539,16 @@ export default function Home() {
             }`}
           >
             {/* Top Toolbar for the Left Listings Pane */}
-            <div className="shrink-0 bg-white dark:bg-[#090D18] border-b border-slate-200 dark:border-slate-800/80 px-4 py-2.5 flex items-center justify-between gap-3 z-10 transition-colors">
+            <div className="shrink-0 bg-white dark:bg-[#1A120B] border-b border-[#E5DAC8] dark:border-[#382618] px-4 py-2.5 flex items-center justify-between gap-3 z-10 transition-colors">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-900 dark:text-white tracking-wide">
+                <span className="text-xs font-bold text-[#271810] dark:text-white tracking-wide">
                   {filtered.length} {filtered.length === 1 ? 'Lodge' : 'Lodges'}
                 </span>
                 {activeCity && (
-                  <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">in {activeCity}</span>
+                  <span className="text-xs text-[#78350F] dark:text-[#E0904E] font-semibold">in {activeCity}</span>
                 )}
                 {filters.sort && (
-                  <span className="hidden sm:inline text-[11px] text-slate-500">
+                  <span className="hidden sm:inline text-[11px] text-[#7C6859] dark:text-[#A8988B]">
                     · sorted by{' '}
                     {filters.sort === 'price_asc'
                       ? 'price (low to high)'
@@ -566,7 +564,7 @@ export default function Home() {
                 <select
                   value={filters.sort}
                   onChange={(e) => patchFilters({ sort: e.target.value })}
-                  className="h-7 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#070A12] px-2 text-[11px] text-slate-800 dark:text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  className="h-7 rounded-lg border border-[#E5DAC8] dark:border-[#382618] bg-white dark:bg-[#160F0A] px-2 text-[11px] text-[#271810] dark:text-[#FAF6F0] focus:outline-none focus:border-[#78350F] cursor-pointer shadow-2xs"
                 >
                   <option value="newest">Newest First</option>
                   <option value="price_asc">Price: Low to High</option>
@@ -574,11 +572,11 @@ export default function Home() {
                 </select>
 
                 {/* Desktop View Switcher */}
-                <div className="hidden lg:inline-flex rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-[#070A12] p-0.5">
+                <div className="hidden lg:inline-flex rounded-lg border border-[#E5DAC8] dark:border-[#382618] bg-[#F3ECE2] dark:bg-[#160F0A] p-0.5">
                   <button
                     onClick={() => setView('split')}
                     className={`p-1 rounded transition cursor-pointer ${
-                      view === 'split' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      view === 'split' ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]' : 'text-[#7C6859] dark:text-[#A8988B] hover:text-[#271810] dark:hover:text-[#FAF6F0]'
                     }`}
                     title="Split view (List on left, map on right)"
                   >
@@ -587,7 +585,7 @@ export default function Home() {
                   <button
                     onClick={() => setView('list')}
                     className={`p-1 rounded transition cursor-pointer ${
-                      view === 'list' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      view === 'list' ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]' : 'text-[#7C6859] dark:text-[#A8988B] hover:text-[#271810] dark:hover:text-[#FAF6F0]'
                     }`}
                     title="Full listings view"
                   >
@@ -596,7 +594,7 @@ export default function Home() {
                   <button
                     onClick={() => setView('map')}
                     className={`p-1 rounded transition cursor-pointer ${
-                      view === 'map' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      view === 'map' ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]' : 'text-[#7C6859] dark:text-[#A8988B] hover:text-[#271810] dark:hover:text-[#FAF6F0]'
                     }`}
                     title="Full map view"
                   >
@@ -607,54 +605,54 @@ export default function Home() {
             </div>
 
             {/* Quick Filter Tag Chips */}
-            <div className="shrink-0 bg-slate-100/70 dark:bg-[#070A12] px-4 py-1.5 border-b border-slate-200 dark:border-slate-850 flex items-center gap-1.5 overflow-x-auto text-[11px] transition-colors">
-              <span className="text-[10px] uppercase font-bold text-slate-500 mr-1 shrink-0">Quick filters:</span>
+            <div className="shrink-0 bg-[#F8F5EE] dark:bg-[#140E0A] px-4 py-1.5 border-b border-[#E5DAC8] dark:border-[#382618] flex items-center gap-1.5 overflow-x-auto text-[11px] transition-colors">
+              <span className="text-[10px] uppercase font-bold text-[#7C6859] dark:text-[#A8988B] mr-1 shrink-0">Quick filters:</span>
               <button
                 onClick={() => patchFilters({ verifiedOnly: !filters.verifiedOnly })}
-                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                className={`rounded-full px-2.5 py-0.5 font-semibold transition shrink-0 cursor-pointer ${
                   filters.verifiedOnly
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
+                    ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                    : 'bg-white text-[#4A3222] hover:bg-[#F5EFEB] border border-[#E5DAC8] shadow-2xs dark:bg-[#1E140D] dark:text-[#A8988B] dark:hover:text-[#FAF6F0] dark:border-[#382618]'
                 }`}
               >
                 Verified Only
               </button>
               <button
                 onClick={() => patchFilters({ fairPriceOnly: !filters.fairPriceOnly })}
-                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                className={`rounded-full px-2.5 py-0.5 font-semibold transition shrink-0 cursor-pointer ${
                   filters.fairPriceOnly
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
+                    ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                    : 'bg-white text-[#4A3222] hover:bg-[#F5EFEB] border border-[#E5DAC8] shadow-2xs dark:bg-[#1E140D] dark:text-[#A8988B] dark:hover:text-[#FAF6F0] dark:border-[#382618]'
                 }`}
               >
                 Fair Price
               </button>
               <button
                 onClick={() => patchFilters({ hasBorehole: !filters.hasBorehole })}
-                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                className={`rounded-full px-2.5 py-0.5 font-semibold transition shrink-0 cursor-pointer ${
                   filters.hasBorehole
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
+                    ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                    : 'bg-white text-[#4A3222] hover:bg-[#F5EFEB] border border-[#E5DAC8] shadow-2xs dark:bg-[#1E140D] dark:text-[#A8988B] dark:hover:text-[#FAF6F0] dark:border-[#382618]'
                 }`}
               >
                 Borehole Water
               </button>
               <button
                 onClick={() => patchFilters({ hasPrepaidMeter: !filters.hasPrepaidMeter })}
-                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                className={`rounded-full px-2.5 py-0.5 font-semibold transition shrink-0 cursor-pointer ${
                   filters.hasPrepaidMeter
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
+                    ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                    : 'bg-white text-[#4A3222] hover:bg-[#F5EFEB] border border-[#E5DAC8] shadow-2xs dark:bg-[#1E140D] dark:text-[#A8988B] dark:hover:text-[#FAF6F0] dark:border-[#382618]'
                 }`}
               >
                 Prepaid NEPA
               </button>
               <button
                 onClick={() => patchFilters({ hasWiFi: !filters.hasWiFi })}
-                className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
+                className={`rounded-full px-2.5 py-0.5 font-semibold transition shrink-0 cursor-pointer ${
                   filters.hasWiFi
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
+                    ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                    : 'bg-white text-[#4A3222] hover:bg-[#F5EFEB] border border-[#E5DAC8] shadow-2xs dark:bg-[#1E140D] dark:text-[#A8988B] dark:hover:text-[#FAF6F0] dark:border-[#382618]'
                 }`}
               >
                 WiFi Ready
@@ -689,11 +687,9 @@ export default function Home() {
             </div>
           </div>
 
-          {/* =========================================================================
-              RIGHT SIDE: Balanced, High-Tech Map (Framed on the Right side)
-             ========================================================================= */}
+          {/* RIGHT SIDE: Map */}
           <div
-            className={`h-full relative overflow-hidden border-l border-slate-200 dark:border-slate-850 transition-all duration-300 ${
+            className={`h-full relative overflow-hidden border-l border-[#E5DAC8] dark:border-[#382618] transition-all duration-300 ${
               view === 'list'
                 ? 'hidden'
                 : view === 'map'
@@ -749,18 +745,18 @@ export default function Home() {
 
 function EmptyState({ onReset }: { onReset: () => void }) {
   return (
-    <div className="text-center py-16 px-4 rounded-2xl bg-white dark:bg-[#090D18] border border-slate-200 dark:border-slate-800/80 shadow-sm my-4 max-w-md mx-auto">
-      <div className="mx-auto h-12 w-12 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center mb-3">
-        <Search className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+    <div className="text-center py-16 px-4 rounded-2xl bg-white dark:bg-[#1A120B] border border-[#E5DAC8] dark:border-[#382618] shadow-sm my-4 max-w-md mx-auto">
+      <div className="mx-auto h-12 w-12 rounded-full bg-[#F5EFEB] dark:bg-[#2A1C13] border border-[#E5DAC8] dark:border-[#4A3222] flex items-center justify-center mb-3">
+        <Search className="h-5 w-5 text-[#78350F] dark:text-[#E0904E]" />
       </div>
-      <h3 className="text-base font-bold text-slate-900 dark:text-white">No lodges match your filters</h3>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 mb-5 max-w-xs mx-auto">
+      <h3 className="text-base font-bold text-[#271810] dark:text-white">No lodges match your filters</h3>
+      <p className="text-xs text-[#7C6859] dark:text-[#A8988B] mt-1.5 mb-5 max-w-xs mx-auto">
         Try adjusting your budget range, changing the city, or removing amenity restrictions.
       </p>
       <Button
         size="sm"
         onClick={onReset}
-        className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 h-9 shadow-md shadow-blue-600/30 cursor-pointer"
+        className="bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] dark:hover:bg-[#C2783B] text-white font-semibold text-xs px-4 h-9 shadow-md shadow-amber-950/20 cursor-pointer"
       >
         Reset all filters
       </Button>

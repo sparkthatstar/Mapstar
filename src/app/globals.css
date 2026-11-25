@@ -45,71 +45,73 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.985 0.005 240);
-  --foreground: oklch(0.18 0.02 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 260);
-  --primary: oklch(0.52 0.22 255);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.95 0.01 240);
-  --secondary-foreground: oklch(0.2 0.02 260);
-  --muted: oklch(0.95 0.01 240);
-  --muted-foreground: oklch(0.48 0.03 260);
-  --accent: oklch(0.94 0.02 255);
-  --accent-foreground: oklch(0.2 0.02 260);
-  --destructive: oklch(0.58 0.22 25);
-  --border: oklch(0.88 0.015 240);
-  --input: oklch(0.92 0.01 240);
-  --ring: oklch(0.52 0.22 255);
-  --chart-1: oklch(0.52 0.22 255);
-  --chart-2: oklch(0.6 0.18 200);
-  --chart-3: oklch(0.65 0.16 160);
-  --chart-4: oklch(0.7 0.18 80);
-  --chart-5: oklch(0.58 0.22 20);
-  --sidebar: oklch(0.98 0.005 240);
-  --sidebar-foreground: oklch(0.18 0.02 260);
-  --sidebar-primary: oklch(0.52 0.22 255);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.94 0.02 255);
-  --sidebar-accent-foreground: oklch(0.2 0.02 260);
-  --sidebar-border: oklch(0.88 0.015 240);
-  --sidebar-ring: oklch(0.52 0.22 255);
+  /* Furniture Brown & White Accents (Light) */
+  --background: #FAF7F2;
+  --foreground: #271810;
+  --card: #FFFFFF;
+  --card-foreground: #271810;
+  --popover: #FFFFFF;
+  --popover-foreground: #271810;
+  --primary: #78350F;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F3ECE2;
+  --secondary-foreground: #3B2314;
+  --muted: #F3ECE2;
+  --muted-foreground: #7C6859;
+  --accent: #EFE4D4;
+  --accent-foreground: #3B2314;
+  --destructive: #B91C1C;
+  --border: #E5DAC8;
+  --input: #EFE8DC;
+  --ring: #854D0E;
+  --chart-1: #78350F;
+  --chart-2: #A16207;
+  --chart-3: #CA8A04;
+  --chart-4: #D97706;
+  --chart-5: #B45309;
+  --sidebar: #FAF7F2;
+  --sidebar-foreground: #271810;
+  --sidebar-primary: #78350F;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #EFE4D4;
+  --sidebar-accent-foreground: #3B2314;
+  --sidebar-border: #E5DAC8;
+  --sidebar-ring: #854D0E;
 }
 
 .dark {
-  --background: oklch(0.1 0.02 260);
-  --foreground: oklch(0.98 0.01 260);
-  --card: oklch(0.13 0.025 260);
-  --card-foreground: oklch(0.98 0.01 260);
-  --popover: oklch(0.12 0.025 260);
-  --popover-foreground: oklch(0.98 0.01 260);
-  --primary: oklch(0.6 0.22 255);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.18 0.035 260);
-  --secondary-foreground: oklch(0.95 0.01 260);
-  --muted: oklch(0.16 0.025 260);
-  --muted-foreground: oklch(0.65 0.03 260);
-  --accent: oklch(0.22 0.05 255);
-  --accent-foreground: oklch(0.98 0.01 260);
-  --destructive: oklch(0.6 0.22 25);
-  --border: oklch(0.22 0.03 260);
-  --input: oklch(0.2 0.03 260);
-  --ring: oklch(0.6 0.22 255);
-  --chart-1: oklch(0.6 0.22 255);
-  --chart-2: oklch(0.68 0.18 200);
-  --chart-3: oklch(0.72 0.16 160);
-  --chart-4: oklch(0.78 0.18 80);
-  --chart-5: oklch(0.65 0.22 20);
-  --sidebar: oklch(0.11 0.02 260);
-  --sidebar-foreground: oklch(0.98 0.01 260);
-  --sidebar-primary: oklch(0.6 0.22 255);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.18 0.035 260);
-  --sidebar-accent-foreground: oklch(0.98 0.01 260);
-  --sidebar-border: oklch(0.22 0.03 260);
-  --sidebar-ring: oklch(0.6 0.22 255);
+  /* Furniture Walnut & White Accents (Dark) */
+  --background: #120C08;
+  --foreground: #FAF6F0;
+  --card: #1A120B;
+  --card-foreground: #FAF6F0;
+  --popover: #1A120B;
+  --popover-foreground: #FAF6F0;
+  --primary: #C2783B;
+  --primary-foreground: #FFFFFF;
+  --secondary: #271A12;
+  --secondary-foreground: #FAF6F0;
+  --muted: #271A12;
+  --muted-foreground: #A8988B;
+  --accent: #322218;
+  --accent-foreground: #FAF6F0;
+  --destructive: #DC2626;
+  --border: #382618;
+  --input: #2B1C13;
+  --ring: #C2783B;
+  --chart-1: #C2783B;
+  --chart-2: #E0904E;
+  --chart-3: #B45309;
+  --chart-4: #92400E;
+  --chart-5: #78350F;
+  --sidebar: #160F0A;
+  --sidebar-foreground: #FAF6F0;
+  --sidebar-primary: #C2783B;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #271A12;
+  --sidebar-accent-foreground: #FAF6F0;
+  --sidebar-border: #382618;
+  --sidebar-ring: #C2783B;
 }
 
 @layer base {
@@ -121,109 +123,24 @@
   }
 }
 
-/* Leaflet overrides for Mapstar (Mature Obsidian Theme with Electric Blue Accents) */
-.leaflet-container {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
-  background: #070A12 !important;
-  z-index: 0 !important;
-}
-
-/* Ensure all modals, sheets, and popovers render above leaflet layers */
-[data-slot="dialog-overlay"],
-[data-slot="sheet-overlay"],
-[data-slot="alert-dialog-overlay"] {
-  z-index: 9998 !important;
-}
-
-[data-slot="dialog-content"],
-[data-slot="sheet-content"],
-[data-slot="alert-dialog-content"],
-[data-slot="dropdown-menu-content"] {
-  z-index: 9999 !important;
-}
-
-.leaflet-popup-content-wrapper {
-  background: #0B1120 !important;
-  color: #F8FAFC !important;
-  border-radius: 0.75rem !important;
-  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.85), 0 0 15px rgba(37, 99, 235, 0.25) !important;
-  border: 1px solid rgba(59, 130, 246, 0.35) !important;
-  backdrop-filter: blur(8px);
-}
-
-.leaflet-popup-content {
-  margin: 12px !important;
-  line-height: 1.4;
-}
-
-.leaflet-popup-tip {
-  background: #0B1120 !important;
-  border: 1px solid rgba(59, 130, 246, 0.35) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-}
-
-.mapstar-star-pin {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.mapstar-star-pin:hover {
-  transform: scale(1.25);
-  z-index: 1000 !important;
-}
-
-.leaflet-control-zoom {
-  border: 1px solid #1E293B !important;
-  border-radius: 0.5rem !important;
-  overflow: hidden;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
-  background: #0B1120 !important;
-}
-
-.leaflet-control-zoom a {
-  background: #0B1120 !important;
-  color: #E2E8F0 !important;
-  border-bottom: 1px solid #1E293B !important;
-  font-weight: 600;
-  transition: all 0.15s ease;
-}
-
-.leaflet-control-zoom a:hover {
-  background: #1E293B !important;
-  color: #38BDF8 !important;
-}
-
-.leaflet-control-attribution {
-  font-size: 9px !important;
-  background: rgba(11, 17, 32, 0.85) !important;
-  color: #64748B !important;
-  border-radius: 4px !important;
-  backdrop-filter: blur(4px);
-}
-
-.leaflet-control-attribution a {
-  color: #38BDF8 !important;
-}
-
-/* Sleek Obsidian Dark styling for OpenStreetMap tiles (100% Free, No API Key Required) */
-.mapstar-dark-tiles .leaflet-tile {
-  filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.35) brightness(0.75) !important;
-}
-
-/* Custom Sleek Scrollbar */
+/* Custom Scrollbars in Furniture Brown */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #070A12;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1E293B;
+  background: #D5C8B5;
   border-radius: 9999px;
 }
+.dark ::-webkit-scrollbar-thumb {
+  background: #3A281C;
+}
 ::-webkit-scrollbar-thumb:hover {
-  background: #3B82F6;
+  background: #B59E85;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #5A3E2B;
 }

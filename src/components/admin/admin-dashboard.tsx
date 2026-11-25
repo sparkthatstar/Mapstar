@@ -46,7 +46,7 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
       <header className="bg-[#090D18] border-b border-slate-800 text-white shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-md shadow-blue-600/30">
+            <div className="h-8 w-8 rounded-lg bg-[#78350F] dark:bg-[#B45309] flex items-center justify-center shadow-md shadow-[#78350F]/25">
               <Shield className="h-4 w-4 text-white" />
             </div>
             <div>
@@ -56,7 +56,7 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-300">
-              <Lock className="h-3 w-3 text-blue-400" />
+              <Lock className="h-3 w-3 text-amber-400" />
               <span>{adminEmail}</span>
             </div>
             <Button
@@ -101,7 +101,7 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
                     onClick={() => setTab(item.id as Tab)}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
                       active
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                        ? 'bg-[#78350F] dark:bg-[#B45309] text-white shadow-md shadow-[#78350F]/25'
                         : 'text-slate-400 hover:bg-[#0E1526] hover:text-slate-200'
                     }`}
                   >
@@ -128,7 +128,7 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
               key={item.id}
               onClick={() => setTab(item.id as Tab)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition cursor-pointer ${
-                tab === item.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'
+                tab === item.id ? 'bg-[#78350F] dark:bg-[#B45309] text-white' : 'bg-slate-800 text-slate-400'
               }`}
             >
               {item.label}
@@ -271,7 +271,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
             <div className="flex items-center gap-3">
               <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${
                 dbStatus?.connected
-                  ? 'bg-blue-950/70 text-blue-400 border border-blue-800/60 shadow-lg shadow-blue-950/50'
+                  ? 'bg-[#2A1810] text-amber-400 border border-[#523018] shadow-lg shadow-[#2A1810]/50'
                   : 'bg-amber-950/70 text-amber-400 border border-amber-800/60'
               }`}>
                 <Database className="h-5 w-5" />
@@ -280,8 +280,8 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-white">Supabase Cloud Database</h3>
                   {dbStatus?.connected ? (
-                    <Badge variant="outline" className="bg-blue-950/80 border-blue-500/60 text-blue-300 text-[10px] gap-1.5 px-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" /> Connected ({dbStatus.latencyMs}ms)
+                    <Badge variant="outline" className="bg-[#2A1810] border-amber-600/60 text-amber-300 text-[10px] gap-1.5 px-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Connected ({dbStatus.latencyMs}ms)
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="bg-amber-950/80 border-amber-500/60 text-amber-300 text-[10px] gap-1 px-2">
@@ -290,7 +290,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                   )}
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  Engine: <span className="font-mono text-blue-400">PostgreSQL (Supabase pgBouncer + REST API)</span>
+                  Engine: <span className="font-mono text-amber-400">PostgreSQL (Supabase pgBouncer + REST API)</span>
                   {dbStatus?.databaseUrlMasked && (
                     <span className="hidden md:inline ml-2 text-slate-500">· {dbStatus.databaseUrlMasked}</span>
                   )}
@@ -303,9 +303,9 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                 variant="outline"
                 size="sm"
                 onClick={() => setConfigOpen(true)}
-                className="h-8 text-xs border-slate-800 bg-[#090D18] text-slate-200 hover:border-blue-500/60 hover:text-white cursor-pointer"
+                className="h-8 text-xs border-slate-800 bg-[#090D18] text-slate-200 hover:border-amber-600/60 hover:text-white cursor-pointer"
               >
-                <Settings className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
+                <Settings className="h-3.5 w-3.5 mr-1.5 text-amber-400" />
                 Configure Supabase
               </Button>
               <Button
@@ -313,16 +313,16 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                 size="sm"
                 onClick={loadDbStatus}
                 disabled={dbLoading}
-                className="h-8 text-xs border-slate-800 bg-[#090D18] text-slate-200 hover:border-blue-500/60 hover:text-white cursor-pointer"
+                className="h-8 text-xs border-slate-800 bg-[#090D18] text-slate-200 hover:border-amber-600/60 hover:text-white cursor-pointer"
               >
-                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 text-blue-400 ${dbLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 text-amber-400 ${dbLoading ? 'animate-spin' : ''}`} />
                 Test Ping
               </Button>
               <Button
                 size="sm"
                 onClick={handleSeed}
                 disabled={seeding}
-                className="h-8 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-md shadow-blue-600/30 cursor-pointer transition"
+                className="h-8 text-xs bg-[#78350F] dark:bg-[#B45309] hover:bg-[#854D0E] dark:hover:bg-[#C2783B] text-white font-semibold shadow-md shadow-[#78350F]/25 cursor-pointer transition"
               >
                 <Database className="h-3.5 w-3.5 mr-1.5" />
                 {seeding ? 'Seeding...' : 'Seed Anchor Lodges'}
@@ -343,11 +343,11 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
               </div>
               <div className="bg-[#090D18] border border-slate-800/60 rounded-xl p-2.5">
                 <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Cloud Listings</span>
-                <div className="text-base font-extrabold text-blue-400 mt-0.5">{dbStatus.counts.listings}</div>
+                <div className="text-base font-extrabold text-amber-400 mt-0.5">{dbStatus.counts.listings}</div>
               </div>
               <div className="bg-[#090D18] border border-slate-800/60 rounded-xl p-2.5">
                 <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Fee Regulation</span>
-                <div className="text-base font-extrabold text-sky-400 mt-0.5">{dbStatus.counts.feeConfigs > 0 ? 'Active in DB' : 'Using Defaults'}</div>
+                <div className="text-base font-extrabold text-amber-300 mt-0.5">{dbStatus.counts.feeConfigs > 0 ? 'Active in DB' : 'Using Defaults'}</div>
               </div>
             </div>
           )}
@@ -356,15 +356,15 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
         {/* Configure Supabase Modal Dialog */}
         <Dialog open={configOpen} onOpenChange={setConfigOpen}>
           <DialogContent className="sm:max-w-[560px] max-h-[92vh] overflow-y-auto p-0 bg-[#090D18] border-slate-800 text-slate-100 shadow-2xl shadow-black/90 z-[9999]">
-            <div className="bg-gradient-to-r from-blue-700 via-blue-900 to-slate-950 px-6 py-5 text-white border-b border-slate-800">
+            <div className="bg-gradient-to-r from-[#4A2810] via-[#5C3317] to-[#2E180A] px-6 py-5 text-white border-b border-slate-800">
               <div className="flex items-center gap-2 mb-1">
-                <div className="h-7 w-7 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
-                  <Database className="h-4 w-4 text-blue-400" />
+                <div className="h-7 w-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
+                  <Database className="h-4 w-4 text-amber-400" />
                 </div>
                 <span className="font-bold tracking-tight text-lg text-white">Supabase Connection Settings</span>
               </div>
               <DialogTitle className="sr-only">Supabase Connection Settings</DialogTitle>
-              <DialogDescription className="text-blue-200/80 text-xs">
+              <DialogDescription className="text-amber-100/80 text-xs">
                 Connect Mapstar to your live Supabase project to store properties, lodge listings, and tenant agreements.
               </DialogDescription>
             </div>
@@ -379,7 +379,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                   placeholder="https://xyzprojectref.supabase.co"
                   value={supabaseUrlInput}
                   onChange={(e) => setSupabaseUrlInput(e.target.value)}
-                  className="h-9 text-xs bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                  className="h-9 text-xs bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-[#78350F]"
                 />
                 <p className="text-[10px] text-slate-500">Found in: Supabase Dashboard → Project Settings → API → Project URL</p>
               </div>
@@ -393,7 +393,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                   placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                   value={supabaseAnonKeyInput}
                   onChange={(e) => setSupabaseAnonKeyInput(e.target.value)}
-                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-[#78350F]"
                 />
               </div>
 
@@ -407,7 +407,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                   placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                   value={supabaseServiceKeyInput}
                   onChange={(e) => setSupabaseServiceKeyInput(e.target.value)}
-                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-[#78350F]"
                 />
                 <p className="text-[10px] text-slate-500">Bypasses RLS for secure backend API mutations and database seeding.</p>
               </div>
@@ -421,7 +421,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                   placeholder="postgresql://postgres.ref:[PASSWORD]@aws-0-region.pooler.supabase.com:6543/postgres?pgbouncer=true"
                   value={databaseUrlInput}
                   onChange={(e) => setDatabaseUrlInput(e.target.value)}
-                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-[#78350F]"
                 />
                 <p className="text-[10px] text-slate-500">Found in: Supabase Dashboard → Settings → Database → Connection string (URI)</p>
               </div>
@@ -435,7 +435,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                   placeholder="postgresql://postgres.ref:[PASSWORD]@aws-0-region.pooler.supabase.com:5432/postgres"
                   value={directUrlInput}
                   onChange={(e) => setDirectUrlInput(e.target.value)}
-                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                  className="h-9 text-xs font-mono bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-[#78350F]"
                 />
               </div>
 
@@ -451,7 +451,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
                 <Button
                   type="submit"
                   disabled={savingConfig}
-                  className="h-9 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-md shadow-blue-600/30 cursor-pointer transition"
+                  className="h-9 text-xs bg-[#78350F] dark:bg-[#B45309] hover:bg-[#854D0E] dark:hover:bg-[#C2783B] text-white font-semibold shadow-md shadow-[#78350F]/25 cursor-pointer transition"
                 >
                   {savingConfig ? (
                     <>
@@ -470,15 +470,15 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-          <StatCard label="Total listings" value={String(stats.listings)} icon={<Building className="h-4 w-4" />} accent="bg-blue-950/60 border border-blue-800/40 text-blue-400" />
+          <StatCard label="Total listings" value={String(stats.listings)} icon={<Building className="h-4 w-4" />} accent="bg-[#2A1810] border border-[#523018] text-amber-400" />
           <StatCard label="Available now" value={String(stats.available)} icon={<Star className="h-4 w-4" />} accent="bg-emerald-950/60 border border-emerald-800/40 text-emerald-400" />
-          <StatCard label="Featured" value={String(stats.featured)} icon={<Star className="h-4 w-4" />} accent="bg-sky-950/60 border border-sky-800/40 text-sky-400" />
-          <StatCard label="Physically verified" value={String(stats.verified)} icon={<Shield className="h-4 w-4" />} accent="bg-indigo-950/60 border border-indigo-800/40 text-indigo-400" />
+          <StatCard label="Featured" value={String(stats.featured)} icon={<Star className="h-4 w-4" />} accent="bg-[#2A1810] border border-[#523018] text-amber-300" />
+          <StatCard label="Physically verified" value={String(stats.verified)} icon={<Shield className="h-4 w-4" />} accent="bg-[#2A1810] border border-[#523018] text-amber-400" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
           <StatCard label="Coming soon (orange)" value={String(stats.comingSoon)} icon={<Building className="h-4 w-4" />} accent="bg-amber-950/60 border border-amber-800/40 text-amber-400" />
-          <StatCard label="Total annual rent value" value={formatNaira(stats.totalRentValue)} icon={<DollarSign className="h-4 w-4" />} accent="bg-blue-950/60 border border-blue-800/40 text-blue-400" wide />
+          <StatCard label="Total annual rent value" value={formatNaira(stats.totalRentValue)} icon={<DollarSign className="h-4 w-4" />} accent="bg-[#2A1810] border border-[#523018] text-amber-400" wide />
         </div>
 
         {/* Quick actions */}
@@ -552,13 +552,13 @@ function ActionCard({ title, description, cta, icon, onClick }: { title: string;
   return (
     <div className="rounded-xl border border-slate-800 bg-[#070A12] p-4 flex flex-col justify-between">
       <div className="flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-blue-950/60 border border-blue-800/40 text-blue-400 shrink-0">{icon}</div>
+        <div className="p-2 rounded-lg bg-[#2A1810] border border-[#523018] text-amber-400 shrink-0">{icon}</div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
           <p className="text-xs text-slate-400 mt-1">{description}</p>
         </div>
       </div>
-      <Button size="sm" variant="outline" className="mt-4 self-start border-slate-800 bg-[#090D18] text-slate-200 hover:border-blue-500/60 hover:text-white cursor-pointer" onClick={onClick}>
+      <Button size="sm" variant="outline" className="mt-4 self-start border-slate-800 bg-[#090D18] text-slate-200 hover:border-amber-600/60 hover:text-white cursor-pointer" onClick={onClick}>
         {cta}
       </Button>
     </div>
@@ -961,7 +961,7 @@ function StatusPill({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     AVAILABLE: { label: 'Available', cls: 'bg-emerald-100 text-emerald-700' },
     COMING_SOON: { label: 'Coming soon', cls: 'bg-amber-100 text-amber-700' },
-    UNDER_INSPECTION: { label: 'Inspection', cls: 'bg-blue-100 text-blue-700' },
+    UNDER_INSPECTION: { label: 'Inspection', cls: 'bg-amber-100 text-amber-900' },
     RECENTLY_LET: { label: 'Recently let', cls: 'bg-slate-100 text-slate-600' },
     VERIFIED: { label: 'Verified', cls: 'bg-red-100 text-red-700' },
     DELISTED: { label: 'Delisted', cls: 'bg-red-200 text-red-900' },
@@ -1060,7 +1060,7 @@ function UsersTab() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 mb-5">
           <StatCard label="Total users" value={String(users.length)} icon={<Users className="h-4 w-4" />} accent="bg-slate-100 text-slate-700" />
           <StatCard label="Landlords" value={String(users.filter((u) => u.role === 'LANDLORD').length)} icon={<Building className="h-4 w-4" />} accent="bg-emerald-50 text-emerald-700" />
-          <StatCard label="Agents" value={String(users.filter((u) => u.role === 'AGENT').length)} icon={<Shield className="h-4 w-4" />} accent="bg-blue-50 text-blue-700" />
+          <StatCard label="Agents" value={String(users.filter((u) => u.role === 'AGENT').length)} icon={<Shield className="h-4 w-4" />} accent="bg-amber-100 text-amber-900" />
           <StatCard label="Pending KYC" value={String(users.filter((u) => !u.verified).length)} icon={<Flag className="h-4 w-4" />} accent="bg-amber-50 text-amber-700" />
         </div>
 
@@ -1087,7 +1087,7 @@ function UsersTab() {
                   <td className="px-3 py-2.5">
                     <Badge variant="outline" className={
                       u.role === 'LANDLORD' ? 'border-emerald-300 text-emerald-700' :
-                      u.role === 'AGENT' ? 'border-blue-300 text-blue-700' :
+                      u.role === 'AGENT' ? 'border-amber-300 text-amber-900' :
                       'border-slate-300 text-slate-700'
                     }>{u.role}</Badge>
                   </td>

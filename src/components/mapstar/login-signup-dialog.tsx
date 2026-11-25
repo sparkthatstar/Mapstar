@@ -120,6 +120,7 @@ export default function LoginSignupDialog({
           email: signupEmail,
           phone: signupPhone,
           password: signupPassword,
+          role: 'TENANT',
         }),
       })
 
@@ -133,7 +134,7 @@ export default function LoginSignupDialog({
       setSignupPhone('')
       setSignupPassword('')
     } catch (err: any) {
-      setError(err.message || 'Account registration failed.')
+      setError(err.message || 'Signup failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -142,6 +143,7 @@ export default function LoginSignupDialog({
   async function handleRequestResetCode(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setSuccessMessage(null)
     setLoading(true)
 
     try {
@@ -154,12 +156,14 @@ export default function LoginSignupDialog({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to request reset code')
 
-      setForgotPreviewCode(data.previewCode || null)
-      if (data.previewCode) setForgotCode(data.previewCode)
+      setSuccessMessage('Recovery code generated. Enter it below with your new password.')
+      if (data.previewCode) {
+        setForgotPreviewCode(data.previewCode)
+        setForgotCode(data.previewCode)
+      }
       setForgotStep('reset')
-      setSuccessMessage('Recovery code dispatched to your email address.')
     } catch (err: any) {
-      setError(err.message || 'Failed to send recovery code.')
+      setError(err.message || 'Could not send recovery code.')
     } finally {
       setLoading(false)
     }
@@ -168,6 +172,7 @@ export default function LoginSignupDialog({
   async function handleConfirmReset(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setSuccessMessage(null)
 
     if (forgotNewPass.length < 6) {
       setError('New password must be at least 6 characters.')
@@ -188,14 +193,17 @@ export default function LoginSignupDialog({
       })
 
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Reset failed')
+      if (!res.ok) throw new Error(data.error || 'Failed to reset password')
 
       onAuthed(data.user)
       onOpenChange(false)
-      setForgotNewPass('')
+      setForgotStep('request')
+      setForgotEmail('')
       setForgotCode('')
+      setForgotNewPass('')
+      setForgotPreviewCode(null)
     } catch (err: any) {
-      setError(err.message || 'Reset failed. Please check the code.')
+      setError(err.message || 'Password reset failed. Please check the code.')
     } finally {
       setLoading(false)
     }
@@ -203,15 +211,15 @@ export default function LoginSignupDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden bg-white dark:bg-[#090D18] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-2xl z-[9999] transition-colors">
+      <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden bg-white dark:bg-[#1A120B] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] shadow-2xl z-[9999] transition-colors">
         {/* Brand Header Banner */}
-        <div className="bg-gradient-to-r from-blue-700 via-blue-900 to-slate-950 px-6 py-5 text-white border-b border-slate-800/80">
+        <div className="bg-gradient-to-r from-[#4A2810] via-[#5C3317] to-[#2E180A] px-6 py-5 text-white border-b border-[#382618]">
           <div className="flex items-center gap-2 mb-1.5">
-            <div className="h-7 w-7 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+            <div className="h-7 w-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
               <svg viewBox="0 0 32 32" className="h-4 w-4">
                 <path
                   d="M16 2 L19.6 12.2 L30.4 12.5 L21.7 19.0 L24.7 29.3 L16 23.2 L7.3 29.3 L10.3 19.0 L1.6 12.5 L12.4 12.2 Z"
-                  fill="#38BDF8"
+                  fill="#FFFFFF"
                 />
               </svg>
             </div>
@@ -223,7 +231,7 @@ export default function LoginSignupDialog({
             {tab === 'signup' && 'Create an Account'}
             {tab === 'forgot' && 'Reset Password'}
           </DialogTitle>
-          <DialogDescription className="text-blue-200/80 text-xs mt-1">
+          <DialogDescription className="text-amber-100/80 text-xs mt-1">
             {tab === 'login' && 'Sign in to access verified lodge listings and saved searches.'}
             {tab === 'signup' && 'Join Mapstar to find or list verified lodges across Imo & Enugu.'}
             {tab === 'forgot' && 'Recover access to your Mapstar account via verification code.'}
@@ -233,11 +241,11 @@ export default function LoginSignupDialog({
         <div className="p-6">
           {tab !== 'forgot' ? (
             <Tabs value={tab} onValueChange={(v) => { setTab(v as 'login' | 'signup'); setError(null) }} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-4 bg-slate-100 dark:bg-[#070A12] p-1 border border-slate-200 dark:border-slate-800 rounded-lg">
-                <TabsTrigger value="login" className="text-xs data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-600 dark:text-slate-400 cursor-pointer">
+              <TabsList className="grid w-full grid-cols-2 mb-4 bg-[#FAF7F2] dark:bg-[#120C08] p-1 border border-[#E5DAC8] dark:border-[#382618] rounded-lg">
+                <TabsTrigger value="login" className="text-xs data-[state=active]:bg-[#78350F] data-[state=active]:text-white dark:data-[state=active]:bg-[#B45309] text-[#7C6859] dark:text-[#B8A598] cursor-pointer">
                   <LogIn className="h-3.5 w-3.5 mr-1.5" /> Log in
                 </TabsTrigger>
-                <TabsTrigger value="signup" className="text-xs data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-600 dark:text-slate-400 cursor-pointer">
+                <TabsTrigger value="signup" className="text-xs data-[state=active]:bg-[#78350F] data-[state=active]:text-white dark:data-[state=active]:bg-[#B45309] text-[#7C6859] dark:text-[#B8A598] cursor-pointer">
                   <UserPlus className="h-3.5 w-3.5 mr-1.5" /> Sign up
                 </TabsTrigger>
               </TabsList>
@@ -253,11 +261,11 @@ export default function LoginSignupDialog({
               <TabsContent value="login" className="space-y-4 m-0">
                 <form onSubmit={handleLogin} className="space-y-3.5">
                   <div className="space-y-1.5">
-                    <Label htmlFor="login-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <Label htmlFor="login-email" className="text-xs font-medium text-[#271810] dark:text-[#FAF6F0]">
                       Email address
                     </Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="login-email"
                         type="email"
@@ -265,14 +273,14 @@ export default function LoginSignupDialog({
                         placeholder="name@example.com"
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
-                        className="pl-9 h-9 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-blue-500"
+                        className="pl-9 h-9 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="login-password" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      <Label htmlFor="login-password" className="text-xs font-medium text-[#271810] dark:text-[#FAF6F0]">
                         Password
                       </Label>
                       <button
@@ -282,13 +290,13 @@ export default function LoginSignupDialog({
                           setTab('forgot')
                           setError(null)
                         }}
-                        className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline cursor-pointer"
+                        className="text-[11px] text-[#78350F] hover:text-[#92400E] dark:text-[#E0904E] dark:hover:text-amber-200 hover:underline cursor-pointer"
                       >
                         Forgot password?
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="login-password"
                         type="password"
@@ -296,7 +304,7 @@ export default function LoginSignupDialog({
                         placeholder="••••••••"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        className="pl-9 h-9 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-blue-500"
+                        className="pl-9 h-9 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
                     </div>
                   </div>
@@ -304,7 +312,7 @@ export default function LoginSignupDialog({
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-9 bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/30 mt-1 cursor-pointer transition"
+                    className="w-full h-9 bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] dark:hover:bg-[#C2783B] text-xs font-semibold text-white shadow-md shadow-[#78350F]/25 mt-1 cursor-pointer transition"
                   >
                     {loading ? (
                       <>
@@ -323,29 +331,29 @@ export default function LoginSignupDialog({
               <TabsContent value="signup" className="space-y-3.5 m-0">
                 <form onSubmit={handleSignup} className="space-y-3">
                   <div className="space-y-1">
-                    <Label htmlFor="signup-name" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <Label htmlFor="signup-name" className="text-xs font-medium text-[#271810] dark:text-[#FAF6F0]">
                       Full Name
                     </Label>
                     <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="signup-name"
                         required
                         placeholder="e.g. Obinna Nwosu"
                         value={signupName}
                         onChange={(e) => setSignupName(e.target.value)}
-                        className="pl-9 h-8 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-blue-500"
+                        className="pl-9 h-8 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <Label htmlFor="signup-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      <Label htmlFor="signup-email" className="text-xs font-medium text-[#271810] dark:text-[#FAF6F0]">
                         Email
                       </Label>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                         <Input
                           id="signup-email"
                           type="email"
@@ -353,35 +361,35 @@ export default function LoginSignupDialog({
                           placeholder="you@email.com"
                           value={signupEmail}
                           onChange={(e) => setSignupEmail(e.target.value)}
-                          className="pl-9 h-8 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-blue-500"
+                          className="pl-9 h-8 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-1">
-                      <Label htmlFor="signup-phone" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      <Label htmlFor="signup-phone" className="text-xs font-medium text-[#271810] dark:text-[#FAF6F0]">
                         Phone Number
                       </Label>
                       <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                         <Input
                           id="signup-phone"
                           type="tel"
                           placeholder="0803 123 4567"
                           value={signupPhone}
                           onChange={(e) => setSignupPhone(e.target.value)}
-                          className="pl-9 h-8 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-blue-500"
+                          className="pl-9 h-8 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
                         />
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="signup-password" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <Label htmlFor="signup-password" className="text-xs font-medium text-[#271810] dark:text-[#FAF6F0]">
                       Password (min. 6 characters)
                     </Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="signup-password"
                         type="password"
@@ -390,7 +398,7 @@ export default function LoginSignupDialog({
                         placeholder="••••••••"
                         value={signupPassword}
                         onChange={(e) => setSignupPassword(e.target.value)}
-                        className="pl-9 h-8 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-blue-500"
+                        className="pl-9 h-8 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
                     </div>
                   </div>
@@ -398,7 +406,7 @@ export default function LoginSignupDialog({
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-9 bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/30 mt-1 cursor-pointer transition"
+                    className="w-full h-9 bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] dark:hover:bg-[#C2783B] text-xs font-semibold text-white shadow-md shadow-[#78350F]/25 mt-1 cursor-pointer transition"
                   >
                     {loading ? (
                       <>
@@ -416,7 +424,7 @@ export default function LoginSignupDialog({
           ) : (
             /* FORGOT PASSWORD VIEW */
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between pb-2 border-b border-[#E5DAC8] dark:border-[#382618]">
                 <button
                   type="button"
                   onClick={() => {
@@ -424,11 +432,11 @@ export default function LoginSignupDialog({
                     setError(null)
                     setSuccessMessage(null)
                   }}
-                  className="inline-flex items-center text-xs font-medium text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition cursor-pointer"
+                  className="inline-flex items-center text-xs font-medium text-[#7C6859] hover:text-[#78350F] dark:text-[#B8A598] dark:hover:text-[#E0904E] transition cursor-pointer"
                 >
                   <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Back to Log in
                 </button>
-                <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                <span className="text-[11px] font-semibold text-[#78350F] dark:text-[#E0904E]">
                   Step {forgotStep === 'request' ? '1: Verify Email' : '2: New Password'}
                 </span>
               </div>
@@ -441,8 +449,8 @@ export default function LoginSignupDialog({
               )}
 
               {successMessage && (
-                <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5 text-xs text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-500 dark:text-blue-400 mt-0.5" />
+                <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900 dark:border-[#523018] dark:bg-[#2A1810] dark:text-amber-200">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[#78350F] dark:text-[#E0904E] mt-0.5" />
                   <div className="flex-1 leading-snug">{successMessage}</div>
                 </div>
               )}
@@ -450,11 +458,11 @@ export default function LoginSignupDialog({
               {forgotStep === 'request' ? (
                 <form onSubmit={handleRequestResetCode} className="space-y-3">
                   <div className="space-y-1">
-                    <Label htmlFor="forgot-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <Label htmlFor="forgot-email" className="text-xs font-medium text-[#271810] dark:text-[#FAF6F0]">
                       Registered Email Address
                     </Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="forgot-email"
                         type="email"
@@ -462,7 +470,7 @@ export default function LoginSignupDialog({
                         placeholder="name@example.com"
                         value={forgotEmail}
                         onChange={(e) => setForgotEmail(e.target.value)}
-                        className="pl-9 h-9 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-blue-500"
+                        className="pl-9 h-9 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
                     </div>
                   </div>
@@ -470,7 +478,7 @@ export default function LoginSignupDialog({
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-9 bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/30 cursor-pointer"
+                    className="w-full h-9 bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] dark:hover:bg-[#C2783B] text-xs font-semibold text-white shadow-md shadow-[#78350F]/25 cursor-pointer"
                   >
                     {loading ? (
                       <>
@@ -484,23 +492,23 @@ export default function LoginSignupDialog({
               ) : (
                 <form onSubmit={handleConfirmReset} className="space-y-3">
                   {forgotPreviewCode && (
-                    <div className="rounded-lg bg-blue-50 border border-blue-200 p-2.5 text-xs text-blue-700 dark:bg-blue-950/50 dark:border-blue-800/60 dark:text-blue-300">
+                    <div className="rounded-lg bg-amber-50 border border-amber-300 p-2.5 text-xs text-amber-900 dark:bg-[#2A1810] dark:border-[#523018] dark:text-amber-200">
                       <div className="font-semibold text-[11px]">Recovery Code Dispatched:</div>
                       <div className="mt-1 flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 shadow-xs">
+                        <span className="font-mono font-bold text-xs bg-white dark:bg-[#120C08] px-2 py-0.5 rounded border border-amber-300 dark:border-[#523018] text-[#78350F] dark:text-[#E0904E] shadow-xs">
                           {forgotPreviewCode}
                         </span>
-                        <span className="text-[10px] text-blue-600 dark:text-blue-400">(Pre-filled)</span>
+                        <span className="text-[10px] text-[#78350F] dark:text-[#E0904E]">(Pre-filled)</span>
                       </div>
                     </div>
                   )}
 
                   <div className="space-y-1">
-                    <Label htmlFor="forgot-code" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <Label htmlFor="forgot-code" className="text-xs font-medium text-[#271810] dark:text-[#FAF6F0]">
                       6-Digit Recovery Code
                     </Label>
                     <div className="relative">
-                      <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                      <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="forgot-code"
                         required
@@ -508,17 +516,17 @@ export default function LoginSignupDialog({
                         placeholder="123456"
                         value={forgotCode}
                         onChange={(e) => setForgotCode(e.target.value)}
-                        className="pl-9 h-9 text-xs font-mono tracking-widest bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:border-blue-500"
+                        className="pl-9 h-9 text-xs font-mono tracking-widest bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="forgot-new-pass" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <Label htmlFor="forgot-new-pass" className="text-xs font-medium text-[#271810] dark:text-[#FAF6F0]">
                       New Password (min. 6 characters)
                     </Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="forgot-new-pass"
                         type="password"
@@ -527,7 +535,7 @@ export default function LoginSignupDialog({
                         placeholder="••••••••"
                         value={forgotNewPass}
                         onChange={(e) => setForgotNewPass(e.target.value)}
-                        className="pl-9 h-9 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:border-blue-500"
+                        className="pl-9 h-9 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
                     </div>
                   </div>
@@ -535,7 +543,7 @@ export default function LoginSignupDialog({
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-9 bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/30 cursor-pointer"
+                    className="w-full h-9 bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] dark:hover:bg-[#C2783B] text-xs font-semibold text-white shadow-md shadow-[#78350F]/25 cursor-pointer"
                   >
                     {loading ? (
                       <>

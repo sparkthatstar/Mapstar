@@ -38,7 +38,7 @@ export default function AdminLoginForm() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="relative h-14 w-14 flex items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-950 border border-blue-500/40 shadow-xl shadow-blue-600/30">
+          <div className="relative h-14 w-14 flex items-center justify-center rounded-2xl bg-gradient-to-br from-[#78350F] to-[#B45309] border border-amber-600/40 shadow-xl shadow-[#78350F]/30">
             <Shield className="h-7 w-7 text-white" />
           </div>
           <h1 className="mt-4 text-2xl font-bold text-white tracking-tight">Mapstar Admin</h1>
@@ -71,7 +71,7 @@ export default function AdminLoginForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@example.com"
-                  className="pl-9 bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                  className="pl-9 bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-[#78350F]"
                   autoComplete="email"
                   autoFocus
                 />
@@ -91,7 +91,7 @@ export default function AdminLoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="pl-9 bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
+                  className="pl-9 bg-[#070A12] border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-[#78350F]"
                   autoComplete="current-password"
                 />
               </div>
@@ -107,7 +107,7 @@ export default function AdminLoginForm() {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full mt-5 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-md shadow-blue-600/30 cursor-pointer transition"
+            className="w-full mt-5 bg-[#78350F] hover:bg-[#854D0E] text-white font-semibold shadow-md shadow-[#78350F]/25 cursor-pointer transition"
           >
             {loading ? (
               <>
@@ -126,7 +126,7 @@ export default function AdminLoginForm() {
         <div className="mt-6 text-center">
           <a
             href="/"
-            className="text-xs text-slate-400 hover:text-blue-400 transition"
+            className="text-xs text-slate-400 hover:text-[#E0904E] transition"
           >
             ← Back to Mapstar public site
           </a>

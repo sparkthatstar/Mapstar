@@ -34,28 +34,28 @@ export default function NewUserBanner({ onOpenGuide }: NewUserBannerProps) {
   if (!visible) return null
 
   return (
-    <div className="shrink-0 mb-3 mx-0.5 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-gradient-to-r from-blue-50/90 via-sky-50/70 to-blue-50/90 dark:from-blue-950/40 dark:via-[#0E172C] dark:to-blue-950/30 p-3 sm:p-3.5 shadow-xs relative text-slate-900 dark:text-slate-100 animate-in fade-in slide-in-from-top-1 duration-300">
+    <div className="shrink-0 mb-3 mx-0.5 rounded-xl border border-[#E5DAC8] dark:border-[#382618] bg-gradient-to-r from-[#FAF7F2] via-amber-50/70 to-[#FAF7F2] dark:from-[#1F140D] dark:via-[#24160E] dark:to-[#18100A] p-3 sm:p-3.5 shadow-xs relative text-[#271810] dark:text-[#FAF6F0] animate-in fade-in slide-in-from-top-1 duration-300">
       <div className="flex items-start justify-between gap-2.5">
         <div className="flex items-start gap-2.5">
-          <div className="h-7 w-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+          <div className="h-7 w-7 rounded-lg bg-[#78350F] text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5 dark:bg-[#B45309]">
             <Sparkles className="h-4 w-4" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-bold text-slate-900 dark:text-white">
+              <span className="text-xs font-bold text-[#271810] dark:text-[#FAF6F0]">
                 👋 First time on Mapstar?
               </span>
-              <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-100/80 dark:bg-blue-900/60 px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+              <span className="text-[10px] font-semibold text-[#78350F] dark:text-[#E0904E] bg-amber-100/80 dark:bg-[#2A1810] px-1.5 py-0.2 rounded border border-amber-300 dark:border-[#523018]">
                 New User Guide
               </span>
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+            <p className="text-xs text-[#7C6859] dark:text-[#B8A598] mt-1 leading-relaxed">
               Green pins = Available lodges. Orange pins = Coming soon. Click <strong>Inspect</strong> on any card for regulated fee breakdowns, or use <strong>Directions</strong> to route directly to the gate with spoken GPS.
             </p>
             <div className="mt-2.5 flex items-center gap-2">
               <button
                 onClick={onOpenGuide}
-                className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 bg-white dark:bg-[#070A12] border border-blue-200 dark:border-blue-800/80 px-2.5 py-1 rounded-lg shadow-2xs hover:shadow-xs transition cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs font-bold text-[#78350F] hover:text-[#92400E] dark:text-[#E0904E] dark:hover:text-amber-200 bg-white dark:bg-[#120C08] border border-[#E5DAC8] dark:border-[#382618] px-2.5 py-1 rounded-lg shadow-2xs hover:shadow-xs transition cursor-pointer"
               >
                 <HelpCircle className="h-3.5 w-3.5" />
                 <span>Show Me the Ropes (1-Min Tour)</span>
@@ -67,7 +67,7 @@ export default function NewUserBanner({ onOpenGuide }: NewUserBannerProps) {
 
         <button
           onClick={handleDismiss}
-          className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer shrink-0"
+          className="text-[#7C6859] hover:text-[#271810] dark:text-[#B8A598] dark:hover:text-white p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer shrink-0"
           title="Dismiss tip"
           aria-label="Dismiss welcome banner"
         >
