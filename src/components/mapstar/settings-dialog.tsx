@@ -9,10 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { ThemeToggle } from '@/components/theme-toggle'
 import {
-  Sun,
-  Moon,
   LogIn,
   UserPlus,
   LogOut,
@@ -46,29 +43,12 @@ export default function SettingsDialog({
             Settings & Preferences
           </DialogTitle>
           <DialogDescription className="text-xs text-[#7C6859] dark:text-[#B8A598]">
-            Customize display mode, manage your account session, and view platform fee policies.
+            Manage your account session and view verified platform fee policies.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
-          {/* 1. Theme / Appearance Mode */}
-          <div className="rounded-2xl border border-[#E5DAC8] dark:border-[#382618] p-4 bg-[#FAF7F2]/70 dark:bg-[#120C08]/70">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold text-[#271810] dark:text-white flex items-center gap-1.5">
-                  <Sun className="h-4 w-4 text-amber-600 dark:hidden" />
-                  <Moon className="h-4 w-4 text-amber-400 hidden dark:block" />
-                  Appearance Mode
-                </div>
-                <div className="text-[11px] text-[#7C6859] dark:text-[#B8A598] mt-0.5">
-                  Toggle between Warm Linen Light & Midnight Walnut Dark
-                </div>
-              </div>
-              <ThemeToggle />
-            </div>
-          </div>
-
-          {/* 2. Authentication & Account Management */}
+          {/* 1. Authentication & Account Management */}
           <div className="rounded-2xl border border-[#E5DAC8] dark:border-[#382618] p-4 bg-[#FAF7F2]/70 dark:bg-[#120C08]/70">
             <div className="text-xs font-bold text-[#271810] dark:text-white mb-2">
               Account & Session
@@ -126,7 +106,7 @@ export default function SettingsDialog({
             )}
           </div>
 
-          {/* 3. Platform Regulations & Guide */}
+          {/* 2. Platform Regulations & Guide */}
           <div className="space-y-2">
             <Button
               variant="outline"

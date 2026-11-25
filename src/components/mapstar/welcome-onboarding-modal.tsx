@@ -310,9 +310,9 @@ export default function WelcomeOnboardingModal({
 
               <div className="rounded-xl border border-[#E5DAC8] dark:border-[#382618] bg-[#FAF7F2] dark:bg-[#120C08] p-3 text-xs flex items-center justify-between">
                 <div>
-                  <span className="font-bold text-[#271810] dark:text-[#FAF6F0] block">Theme preference</span>
+                  <span className="font-bold text-[#271810] dark:text-[#FAF6F0] block">Direct Landlord Contact</span>
                   <span className="text-[11px] text-[#7C6859] dark:text-[#B8A598]">
-                    You can switch between Bright and Midnight theme anytime using the button in the top bar.
+                    Verified phone numbers and chat are available directly inside each lodge details page.
                   </span>
                 </div>
               </div>

@@ -47,7 +47,6 @@ import ChatView from '@/components/mapstar/chat-view'
 import MeView from '@/components/mapstar/me-view'
 import StarPowerView from '@/components/mapstar/star-power-view'
 import SettingsDialog from '@/components/mapstar/settings-dialog'
-import { ThemeToggle } from '@/components/theme-toggle'
 import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
 
 // Interactive Google Maps & Turn-by-Turn Directions Component
