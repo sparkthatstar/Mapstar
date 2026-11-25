@@ -4,8 +4,8 @@
   "description": "Find lodges in Nigeria. Skip the agent fees.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#070A12",
-  "theme_color": "#2563EB",
+  "background_color": "#FAF7F2",
+  "theme_color": "#78350F",
   "orientation": "portrait",
   "icons": [
     {
