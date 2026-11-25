@@ -10,6 +10,8 @@ import {
   ADMIN_COOKIE_NAME,
   ADMIN_COOKIE_OPTIONS,
 } from '@/lib/admin-auth'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { recordLoginActivity } from '@/lib/activity-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,18 +21,42 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json()
+    const limit = await checkRateLimit(req, {
+      prefix: 'user-login',
+      maxAttempts: 10,
+      windowMs: 15 * 60 * 1000,
+    })
 
-    if (!email || !password) {
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many login attempts. Please wait ${limit.retryAfterSeconds} seconds before trying again.`,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(limit.retryAfterSeconds) },
+        }
+      )
+    }
+
+    const { email, password } = await req.json()
+    const trimmedEmail = (email || '').trim().toLowerCase()
+
+    if (!trimmedEmail || !password) {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
       )
     }
 
-    const user = await authenticateUser(email, password)
+    const user = await authenticateUser(trimmedEmail, password)
 
     if (!user) {
+      recordLoginActivity({
+        email: trimmedEmail,
+        status: 'FAILED',
+        details: 'Incorrect password attempt',
+      })
       // Artificial delay to prevent timing attacks
       await new Promise((r) => setTimeout(r, 400))
       return NextResponse.json(
@@ -38,6 +64,15 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       )
     }
+
+    recordLoginActivity({
+      userId: user.id,
+      email: user.email,
+      fullName: user.fullName || undefined,
+      role: user.role,
+      status: 'SUCCESS',
+      details: 'Authenticated successfully',
+    })
 
     const sessionCookie = createUserSessionCookie(user)
     const response = NextResponse.json({ ok: true, user })

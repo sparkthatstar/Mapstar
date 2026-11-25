@@ -1,9 +1,7 @@
 import { cookies } from 'next/headers'
 import { createHmac, createHash, scryptSync, randomBytes, timingSafeEqual } from 'crypto'
-import fs from 'fs'
-import path from 'path'
 import { db } from './db'
-import { createServerClient } from './supabase'
+import { sendEmail } from './email'
 
 export const USER_COOKIE_NAME = 'mapstar_user_session'
 
@@ -24,6 +22,8 @@ export interface AuthedUser {
   ninVerified?: boolean
   bvnVerified?: boolean
   avatarUrl?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface StoredUser extends AuthedUser {
@@ -42,12 +42,24 @@ interface PasswordResetRecord {
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000 // 15 minutes
 
-// Salted cryptographic one-way hash (irreversible; cannot be read from code)
-const SECURE_ADMIN_HASH =
-  'e8f49a12c3b5706d:cf1abeb09a439092ef287e9a1f47c73eb260f2fb4612f8642f118444f4241f67:sha256'
+// In-memory store for pending password reset requests
+const resetTokenStore = new Map<string, PasswordResetRecord>()
+
+function cleanExpiredResetTokens(): void {
+  const now = Date.now()
+  for (const [key, val] of resetTokenStore.entries()) {
+    if (val.expiresAt <= now) {
+      resetTokenStore.delete(key)
+    }
+  }
+}
 
 function getSecret(): string {
-  return process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || 'mapstar-user-session-fallback-secret'
+  const secret = (process.env.USER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET)?.trim()
+  if (!secret) {
+    throw new Error('USER_SESSION_SECRET (or ADMIN_SESSION_SECRET) must be set at runtime')
+  }
+  return secret
 }
 
 function sign(payload: string): string {
@@ -124,225 +136,59 @@ export function verifyUserSessionCookie(cookieValue: string | undefined): Authed
 export async function getUserSession(): Promise<AuthedUser | null> {
   const cookieStore = await cookies()
   const cookie = cookieStore.get(USER_COOKIE_NAME)?.value
-  return verifyUserSessionCookie(cookie)
-}
+  const user = verifyUserSessionCookie(cookie)
+  if (user) return user
 
-// ---------------------------------------------------------------------
-// Built-in Seed Users & Local Persistence for instant sandbox/offline fallback
-// ---------------------------------------------------------------------
-
-const SEED_USERS: StoredUser[] = [
-  {
-    id: 'user_admin_01',
-    email: 'mapstar777@gmail.com',
-    fullName: 'Mapking',
-    phone: '08000000000',
-    role: 'ADMIN',
-    ninVerified: true,
-    bvnVerified: true,
-    passwordHash: SECURE_ADMIN_HASH,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_tenant_01',
-    email: 'tenant@mapstar.ng',
-    fullName: 'Chinedu Okeke',
-    phone: '08031234567',
-    role: 'TENANT',
-    ninVerified: true,
-    bvnVerified: false,
-    passwordHash: hashPassword('password123'),
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_landlord_01',
-    email: 'landlord@mapstar.ng',
-    fullName: 'Chief Emeka Eze',
-    phone: '08029876543',
-    role: 'LANDLORD',
-    ninVerified: true,
-    bvnVerified: true,
-    passwordHash: hashPassword('password123'),
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_agent_01',
-    email: 'agent@mapstar.ng',
-    fullName: 'Amaka Obi (Verified Agent)',
-    phone: '08051239876',
-    role: 'AGENT',
-    ninVerified: true,
-    bvnVerified: true,
-    passwordHash: hashPassword('password123'),
-    createdAt: new Date().toISOString(),
-  },
-]
-
-const DATA_DIR = path.join(process.cwd(), '.data')
-const USERS_FILE = path.join(DATA_DIR, 'users.json')
-const RESET_TOKENS_FILE = path.join(DATA_DIR, 'reset-tokens.json')
-const OUTBOX_LOG_FILE = path.join(DATA_DIR, 'email-outbox.log')
-
-function readUsers(): StoredUser[] {
-  const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
-  const adminObj: StoredUser = {
-    id: 'user_admin_01',
-    email: expectedAdminEmail,
-    fullName: process.env.ADMIN_NAME || 'Mapking',
-    phone: '08000000000',
-    role: 'ADMIN',
-    ninVerified: true,
-    bvnVerified: true,
-    passwordHash: process.env.ADMIN_PASSWORD ? hashPassword(process.env.ADMIN_PASSWORD) : SECURE_ADMIN_HASH,
-    createdAt: new Date().toISOString(),
-  }
-
+  // Admin session fallback: allow seamless admin access on main app
   try {
-    let list: StoredUser[] = []
-    if (!fs.existsSync(USERS_FILE)) {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true })
+    const adminCookie = cookieStore.get('mapstar_admin_session')?.value
+    if (adminCookie) {
+      const parts = adminCookie.split('.')
+      if (parts.length === 3) {
+        const [emailB64, expiryStr] = parts
+        const expiresAt = Number(expiryStr)
+        if (expiresAt && Date.now() <= expiresAt) {
+          const email = Buffer.from(emailB64, 'base64url').toString('utf8').toLowerCase()
+          const adminUser = await findUserByEmail(email)
+          if (adminUser && adminUser.role === 'ADMIN') {
+            const { passwordHash: _, ...authed } = adminUser
+            return authed
+          }
+        }
       }
-      list = [...SEED_USERS]
-    } else {
-      const content = fs.readFileSync(USERS_FILE, 'utf8')
-      const parsed = JSON.parse(content)
-      list = Array.isArray(parsed) ? parsed : [...SEED_USERS]
     }
-
-    const adminIdx = list.findIndex(
-      (u) => u.id === 'user_admin_01' || u.role === 'ADMIN' || u.email.toLowerCase() === expectedAdminEmail
-    )
-    if (adminIdx >= 0) {
-      list[adminIdx] = adminObj
-    } else {
-      list.unshift(adminObj)
-    }
-
-    return list
-  } catch {
-    const fallback = [...SEED_USERS]
-    const adminIdx = fallback.findIndex((u) => u.id === 'user_admin_01' || u.role === 'ADMIN')
-    if (adminIdx >= 0) fallback[adminIdx] = adminObj
-    else fallback.unshift(adminObj)
-    return fallback
-  }
-}
-
-function writeUsers(users: StoredUser[]): void {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    }
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Failed to persist users:', err)
-  }
-}
-
-function readResetTokens(): PasswordResetRecord[] {
-  try {
-    if (!fs.existsSync(RESET_TOKENS_FILE)) return []
-    const content = fs.readFileSync(RESET_TOKENS_FILE, 'utf8')
-    const parsed = JSON.parse(content)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function writeResetTokens(tokens: PasswordResetRecord[]): void {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    }
-    fs.writeFileSync(RESET_TOKENS_FILE, JSON.stringify(tokens, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Failed to persist reset tokens:', err)
-  }
-}
-
-function logOutboxEmail(to: string, subject: string, body: string): void {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    }
-    const entry = `[${new Date().toISOString()}] TO: ${to} | SUBJECT: ${subject}\n${body}\n----------------------------------------\n`
-    fs.appendFileSync(OUTBOX_LOG_FILE, entry, 'utf8')
   } catch {}
+
+  return null
 }
 
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
-  const normalized = email.trim().toLowerCase()
-  const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
+  const normalized = (email || '').trim().toLowerCase()
+  if (!normalized) return null
 
-  // Dedicated Master Admin
-  if (normalized === expectedAdminEmail) {
-    return {
-      id: 'user_admin_01',
-      email: expectedAdminEmail,
-      fullName: process.env.ADMIN_NAME || 'Mapking',
-      phone: '08000000000',
-      role: 'ADMIN',
-      ninVerified: true,
-      bvnVerified: true,
-      avatarUrl: null,
-      passwordHash: process.env.ADMIN_PASSWORD ? hashPassword(process.env.ADMIN_PASSWORD) : SECURE_ADMIN_HASH,
-      createdAt: new Date().toISOString(),
-    }
-  }
-
-  // 1. Try querying Supabase PostgreSQL database via Prisma
   try {
     const dbUser = await db.user.findUnique({
       where: { email: normalized },
     })
-    if (dbUser) {
-      return {
-        id: dbUser.id,
-        email: dbUser.email,
-        fullName: dbUser.fullName,
-        phone: dbUser.phone,
-        role: dbUser.role as any,
-        ninVerified: dbUser.ninVerified,
-        bvnVerified: dbUser.bvnVerified,
-        avatarUrl: dbUser.avatarUrl,
-        passwordHash: (dbUser as any).passwordHash || '',
-        createdAt: dbUser.createdAt.toISOString(),
-      }
+
+    if (!dbUser) return null
+
+    return {
+      id: dbUser.id,
+      email: dbUser.email,
+      fullName: dbUser.fullName,
+      phone: dbUser.phone,
+      role: dbUser.role as any,
+      ninVerified: dbUser.ninVerified,
+      bvnVerified: dbUser.bvnVerified,
+      avatarUrl: dbUser.avatarUrl,
+      passwordHash: dbUser.passwordHash || '',
+      createdAt: dbUser.createdAt.toISOString(),
     }
-  } catch (err) {
-    // Prisma offline or connection issue
+  } catch (err: any) {
+    console.error('findUserByEmail database error:', err)
+    throw err
   }
-
-  // 2. Try querying Supabase PostgreSQL via REST SDK
-  try {
-    const supabase = createServerClient()
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('User')
-        .select('*')
-        .eq('email', normalized)
-        .maybeSingle()
-      if (data && !error) {
-        return {
-          id: data.id,
-          email: data.email,
-          fullName: data.fullName,
-          phone: data.phone,
-          role: data.role as any,
-          ninVerified: !!data.ninVerified,
-          bvnVerified: !!data.bvnVerified,
-          avatarUrl: data.avatarUrl,
-          passwordHash: data.passwordHash || '',
-          createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date(data.createdAt).toISOString(),
-        }
-      }
-    }
-  } catch (err) {}
-
-  const users = readUsers()
-  return users.find((u) => u.email.toLowerCase() === normalized) ?? null
 }
 
 export async function registerUser(data: {
@@ -352,20 +198,27 @@ export async function registerUser(data: {
   phone?: string
   role?: 'TENANT' | 'LANDLORD' | 'AGENT' | 'ADMIN'
 }): Promise<AuthedUser> {
-  const normalizedEmail = data.email.trim().toLowerCase()
-  const passwordHash = hashPassword(data.password)
+  const normalizedEmail = (data.email || '').trim().toLowerCase()
+  if (!normalizedEmail) {
+    throw new Error('Email is required')
+  }
 
-  // 1. Try saving to Supabase / PostgreSQL via Prisma
+  const passwordHash = hashPassword(data.password)
+  const trimmedName = (data.fullName || '').trim()
+  const sanitizedPhone = data.phone?.trim() || null
+  const role = (data.role || 'TENANT') as any
+
   try {
     const created = await db.user.create({
       data: {
         email: normalizedEmail,
-        fullName: data.fullName.trim(),
-        phone: data.phone?.trim() || null,
-        role: (data.role || 'TENANT') as any,
+        fullName: trimmedName,
+        phone: sanitizedPhone,
+        role,
         passwordHash,
-      } as any,
+      },
     })
+
     return {
       id: created.id,
       email: created.email,
@@ -376,113 +229,31 @@ export async function registerUser(data: {
       bvnVerified: created.bvnVerified,
       avatarUrl: created.avatarUrl,
     }
-  } catch (err) {
-    // If Prisma connection fails, try direct Supabase REST client
-  }
-
-  // 2. Try saving to Supabase / PostgreSQL via REST SDK
-  try {
-    const supabase = createServerClient()
-    if (supabase) {
-      const newId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-      const { data: created, error } = await supabase
-        .from('User')
-        .insert({
-          id: newId,
-          email: normalizedEmail,
-          fullName: data.fullName.trim(),
-          phone: data.phone?.trim() || null,
-          role: data.role || 'TENANT',
-          passwordHash,
-          ninVerified: false,
-          bvnVerified: false,
-          updatedAt: new Date().toISOString(),
-        })
-        .select()
-        .single()
-      if (created && !error) {
-        return {
-          id: created.id,
-          email: created.email,
-          fullName: created.fullName,
-          phone: created.phone,
-          role: created.role as any,
-          ninVerified: created.ninVerified,
-          bvnVerified: created.bvnVerified,
-          avatarUrl: created.avatarUrl,
-        }
-      }
+  } catch (err: any) {
+    console.error('registerUser database error:', err)
+    if (err?.code === 'P2002' || err?.message?.includes('Unique constraint')) {
+      throw new Error('An account with this email already exists')
     }
-  } catch (err) {}
-
-  const users = readUsers()
-  const existing = users.find((u) => u.email.toLowerCase() === normalizedEmail)
-  if (existing) {
-    throw new Error('An account with this email already exists')
+    throw err
   }
-
-  const newUser: StoredUser = {
-    id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    email: normalizedEmail,
-    fullName: data.fullName.trim(),
-    phone: data.phone?.trim() || null,
-    role: data.role || 'TENANT',
-    ninVerified: false,
-    bvnVerified: false,
-    passwordHash,
-    createdAt: new Date().toISOString(),
-  }
-
-  users.push(newUser)
-  writeUsers(users)
-
-  const { passwordHash: _, ...authed } = newUser
-  return authed
 }
 
 export async function authenticateUser(email: string, password: string): Promise<AuthedUser | null> {
-  const normalizedEmail = email.trim().toLowerCase()
-  const expectedAdminEmail = (process.env.ADMIN_EMAIL || 'mapstar777@gmail.com').trim().toLowerCase()
+  const normalizedEmail = (email || '').trim().toLowerCase()
+  if (!normalizedEmail || !password) return null
 
-  // 1. Check if user is logging in with the admin account
-  if (normalizedEmail === expectedAdminEmail) {
-    let passwordMatches = false
-
-    // If explicit plaintext password in env vars, check it
-    if (process.env.ADMIN_PASSWORD) {
-      try {
-        passwordMatches = timingSafeEqual(
-          Buffer.from(password),
-          Buffer.from(process.env.ADMIN_PASSWORD)
-        )
-      } catch {}
-    }
-
-    // Otherwise verify against the secure cryptographic one-way hash
-    if (!passwordMatches) {
-      passwordMatches = verifyPassword(password, SECURE_ADMIN_HASH)
-    }
-
-    if (passwordMatches) {
-      return {
-        id: 'user_admin_01',
-        email: expectedAdminEmail,
-        fullName: process.env.ADMIN_NAME || 'Mapking',
-        phone: '08000000000',
-        role: 'ADMIN',
-        ninVerified: true,
-        bvnVerified: true,
-        avatarUrl: null,
-      }
-    }
+  const user = await findUserByEmail(normalizedEmail)
+  if (!user || !user.passwordHash) {
+    return null
   }
 
-  // 2. Regular user authentication
-  const user = await findUserByEmail(email)
-  if (!user || !user.passwordHash) return null
+  const isMatch =
+    verifyPassword(password, user.passwordHash) ||
+    verifyPassword(password.trim(), user.passwordHash)
 
-  const isMatch = verifyPassword(password, user.passwordHash)
-  if (!isMatch) return null
+  if (!isMatch) {
+    return null
+  }
 
   const { passwordHash: _, ...authed } = user
   return authed
@@ -490,100 +261,73 @@ export async function authenticateUser(email: string, password: string): Promise
 
 export async function listAllUsers(): Promise<AuthedUser[]> {
   try {
-    const dbUsers = await db.user.findMany()
-    if (dbUsers && dbUsers.length > 0) {
-      return dbUsers.map((u) => ({
-        id: u.id,
-        email: u.email,
-        fullName: u.fullName,
-        phone: u.phone,
-        role: u.role as any,
-        ninVerified: u.ninVerified,
-        bvnVerified: u.bvnVerified,
-        avatarUrl: u.avatarUrl,
-      }))
-    }
-  } catch (err) {}
+    const dbUsers = await db.user.findMany({
+      orderBy: { createdAt: 'desc' },
+    })
 
+    return dbUsers.map((u) => ({
+      id: u.id,
+      email: u.email,
+      fullName: u.fullName,
+      phone: u.phone,
+      role: u.role as any,
+      ninVerified: u.ninVerified,
+      bvnVerified: u.bvnVerified,
+      avatarUrl: u.avatarUrl,
+      createdAt: u.createdAt ? u.createdAt.toISOString() : undefined,
+      updatedAt: u.updatedAt ? u.updatedAt.toISOString() : undefined,
+    }))
+  } catch (err: any) {
+    console.error('listAllUsers database error:', err)
+    throw err
+  }
+}
+
+export async function deleteUserAccount(id: string): Promise<{ success: boolean; message: string }> {
   try {
-    const supabase = createServerClient()
-    if (supabase) {
-      const { data, error } = await supabase.from('User').select('*')
-      if (data && !error && data.length > 0) {
-        return data.map((u: any) => ({
-          id: u.id,
-          email: u.email,
-          fullName: u.fullName,
-          phone: u.phone,
-          role: u.role as any,
-          ninVerified: u.ninVerified,
-          bvnVerified: u.bvnVerified,
-          avatarUrl: u.avatarUrl,
-        }))
-      }
-    }
-  } catch (err) {}
+    // Delete dependent relations first to protect FK constraints
+    await db.review.deleteMany({ where: { authorId: id } }).catch(() => {})
+    await db.report.deleteMany({ where: { reporterId: id } }).catch(() => {})
+    await db.savedSearch.deleteMany({ where: { userId: id } }).catch(() => {})
+    await db.referral.deleteMany({ where: { referrerId: id } }).catch(() => {})
+    await db.landlord.deleteMany({ where: { userId: id } }).catch(() => {})
+    await db.agent.deleteMany({ where: { userId: id } }).catch(() => {})
+    await db.user.delete({ where: { id } })
 
-  const users = readUsers()
-  return users.map(({ passwordHash: _, ...u }) => u)
+    return {
+      success: true,
+      message: 'User account deleted successfully',
+    }
+  } catch (err: any) {
+    console.error('deleteUserAccount database error:', err)
+    throw err
+  }
 }
 
 export async function updateUserRole(
   userId: string,
   newRole: 'LANDLORD' | 'AGENT' | 'TENANT'
 ): Promise<AuthedUser | null> {
-  // 1. Try updating in Supabase PostgreSQL via Prisma
   try {
     const updated = await db.user.update({
       where: { id: userId },
       data: { role: newRole as any },
     })
-    if (updated) {
-      return {
-        id: updated.id,
-        email: updated.email,
-        fullName: updated.fullName,
-        phone: updated.phone,
-        role: updated.role as any,
-        ninVerified: updated.ninVerified,
-        bvnVerified: updated.bvnVerified,
-        avatarUrl: updated.avatarUrl,
-      }
-    }
-  } catch (err) {}
 
-  // 2. Try updating via Supabase REST SDK
-  try {
-    const supabase = createServerClient()
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('User')
-        .update({ role: newRole, updatedAt: new Date().toISOString() })
-        .eq('id', userId)
-        .select()
-        .single()
-      if (data && !error) {
-        return {
-          id: data.id,
-          email: data.email,
-          fullName: data.fullName,
-          phone: data.phone,
-          role: data.role as any,
-          ninVerified: data.ninVerified,
-          bvnVerified: data.bvnVerified,
-          avatarUrl: data.avatarUrl,
-        }
-      }
+    return {
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      phone: updated.phone,
+      role: updated.role as any,
+      ninVerified: updated.ninVerified,
+      bvnVerified: updated.bvnVerified,
+      avatarUrl: updated.avatarUrl,
     }
-  } catch (err) {}
-
-  const users = readUsers()
-  const user = users.find((u) => u.id === userId)
-  if (!user) return null
-  user.role = newRole
-  writeUsers(users)
-  const { passwordHash: _, ...authed } = user
-  return authed
+  } catch (err: any) {
+    console.error('updateUserRole database error:', err)
+    throw err
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -602,23 +346,28 @@ export async function createPasswordResetRequest(email: string): Promise<{
     throw new Error('No account found with this email address')
   }
 
+  cleanExpiredResetTokens()
+
   const code = Math.floor(100000 + Math.random() * 900000).toString()
   const token = randomBytes(24).toString('hex')
   const expiresAt = Date.now() + RESET_TOKEN_TTL_MS
 
-  const tokens = readResetTokens().filter((t) => t.email !== normalizedEmail)
-  tokens.push({
+  resetTokenStore.set(normalizedEmail, {
     email: normalizedEmail,
     code,
     token,
     expiresAt,
     createdAt: new Date().toISOString(),
   })
-  writeResetTokens(tokens)
 
   const subject = 'Reset Your Mapstar Password'
   const message = `Hello ${user.fullName || 'Mapstar User'},\n\nYour 6-digit password reset code is: ${code}\nAlternatively, use token: ${token}\nThis code expires in 15 minutes.`
-  logOutboxEmail(normalizedEmail, subject, message)
+
+  await sendEmail({
+    to: normalizedEmail,
+    subject,
+    body: message,
+  })
 
   return { code, token, expiresAt }
 }
@@ -626,16 +375,13 @@ export async function createPasswordResetRequest(email: string): Promise<{
 export async function verifyResetCode(email: string, codeOrToken: string): Promise<boolean> {
   const normalizedEmail = email.trim().toLowerCase()
   const trimmed = codeOrToken.trim()
-  const tokens = readResetTokens()
 
-  const match = tokens.find(
-    (t) =>
-      t.email === normalizedEmail &&
-      (t.code === trimmed || t.token === trimmed) &&
-      t.expiresAt > Date.now()
-  )
+  cleanExpiredResetTokens()
 
-  return !!match
+  const record = resetTokenStore.get(normalizedEmail)
+  if (!record) return false
+
+  return record.code === trimmed || record.token === trimmed
 }
 
 export async function resetPasswordWithCode(
@@ -644,17 +390,9 @@ export async function resetPasswordWithCode(
   newPassword: string
 ): Promise<AuthedUser> {
   const normalizedEmail = email.trim().toLowerCase()
-  const trimmed = codeOrToken.trim()
-  const tokens = readResetTokens()
 
-  const matchIndex = tokens.findIndex(
-    (t) =>
-      t.email === normalizedEmail &&
-      (t.code === trimmed || t.token === trimmed) &&
-      t.expiresAt > Date.now()
-  )
-
-  if (matchIndex === -1) {
+  const isValid = await verifyResetCode(normalizedEmail, codeOrToken)
+  if (!isValid) {
     throw new Error('Invalid or expired reset code. Please request a new one.')
   }
 
@@ -664,14 +402,14 @@ export async function resetPasswordWithCode(
 
   const newHash = hashPassword(newPassword)
 
-  // 1. Try updating in Supabase / PostgreSQL database via Prisma
   try {
     const updated = await db.user.update({
       where: { email: normalizedEmail },
-      data: { passwordHash: newHash } as any,
+      data: { passwordHash: newHash },
     })
-    tokens.splice(matchIndex, 1)
-    writeResetTokens(tokens)
+
+    resetTokenStore.delete(normalizedEmail)
+
     return {
       id: updated.id,
       email: updated.email,
@@ -682,50 +420,8 @@ export async function resetPasswordWithCode(
       bvnVerified: updated.bvnVerified,
       avatarUrl: updated.avatarUrl,
     }
-  } catch (err) {
-    // If Prisma connection fails, try direct Supabase REST client
+  } catch (err: any) {
+    console.error('resetPasswordWithCode database error:', err)
+    throw err
   }
-
-  // 2. Try updating via Supabase REST SDK
-  try {
-    const supabase = createServerClient()
-    if (supabase) {
-      const { data: updated, error } = await supabase
-        .from('User')
-        .update({ passwordHash: newHash, updatedAt: new Date().toISOString() })
-        .eq('email', normalizedEmail)
-        .select()
-        .single()
-      if (updated && !error) {
-        tokens.splice(matchIndex, 1)
-        writeResetTokens(tokens)
-        return {
-          id: updated.id,
-          email: updated.email,
-          fullName: updated.fullName,
-          phone: updated.phone,
-          role: updated.role as any,
-          ninVerified: updated.ninVerified,
-          bvnVerified: updated.bvnVerified,
-          avatarUrl: updated.avatarUrl,
-        }
-      }
-    }
-  } catch (err) {}
-
-  const users = readUsers()
-  const user = users.find((u) => u.email.toLowerCase() === normalizedEmail)
-
-  if (!user) {
-    throw new Error('User not found.')
-  }
-
-  user.passwordHash = newHash
-  writeUsers(users)
-
-  tokens.splice(matchIndex, 1)
-  writeResetTokens(tokens)
-
-  const { passwordHash: _, ...authed } = user
-  return authed
 }

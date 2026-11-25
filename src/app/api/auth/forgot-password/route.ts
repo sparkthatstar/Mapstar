@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createPasswordResetRequest } from '@/lib/user-auth'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,24 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(req: NextRequest) {
   try {
+    const limit = await checkRateLimit(req, {
+      prefix: 'forgot-password',
+      maxAttempts: 5,
+      windowMs: 15 * 60 * 1000,
+    })
+
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many password reset requests. Please wait ${limit.retryAfterSeconds} seconds before requesting again.`,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(limit.retryAfterSeconds) },
+        }
+      )
+    }
+
     const { email } = await req.json()
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
