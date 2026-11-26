@@ -16,6 +16,7 @@ import {
   AlertCircle,
   ArrowLeft,
 } from 'lucide-react'
+import MapstarAppIcon from '@/components/mapstar/app-icon'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -72,14 +73,7 @@ export default function SignupPage() {
         </div>
 
         <div className="flex items-center justify-center gap-2 mb-2">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#78350F] to-[#B45309] flex items-center justify-center shadow-lg shadow-[#78350F]/30 border border-amber-600/40">
-            <svg viewBox="0 0 32 32" className="h-5 w-5">
-              <path
-                d="M16 2 L19.6 12.2 L30.4 12.5 L21.7 19.0 L24.7 29.3 L16 23.2 L7.3 29.3 L10.3 19.0 L1.6 12.5 L12.4 12.2 Z"
-                fill="#FFFFFF"
-              />
-            </svg>
-          </div>
+          <MapstarAppIcon className="h-9 w-9 shadow-lg shadow-[#78350F]/30" />
           <span className="text-2xl font-black tracking-tight text-[#271810] dark:text-white">Mapstar</span>
         </div>
         <h2 className="text-center text-xl font-bold tracking-tight text-[#271810] dark:text-white">

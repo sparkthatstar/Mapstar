@@ -25,6 +25,7 @@ import {
   ArrowLeft,
   CheckCircle2,
 } from 'lucide-react'
+import MapstarAppIcon from '@/components/mapstar/app-icon'
 import type { AuthedUser } from '@/lib/user-auth'
 
 export type { AuthedUser }
@@ -215,14 +216,7 @@ export default function LoginSignupDialog({
         {/* Brand Header Banner */}
         <div className="bg-gradient-to-r from-[#4A2810] via-[#5C3317] to-[#2E180A] px-6 py-5 text-white border-b border-[#382618]">
           <div className="flex items-center gap-2 mb-1.5">
-            <div className="h-7 w-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
-              <svg viewBox="0 0 32 32" className="h-4 w-4">
-                <path
-                  d="M16 2 L19.6 12.2 L30.4 12.5 L21.7 19.0 L24.7 29.3 L16 23.2 L7.3 29.3 L10.3 19.0 L1.6 12.5 L12.4 12.2 Z"
-                  fill="#FFFFFF"
-                />
-              </svg>
-            </div>
+            <MapstarAppIcon className="h-7 w-7 shadow-sm" />
             <span className="font-bold tracking-tight text-lg text-white">Mapstar</span>
           </div>
 

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Shield, Loader2, Lock, Mail } from 'lucide-react'
+import MapstarAppIcon from '@/components/mapstar/app-icon'
 
 export default function AdminLoginForm() {
   const [email, setEmail] = useState('')
@@ -38,9 +39,7 @@ export default function AdminLoginForm() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="relative h-14 w-14 flex items-center justify-center rounded-2xl bg-gradient-to-br from-[#78350F] to-[#B45309] border border-amber-600/40 shadow-xl shadow-[#78350F]/30">
-            <Shield className="h-7 w-7 text-white" />
-          </div>
+          <MapstarAppIcon className="h-14 w-14 shadow-xl shadow-[#78350F]/30" />
           <h1 className="mt-4 text-2xl font-bold text-white tracking-tight">Mapstar Admin</h1>
           <p className="mt-1 text-xs text-slate-400">
             Restricted access · Authorized personnel only

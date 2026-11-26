@@ -29,6 +29,7 @@ import {
   X,
   Play,
 } from 'lucide-react'
+import MapstarAppIcon from '@/components/mapstar/app-icon'
 
 interface WelcomeOnboardingModalProps {
   open: boolean
@@ -93,9 +94,7 @@ export default function WelcomeOnboardingModal({
         <div className="relative bg-gradient-to-r from-[#4A2810] via-[#5C3317] to-[#2E180A] p-5 sm:p-6 text-white border-b border-[#382618]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shadow-inner">
-                <Sparkles className="h-4 w-4 text-amber-200" />
-              </div>
+              <MapstarAppIcon className="h-8 w-8 shadow-md" />
               <div>
                 <span className="font-extrabold tracking-tight text-lg text-white">Mapstar</span>
                 <span className="ml-1.5 text-[10px] font-mono bg-[#2E180A]/80 px-1.5 py-0.5 rounded border border-[#B45309]/50 text-amber-200">

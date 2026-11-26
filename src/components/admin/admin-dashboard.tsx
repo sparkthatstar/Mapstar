@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import MapstarAppIcon from '@/components/mapstar/app-icon'
 import { DEFAULT_FEES, FeeConfig } from '@/lib/fees'
 import { MockListing, formatNaira, PROPERTY_TYPE_LABELS } from '@/lib/mock-data'
 import { MOCK_LISTINGS } from '@/lib/mock-data'
@@ -46,9 +47,7 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
       <header className="bg-[#090D18] border-b border-slate-800 text-white shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-[#78350F] dark:bg-[#B45309] flex items-center justify-center shadow-md shadow-[#78350F]/25">
-              <Shield className="h-4 w-4 text-white" />
-            </div>
+            <MapstarAppIcon className="h-8 w-8 shadow-md shadow-[#78350F]/25" />
             <div>
               <div className="text-sm font-semibold leading-none">Mapstar Admin</div>
               <div className="text-[10px] text-slate-400 mt-0.5">Control panel</div>

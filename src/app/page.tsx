@@ -47,6 +47,7 @@ import ChatView from '@/components/mapstar/chat-view'
 import MeView from '@/components/mapstar/me-view'
 import StarPowerView from '@/components/mapstar/star-power-view'
 import SettingsDialog from '@/components/mapstar/settings-dialog'
+import MapstarAppIcon from '@/components/mapstar/app-icon'
 import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
 
 // Interactive Google Maps & Turn-by-Turn Directions Component
@@ -326,17 +327,7 @@ export default function Home() {
               resetFilters()
             }}
           >
-            <div className="relative h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-gradient-to-br from-[#78350F] via-[#854D0E] to-[#451A03] p-1 flex items-center justify-center shadow-md shadow-amber-950/20 border border-amber-600/30 group-hover:scale-105 transition-transform">
-              <svg viewBox="0 0 32 32" className="h-5 w-5">
-                <path
-                  d="M16 2 L19.6 12.2 L30.4 12.5 L21.7 19.0 L24.7 29.3 L16 23.2 L7.3 29.3 L10.3 19.0 L1.6 12.5 L12.4 12.2 Z"
-                  fill="#FFFFFF"
-                  stroke="#451A03"
-                  strokeWidth="1.2"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
+            <MapstarAppIcon className="h-8 w-8 sm:h-9 sm:w-9 shadow-md shadow-amber-950/20 group-hover:scale-105 transition-transform" />
             <div className="flex items-center gap-1.5">
               <span className="text-xl sm:text-2xl font-extrabold text-[#271810] dark:text-[#FAF6F0] tracking-tight">
                 Mapstar
