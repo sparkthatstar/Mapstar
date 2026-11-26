@@ -44,6 +44,7 @@ model User {
   savedSearches SavedSearch[]
   reports       Report[]      @relation("ReportAuthor")
   referrals     Referral[]
+  chatMessages  ChatMessage[]
 
   @@index([role])
 }
@@ -422,4 +423,23 @@ model VerificationApplication {
 
   @@index([status])
   @@index([userId])
+}
+
+// ---------------------------------------------------------------------
+// Community & Direct Chat Messages
+// ---------------------------------------------------------------------
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  channelId  String
+  senderId   String
+  sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderName String
+  senderRole UserRole @default(TENANT)
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([channelId, createdAt])
+  @@index([senderId])
 }

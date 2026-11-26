@@ -4,19 +4,20 @@ import { useState, useEffect, useRef } from 'react'
 import {
   MessageSquare,
   Send,
-  Users,
   Shield,
   Building,
   GraduationCap,
   Lock,
   LogIn,
-  CheckCircle2,
-  Sparkles,
+  Trash2,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { AuthedUser } from '@/components/mapstar/login-signup-dialog'
+import { toast } from 'sonner'
 
 interface ChatMessage {
   id: string
@@ -54,76 +55,154 @@ const CHANNELS = [
   },
 ]
 
-const INITIAL_MESSAGES: ChatMessage[] = [
-  {
-    id: 'msg_1',
-    channelId: 'student-lodges',
-    senderId: 'user_agent_01',
-    senderName: 'Amaka Obi (Verified Agent)',
-    senderRole: 'AGENT',
-    content: 'Welcome to Mapstar Chat! Feel free to ask about lodge availability around IMSU and UNN. All agent fees are legally capped at 5%.',
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    id: 'msg_2',
-    channelId: 'student-lodges',
-    senderId: 'user_landlord_01',
-    senderName: 'Chief Emeka Eze',
-    senderRole: 'LANDLORD',
-    content: 'Just updated the water pump and prepaid meter at my lodge in Works Layout, Owerri. Inspected yesterday.',
-    createdAt: new Date(Date.now() - 1800000).toISOString(),
-  },
-  {
-    id: 'msg_3',
-    channelId: 'student-lodges',
-    senderId: 'user_tenant_01',
-    senderName: 'Chinedu Okeke',
-    senderRole: 'TENANT',
-    content: 'Has anyone seen the self-con near FUTO back gate? Looking for a quiet place with 24/7 borehole.',
-    createdAt: new Date(Date.now() - 600000).toISOString(),
-  },
-]
-
 export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
   const [activeChannel, setActiveChannel] = useState(CHANNELS[0].id)
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('mapstar_chat_messages')
-        if (saved) return JSON.parse(saved)
-      } catch {}
-    }
-    return INITIAL_MESSAGES
-  })
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [purging, setPurging] = useState(false)
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
+  const isAdmin = user?.role === 'ADMIN'
+
+  // Fetch messages from Supabase Postgres
+  async function fetchMessages(channelId: string, showToast = false) {
     try {
-      localStorage.setItem('mapstar_chat_messages', JSON.stringify(messages))
-    } catch {}
-  }, [messages])
+      setLoading(true)
+      const res = await fetch(`/api/chat?channelId=${encodeURIComponent(channelId)}`)
+      if (!res.ok) {
+        throw new Error('Failed to load chat messages')
+      }
+      const data = await res.json()
+      setMessages(data.messages || [])
+      if (showToast) {
+        toast.success('Chat refreshed')
+      }
+    } catch (err: any) {
+      console.error('[ChatView fetch error]', err)
+      toast.error(err.message || 'Error loading chat messages')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (user) {
+      fetchMessages(activeChannel)
+    }
+  }, [activeChannel, user])
+
+  // Periodic polling for new messages every 6 seconds
+  useEffect(() => {
+    if (!user) return
+    const interval = setInterval(() => {
+      fetch(`/api/chat?channelId=${encodeURIComponent(activeChannel)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.messages) {
+            setMessages(data.messages)
+          }
+        })
+        .catch(() => {})
+    }, 6000)
+
+    return () => clearInterval(interval)
+  }, [activeChannel, user])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, activeChannel])
 
-  function handleSend(e: React.FormEvent) {
+  async function handleSend(e: React.FormEvent) {
     e.preventDefault()
-    if (!input.trim() || !user) return
+    if (!input.trim() || !user || sending) return
 
-    const newMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      channelId: activeChannel,
-      senderId: user.id,
-      senderName: user.fullName || user.email,
-      senderRole: user.role,
-      content: input.trim(),
-      createdAt: new Date().toISOString(),
-    }
-
-    setMessages((prev) => [...prev, newMsg])
+    const trimmed = input.trim()
     setInput('')
+    setSending(true)
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channelId: activeChannel,
+          content: trimmed,
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to post message')
+      }
+
+      const data = await res.json()
+      if (data.message) {
+        setMessages((prev) => [...prev, data.message])
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Could not send message')
+      setInput(trimmed) // Restore text on failure
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Admin delete single message permanently
+  async function handleDeleteMessage(id: string) {
+    if (!isAdmin) return
+    if (!confirm('Permanently delete this message from Supabase PostgreSQL?')) return
+
+    try {
+      setDeletingId(id)
+      const res = await fetch(`/api/chat?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete message')
+      }
+
+      setMessages((prev) => prev.filter((m) => m.id !== id))
+      toast.success('Message permanently deleted from database')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete message')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  // Admin purge entire channel history permanently
+  async function handlePurgeChannel() {
+    if (!isAdmin) return
+    const channelObj = CHANNELS.find((c) => c.id === activeChannel)
+    const promptConfirm = confirm(
+      `WARNING: Permanently delete ALL messages in #${channelObj?.name || activeChannel} from Supabase? This action is irreversible.`
+    )
+    if (!promptConfirm) return
+
+    try {
+      setPurging(true)
+      const res = await fetch(`/api/chat?channelId=${encodeURIComponent(activeChannel)}&purge=true`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to purge channel history')
+      }
+
+      const data = await res.json()
+      setMessages([])
+      toast.success(data.message || 'Channel history permanently cleared')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to purge chat history')
+    } finally {
+      setPurging(false)
+    }
   }
 
   // Logged-out state: "log in to use feature"
@@ -162,8 +241,6 @@ export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
     )
   }
 
-  // Filter messages for active channel
-  const channelMessages = messages.filter((m) => m.channelId === activeChannel)
   const currentChanInfo = CHANNELS.find((c) => c.id === activeChannel)
 
   return (
@@ -172,7 +249,7 @@ export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
       <div className="w-full md:w-64 shrink-0 bg-white dark:bg-[#090D18] border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 flex md:flex-col overflow-x-auto p-3 gap-2">
         <div className="hidden md:block mb-2 px-2">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-            <MessageSquare className="h-3.5 w-3.5 text-[#78350F]" /> Real-time Channels
+            <MessageSquare className="h-3.5 w-3.5 text-[#78350F]" /> Supabase Live Channels
           </div>
         </div>
         {CHANNELS.map((ch) => {
@@ -198,6 +275,17 @@ export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
             </button>
           )
         })}
+
+        {isAdmin && (
+          <div className="hidden md:block mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 px-2">
+            <div className="text-[10px] font-bold text-amber-600 dark:text-amber-500 uppercase flex items-center gap-1 mb-1">
+              <Shield className="h-3 w-3" /> Admin Moderation Active
+            </div>
+            <p className="text-[10px] text-slate-500">
+              You can delete individual messages or wipe whole channels permanently from the database.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Main Chat Thread */}
@@ -212,24 +300,56 @@ export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
               · {currentChanInfo?.desc}
             </span>
           </div>
-          <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" /> Live
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fetchMessages(activeChannel, true)}
+              className="h-7 px-2 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white"
+              title="Refresh messages"
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
+            </Button>
+
+            {isAdmin && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handlePurgeChannel}
+                disabled={purging || messages.length === 0}
+                className="h-7 px-2.5 text-xs bg-red-600/90 hover:bg-red-700 text-white shadow-xs font-medium cursor-pointer"
+                title="Permanently delete all messages in this channel from Supabase"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                {purging ? 'Purging...' : 'Purge Channel History'}
+              </Button>
+            )}
+
+            <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" /> Live DB
+            </Badge>
+          </div>
         </div>
 
         {/* Messages List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
-          {channelMessages.length === 0 ? (
+          {loading && messages.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 text-xs">
+              Loading chat messages from Supabase...
+            </div>
+          ) : messages.length === 0 ? (
             <div className="text-center py-12 text-slate-500 text-xs">
               No messages yet in #{currentChanInfo?.name}. Be the first to say hello!
             </div>
           ) : (
-            channelMessages.map((msg) => {
+            messages.map((msg) => {
               const isMe = msg.senderId === user.id
+              const isDeleting = deletingId === msg.id
+
               return (
                 <div
                   key={msg.id}
-                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                  className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'} ${isDeleting ? 'opacity-40 pointer-events-none' : ''}`}
                 >
                   <div className="flex items-center gap-1.5 mb-1 px-1">
                     <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
@@ -241,9 +361,20 @@ export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
                     <span className="text-[10px] text-slate-400">
                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
+
+                    {/* Admin Delete Action Button */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        title="Delete permanently from Supabase"
+                        className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition p-0.5 ml-1 cursor-pointer"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                   <div
-                    className={`max-w-lg rounded-2xl px-4 py-2 text-xs shadow-xs leading-relaxed ${
+                    className={`max-w-lg rounded-2xl px-4 py-2 text-xs shadow-xs leading-relaxed relative ${
                       isMe
                         ? 'bg-[#78350F] dark:bg-[#B45309] text-white rounded-tr-xs'
                         : 'bg-white dark:bg-[#0E1526] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800 rounded-tl-xs'
@@ -267,11 +398,12 @@ export default function ChatView({ user, onOpenAuth }: ChatViewProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={`Message #${currentChanInfo?.name}...`}
+            disabled={sending}
             className="h-10 text-xs bg-slate-50 dark:bg-[#070A12] border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl"
           />
           <Button
             type="submit"
-            disabled={!input.trim()}
+            disabled={!input.trim() || sending}
             className="h-10 px-4 bg-[#78350F] dark:bg-[#B45309] hover:bg-[#854D0E] dark:hover:bg-[#C2783B] text-white font-semibold rounded-xl cursor-pointer shadow-sm shadow-[#78350F]/25"
           >
             <Send className="h-4 w-4" />

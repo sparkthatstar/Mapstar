@@ -60,11 +60,12 @@ export async function GET() {
       prismaConnected = true
       connected = true
 
-      const [uCount, pCount, lCount, fCount] = await Promise.all([
+      const [uCount, pCount, lCount, fCount, cCount] = await Promise.all([
         db.user.count().catch(() => 0),
         db.property.count().catch(() => 0),
         db.listing.count().catch(() => 0),
         db.feeConfig.count().catch(() => 0),
+        db.chatMessage.count().catch(() => 0),
       ])
 
       counts = {
@@ -72,7 +73,8 @@ export async function GET() {
         properties: pCount,
         listings: lCount,
         feeConfigs: fCount,
-      }
+        chatMessages: cCount,
+      } as any
     } catch (err: any) {
       console.error('Prisma PostgreSQL connection error:', err)
       errorMessage = err.message || 'Prisma PostgreSQL connection error'
@@ -271,6 +273,7 @@ export async function POST(req: NextRequest) {
       const adminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.trim().toLowerCase() : ''
 
       try {
+        await db.chatMessage.deleteMany({}).catch(() => {})
         await db.transaction.deleteMany({}).catch(() => {})
         await db.agreement.deleteMany({}).catch(() => {})
         await db.review.deleteMany({}).catch(() => {})

@@ -331,7 +331,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
 
           {/* Database table counts preview */}
           {dbStatus?.connected && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 pt-3.5 border-t border-slate-800/80 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mt-4 pt-3.5 border-t border-slate-800/80 text-center">
               <div className="bg-[#090D18] border border-slate-800/60 rounded-xl p-2.5">
                 <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Cloud Users</span>
                 <div className="text-base font-extrabold text-white mt-0.5">{dbStatus.counts.users}</div>
@@ -347,6 +347,10 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
               <div className="bg-[#090D18] border border-slate-800/60 rounded-xl p-2.5">
                 <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Fee Regulation</span>
                 <div className="text-base font-extrabold text-amber-300 mt-0.5">{dbStatus.counts.feeConfigs > 0 ? 'Active in DB' : 'Using Defaults'}</div>
+              </div>
+              <div className="bg-[#090D18] border border-slate-800/60 rounded-xl p-2.5">
+                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Cloud Chat Messages</span>
+                <div className="text-base font-extrabold text-emerald-400 mt-0.5">{dbStatus.counts.chatMessages || 0}</div>
               </div>
             </div>
           )}
