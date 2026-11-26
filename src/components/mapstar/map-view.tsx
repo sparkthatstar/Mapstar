@@ -1,22 +1,21 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import { createMapstarListingIcon, getPinState, PinState } from './star-pin'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import { Loader } from '@googlemaps/js-api-loader'
 import { MockListing, formatNaira, PROPERTY_TYPE_LABELS } from '@/lib/mock-data'
+import { buildStarPinElement, getPinState } from './star-pin'
 import {
   Navigation,
   ExternalLink,
   ShieldCheck,
   X,
-  Compass,
   Layers,
   Sparkles,
-  ChevronRight,
+  MapPin,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 interface MapViewProps {
   listings: MockListing[]
@@ -26,70 +25,181 @@ interface MapViewProps {
   zoom?: number
 }
 
-// Controller to smoothly fly to the selected listing or recenter
-function MapFlyController({
-  selectedListing,
-  center,
-  zoom = 13,
-}: {
-  selectedListing?: MockListing | null
-  center: [number, number]
-  zoom?: number
-}) {
-  const map = useMap()
-
-  useEffect(() => {
-    if (selectedListing) {
-      map.flyTo([selectedListing.latitude, selectedListing.longitude], Math.max(map.getZoom(), 15), {
-        animate: true,
-        duration: 1.0,
-      })
-    }
-  }, [selectedListing, map])
-
-  return null
-}
-
 export default function MapView({
   listings,
   selectedId,
   onSelect,
   center,
-  zoom = 13,
+  zoom = 14,
 }: MapViewProps) {
-  const [mapLayer, setMapLayer] = useState<'streets' | 'satellite'>('streets')
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const mapInstanceRef = useRef<google.maps.Map | null>(null)
+  const markersRef = useRef<any[]>([])
+
+  const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'hybrid'>('roadmap')
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [cardDismissed, setCardDismissed] = useState(false)
 
-  // Auto-sync active target lodge with selectedId
-  useEffect(() => {
-    if (selectedId) {
-      setCardDismissed(false)
-    }
-  }, [selectedId])
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
 
-  // Active lodge details
+  // Active selected lodge
   const activeLodge = useMemo(() => {
     if (cardDismissed || !selectedId) return null
     return listings.find((l) => l.id === selectedId) || null
   }, [listings, selectedId, cardDismissed])
 
-  // Map Tile URLs
-  const tileUrl =
-    mapLayer === 'satellite'
-      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+  // Initialize Google Maps instance
+  useEffect(() => {
+    let isCancelled = false
 
-  const tileAttribution =
-    mapLayer === 'satellite'
-      ? '&copy; <a href="https://www.esri.com/">Esri</a>'
-      : '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    if (!mapContainerRef.current) return
+
+    // If API key is missing, flag gracefully so user can configure it
+    if (!apiKey) {
+      setLoadError('MISSING_API_KEY')
+      setLoading(false)
+      return
+    }
+
+    const loader = new Loader({
+      apiKey,
+      version: 'weekly',
+      libraries: ['marker', 'places', 'geometry'],
+    })
+
+    loader
+      .load()
+      .then(async (google) => {
+        if (isCancelled || !mapContainerRef.current) return
+
+        try {
+          const map = new google.maps.Map(mapContainerRef.current, {
+            center: { lat: center[0], lng: center[1] },
+            zoom,
+            mapTypeId: mapType,
+            mapId: 'MAPSTAR_GOOGLE_MAP_ID', // Enables AdvancedMarkerElement
+            disableDefaultUI: false,
+            zoomControl: true,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+            gestureHandling: 'greedy',
+          })
+
+          mapInstanceRef.current = map
+          setLoading(false)
+          setLoadError(null)
+        } catch (err: any) {
+          console.error('[Google Maps Init Error]', err)
+          setLoadError(err.message || 'Failed to initialize Google Maps')
+          setLoading(false)
+        }
+      })
+      .catch((err) => {
+        if (!isCancelled) {
+          console.error('[Google Maps Load Error]', err)
+          setLoadError(err.message || 'Failed to load Google Maps JavaScript API')
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [apiKey])
+
+  // Change Map Type (Roadmap / Satellite)
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setMapTypeId(mapType)
+    }
+  }, [mapType])
+
+  // Center / Pan map when center prop or selectedId changes
+  useEffect(() => {
+    if (!mapInstanceRef.current) return
+
+    if (selectedId) {
+      const selected = listings.find((l) => l.id === selectedId)
+      if (selected?.latitude && selected?.longitude) {
+        mapInstanceRef.current.panTo({ lat: selected.latitude, lng: selected.longitude })
+        mapInstanceRef.current.setZoom(16)
+        setCardDismissed(false)
+        return
+      }
+    }
+
+    mapInstanceRef.current.panTo({ lat: center[0], lng: center[1] })
+  }, [selectedId, center, listings])
+
+  // Render Star Listing Pins on the Google Map
+  useEffect(() => {
+    if (!mapInstanceRef.current || typeof google === 'undefined') return
+
+    // Clear previous markers
+    markersRef.current.forEach((marker) => {
+      if ('setMap' in marker) {
+        marker.setMap(null)
+      } else if ('map' in marker) {
+        marker.map = null
+      }
+    })
+    markersRef.current = []
+
+    listings.forEach((listing) => {
+      if (!listing.latitude || !listing.longitude) return
+
+      const isSelected = selectedId === listing.id
+      const pinElement = buildStarPinElement({
+        status: listing.status,
+        annualRent: listing.annualRent,
+        featured: listing.featured,
+        selected: isSelected,
+        title: listing.title,
+      })
+
+      pinElement.addEventListener('click', (e) => {
+        e.stopPropagation()
+        onSelect(listing.id)
+        setCardDismissed(false)
+      })
+
+      try {
+        // Attempt AdvancedMarkerElement (Google Maps modern vector markers)
+        if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
+          const advMarker = new google.maps.marker.AdvancedMarkerElement({
+            map: mapInstanceRef.current,
+            position: { lat: listing.latitude, lng: listing.longitude },
+            content: pinElement,
+            title: `${listing.title} — ${formatNaira(listing.annualRent)}/yr`,
+          })
+          markersRef.current.push(advMarker)
+        } else {
+          // Standard marker fallback with Custom Overlay or icon
+          const marker = new google.maps.Marker({
+            map: mapInstanceRef.current,
+            position: { lat: listing.latitude, lng: listing.longitude },
+            title: listing.title,
+          })
+          marker.addListener('click', () => {
+            onSelect(listing.id)
+            setCardDismissed(false)
+          })
+          markersRef.current.push(marker)
+        }
+      } catch (err) {
+        console.warn('Marker creation fallback:', err)
+      }
+    })
+  }, [listings, selectedId, onSelect])
 
   return (
     <div className="relative h-full w-full flex flex-col bg-[#FAF7F2] dark:bg-[#120C08] overflow-hidden select-none">
       {/* =========================================================================
-          TOP MAP BAR: Controls & Visual Pin Legend
+          TOP MAP BAR: Status Legend & Layer Toggle
          ========================================================================= */}
-      <div className="z-[1000] bg-white/95 dark:bg-[#1A120B]/95 border-b border-[#E5DAC8] dark:border-[#382618] px-3 py-2 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 shadow-xs transition-colors">
+      <div className="z-10 bg-white/95 dark:bg-[#1A120B]/95 border-b border-[#E5DAC8] dark:border-[#382618] px-3 py-2 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 shadow-xs transition-colors">
         {/* Visual Pin State Legend */}
         <div className="flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1.5">
@@ -106,22 +216,22 @@ export default function MapView({
           </div>
         </div>
 
-        {/* Layer Switcher (Streets vs Satellite) */}
+        {/* Layer Switcher (Roadmap vs Satellite) */}
         <div className="flex items-center gap-1 bg-[#FAF7F2] dark:bg-[#120C08] p-1 rounded-xl border border-[#E5DAC8] dark:border-[#382618]">
           <button
-            onClick={() => setMapLayer('streets')}
+            onClick={() => setMapType('roadmap')}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              mapLayer === 'streets'
+              mapType === 'roadmap'
                 ? 'bg-white text-[#78350F] shadow-2xs dark:bg-[#2A1810] dark:text-[#E0904E] font-semibold border border-[#E5DAC8]/60 dark:border-[#382618]'
                 : 'text-[#7C6859] hover:text-[#271810] dark:text-[#B8A598] dark:hover:text-[#FAF6F0]'
             }`}
           >
-            Streets
+            Google Map
           </button>
           <button
-            onClick={() => setMapLayer('satellite')}
+            onClick={() => setMapType('satellite')}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              mapLayer === 'satellite'
+              mapType === 'satellite'
                 ? 'bg-white text-[#78350F] shadow-2xs dark:bg-[#2A1810] dark:text-[#E0904E] font-semibold border border-[#E5DAC8]/60 dark:border-[#382618]'
                 : 'text-[#7C6859] hover:text-[#271810] dark:text-[#B8A598] dark:hover:text-[#FAF6F0]'
             }`}
@@ -132,81 +242,50 @@ export default function MapView({
       </div>
 
       {/* =========================================================================
-          LEAFLET INTERACTIVE MAP CONTAINER
+          GOOGLE MAP CANVAS CONTAINER
          ========================================================================= */}
-      <div className="flex-1 w-full h-full relative z-0">
-        <MapContainer
-          center={center}
-          zoom={zoom}
-          scrollWheelZoom={true}
-          className="h-full w-full"
-          attributionControl={false}
-        >
-          <TileLayer url={tileUrl} attribution={tileAttribution} maxZoom={19} />
+      <div className="flex-1 w-full h-full relative">
+        <div ref={mapContainerRef} className="w-full h-full" />
 
-          <MapFlyController
-            selectedListing={listings.find((l) => l.id === selectedId)}
-            center={center}
-            zoom={zoom}
-          />
+        {/* Loading State */}
+        {loading && (
+          <div className="absolute inset-0 bg-[#FAF7F2]/80 dark:bg-[#120C08]/80 backdrop-blur-xs flex flex-col items-center justify-center gap-2.5 z-20">
+            <div className="h-7 w-7 border-3 border-[#78350F] border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs font-semibold text-[#78350F] dark:text-[#E0904E]">
+              Loading Google Maps Platform…
+            </span>
+          </div>
+        )}
 
-          {/* Render All Verified Listings on the Map with Exact GPS Coordinates */}
-          {listings.map((listing) => {
-            if (!listing.latitude || !listing.longitude) return null
-            const isSelected = selectedId === listing.id
-            const icon = createMapstarListingIcon({
-              status: listing.status,
-              annualRent: listing.annualRent,
-              featured: listing.featured,
-              selected: isSelected,
-              title: listing.title,
-            })
-
-            return (
-              <Marker
-                key={listing.id}
-                position={[listing.latitude, listing.longitude]}
-                icon={icon}
-                eventHandlers={{
-                  click: () => {
-                    onSelect(listing.id)
-                    setCardDismissed(false)
-                  },
-                }}
-              >
-                {/* Embedded Popup for instant micro-inspection */}
-                <Popup className="mapstar-popup" offset={[0, -10]}>
-                  <div className="p-1 min-w-[180px] max-w-[220px]">
-                    <div className="font-bold text-xs text-slate-900 truncate">
-                      {listing.title}
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                      {listing.area}, {listing.city}
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between">
-                      <span className="font-extrabold text-xs text-[#78350F]">
-                        {formatNaira(listing.annualRent)}/yr
-                      </span>
-                      <button
-                        onClick={() => onSelect(listing.id)}
-                        className="px-2 py-0.5 rounded bg-[#78350F] text-white text-[10px] font-semibold cursor-pointer"
-                      >
-                        Inspect
-                      </button>
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            )
-          })}
-        </MapContainer>
+        {/* Fallback / Configuration Notice if API Key is not yet set */}
+        {loadError === 'MISSING_API_KEY' && (
+          <div className="absolute inset-0 bg-[#FAF7F2]/95 dark:bg-[#120C08]/95 p-6 flex flex-col items-center justify-center text-center z-30">
+            <div className="max-w-md w-full bg-white dark:bg-[#1A120B] p-6 rounded-3xl border border-[#E5DAC8] dark:border-[#382618] shadow-2xl">
+              <div className="h-12 w-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 mx-auto mb-3">
+                <MapPin className="h-6 w-6" />
+              </div>
+              <h3 className="font-bold text-base text-[#271810] dark:text-[#FAF6F0]">
+                Google Maps API Key Setup
+              </h3>
+              <p className="text-xs text-[#7C6859] dark:text-[#B8A598] mt-2 mb-4 leading-relaxed">
+                Mapstar is ready to render the Google Maps JavaScript API with custom star pins.
+                Add <code className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[11px] text-[#78350F] dark:text-[#E0904E]">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to your environment variables.
+              </p>
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-left text-[11px] text-amber-900 dark:text-amber-300 space-y-1 mb-4">
+                <div className="font-semibold">Quick Checklist:</div>
+                <div>1. Enable <strong>Maps JavaScript API</strong> in Google Cloud Console.</div>
+                <div>2. Set <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in Vercel &amp; local <code>.env</code>.</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* =========================================================================
           FLOATING BOTTOM CARD: Selected Lodge Summary & Quick Actions
          ========================================================================= */}
       {activeLodge && (
-        <div className="absolute bottom-3 left-3 right-3 z-[1000] pointer-events-none flex justify-center">
+        <div className="absolute bottom-3 left-3 right-3 z-30 pointer-events-none flex justify-center">
           <div className="pointer-events-auto relative w-full max-w-xl rounded-2xl bg-white/95 dark:bg-[#1A120B]/95 p-3 sm:p-4 shadow-xl dark:shadow-2xl border border-[#E5DAC8] dark:border-[#382618] backdrop-blur-xl text-[#271810] dark:text-[#FAF6F0] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200 transition-colors">
             {/* Dismiss / Close button */}
             <button
@@ -222,7 +301,6 @@ export default function MapView({
 
             <div className="flex-1 min-w-0 pr-6 sm:pr-2">
               <div className="flex items-center gap-2 mb-1">
-                {/* Status Badge with color match */}
                 {(() => {
                   const state = getPinState(activeLodge.status)
                   const badgeColor =
@@ -277,7 +355,7 @@ export default function MapView({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 text-xs font-semibold shadow-md shadow-emerald-800/30 transition cursor-pointer"
-                  title="Open GPS Turn-by-Turn Directions"
+                  title="Open GPS Turn-by-Turn Directions in Google Maps"
                 >
                   <Navigation className="h-3.5 w-3.5" />
                   <span>Directions</span>
