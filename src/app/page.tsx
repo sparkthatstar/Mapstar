@@ -96,12 +96,40 @@ export default function Home() {
   const [bottomTab, setBottomTab] = useState<NavTab>('listings')
   const [settingsOpen, setSettingsOpen] = useState(false)
 
+  // Sync tab with URL search parameter (?tab=chat, ?tab=me, etc.) on initial mount and back/forward
+  useEffect(() => {
+    function readTabFromUrl() {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const tabParam = params.get('tab') as NavTab | null
+        if (tabParam && ['listings', 'chat', 'me', 'star_power'].includes(tabParam)) {
+          setBottomTab(tabParam)
+        }
+      } catch {}
+    }
+
+    readTabFromUrl()
+    window.addEventListener('popstate', readTabFromUrl)
+    return () => window.removeEventListener('popstate', readTabFromUrl)
+  }, [])
+
   function handleTabChange(tab: NavTab) {
     if (tab === 'settings') {
       setSettingsOpen(true)
       return
     }
     setBottomTab(tab)
+
+    // Update URL query parameter seamlessly without triggering full page reload
+    try {
+      const url = new URL(window.location.href)
+      if (tab === 'listings') {
+        url.searchParams.delete('tab')
+      } else {
+        url.searchParams.set('tab', tab)
+      }
+      window.history.pushState({}, '', url.toString())
+    } catch {}
   }
 
   // Automatically welcome new users on first visit (only once)
