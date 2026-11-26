@@ -24,6 +24,8 @@ import {
   KeyRound,
   ArrowLeft,
   CheckCircle2,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import MapstarAppIcon from '@/components/mapstar/app-icon'
 import type { AuthedUser } from '@/lib/user-auth'
@@ -61,6 +63,11 @@ export default function LoginSignupDialog({
   const [forgotCode, setForgotCode] = useState('')
   const [forgotNewPass, setForgotNewPass] = useState('')
   const [forgotPreviewCode, setForgotPreviewCode] = useState<string | null>(null)
+
+  // Password visibility states
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
+  const [showSignupPassword, setShowSignupPassword] = useState(false)
+  const [showForgotNewPass, setShowForgotNewPass] = useState(false)
 
   // Feedback states
   const [loading, setLoading] = useState(false)
@@ -293,13 +300,26 @@ export default function LoginSignupDialog({
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="login-password"
-                        type="password"
+                        type={showLoginPassword ? 'text' : 'password'}
                         required
                         placeholder="••••••••"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        className="pl-9 h-9 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
+                        className="pl-9 pr-9 h-9 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowLoginPassword((prev) => !prev)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7C6859] hover:text-[#271810] dark:text-[#B8A598] dark:hover:text-[#FAF6F0] p-1 rounded-md transition focus:outline-none cursor-pointer"
+                        aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                        tabIndex={-1}
+                      >
+                        {showLoginPassword ? (
+                          <EyeOff className="h-3.5 w-3.5" />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5" />
+                        )}
+                      </button>
                     </div>
                   </div>
 
@@ -386,14 +406,27 @@ export default function LoginSignupDialog({
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="signup-password"
-                        type="password"
+                        type={showSignupPassword ? 'text' : 'password'}
                         required
                         minLength={6}
                         placeholder="••••••••"
                         value={signupPassword}
                         onChange={(e) => setSignupPassword(e.target.value)}
-                        className="pl-9 h-8 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
+                        className="pl-9 pr-9 h-8 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] placeholder:text-[#7C6859] dark:placeholder:text-[#B8A598] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignupPassword((prev) => !prev)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7C6859] hover:text-[#271810] dark:text-[#B8A598] dark:hover:text-[#FAF6F0] p-1 rounded-md transition focus:outline-none cursor-pointer"
+                        aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
+                        tabIndex={-1}
+                      >
+                        {showSignupPassword ? (
+                          <EyeOff className="h-3.5 w-3.5" />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5" />
+                        )}
+                      </button>
                     </div>
                   </div>
 
@@ -523,14 +556,27 @@ export default function LoginSignupDialog({
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859] dark:text-[#B8A598]" />
                       <Input
                         id="forgot-new-pass"
-                        type="password"
+                        type={showForgotNewPass ? 'text' : 'password'}
                         required
                         minLength={6}
                         placeholder="••••••••"
                         value={forgotNewPass}
                         onChange={(e) => setForgotNewPass(e.target.value)}
-                        className="pl-9 h-9 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] focus:border-[#78350F] dark:focus:border-[#B45309]"
+                        className="pl-9 pr-9 h-9 text-xs bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] text-[#271810] dark:text-[#FAF6F0] focus:border-[#78350F] dark:focus:border-[#B45309]"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotNewPass((prev) => !prev)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7C6859] hover:text-[#271810] dark:text-[#B8A598] dark:hover:text-[#FAF6F0] p-1 rounded-md transition focus:outline-none cursor-pointer"
+                        aria-label={showForgotNewPass ? 'Hide password' : 'Show password'}
+                        tabIndex={-1}
+                      >
+                        {showForgotNewPass ? (
+                          <EyeOff className="h-3.5 w-3.5" />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5" />
+                        )}
+                      </button>
                     </div>
                   </div>
 
