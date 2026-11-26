@@ -1048,7 +1048,28 @@ export default function StarPowerView({
                     </div>
 
                     {/* Controls */}
-                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-center">
+                      {/* State Switcher: Available / Coming Soon / Unavailable */}
+                      <select
+                        value={
+                          listing.status === 'AVAILABLE' || listing.status === 'VERIFIED'
+                            ? 'AVAILABLE'
+                            : listing.status === 'COMING_SOON' || listing.status === 'UNDER_INSPECTION'
+                            ? 'COMING_SOON'
+                            : 'DELISTED'
+                        }
+                        onChange={(e) =>
+                          handleUpdateListing(listing.id, {
+                            status: e.target.value,
+                          })
+                        }
+                        className="h-8 text-xs bg-slate-900 border border-slate-700 rounded-lg px-2 text-slate-200 font-semibold cursor-pointer focus:outline-none"
+                      >
+                        <option value="AVAILABLE">🟢 Available</option>
+                        <option value="COMING_SOON">🟠 Coming Soon</option>
+                        <option value="DELISTED">🔴 Unavailable (Hold/Sold)</option>
+                      </select>
+
                       <Button
                         size="sm"
                         variant="outline"

@@ -908,7 +908,36 @@ function ListingsTab() {
                     {formatNaira(l.annualRent)}
                   </td>
                   <td className="px-3 py-2.5">
-                    <StatusPill status={l.status} />
+                    <select
+                      value={
+                        l.status === 'AVAILABLE' || l.status === 'VERIFIED'
+                          ? 'AVAILABLE'
+                          : l.status === 'COMING_SOON' || l.status === 'UNDER_INSPECTION'
+                          ? 'COMING_SOON'
+                          : 'DELISTED'
+                      }
+                      onChange={async (e) => {
+                        const newStatus = e.target.value
+                        try {
+                          await fetch('/api/admin/listings', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: l.id, status: newStatus }),
+                          })
+                          toast.success(`Listing status updated to ${newStatus}`)
+                          setListings((prev) =>
+                            prev.map((item) => (item.id === l.id ? { ...item, status: newStatus as any } : item))
+                          )
+                        } catch {
+                          toast.error('Failed to update status')
+                        }
+                      }}
+                      className="text-xs bg-[#070A12] border border-slate-700 rounded-lg px-2 py-1 text-slate-200 font-medium cursor-pointer"
+                    >
+                      <option value="AVAILABLE">🟢 Available</option>
+                      <option value="COMING_SOON">🟠 Coming Soon</option>
+                      <option value="DELISTED">🔴 Unavailable</option>
+                    </select>
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex flex-wrap gap-0.5">

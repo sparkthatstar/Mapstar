@@ -1,102 +1,199 @@
 import L from 'leaflet'
+import { formatNaira } from '@/lib/mock-data'
 
 /**
- * Mapstar custom star-shaped pin.
+ * Creative Mapstar Signature Pin Design:
+ * A distinctive fusion of a Nigerian real estate listing sign (lollipop pill badge
+ * with clean price tag and pin stem) crowned with the Mapstar Star Emblem.
  *
- * The star is the brand signature — every pin on the map is a star,
- * colored by listing status:
- *   🟢 green  = AVAILABLE (now)
- *   🟠 orange = COMING_SOON
- *   🔵 blue   = UNDER_INSPECTION
- *   ⚪ grey   = RECENTLY_LET
- *   🔴 red    = VERIFIED (physically visited by Mapstar rep)
- *   💎 ring   = FEATURED (paid boost) — adds an electric/cyan halo around the star
+ * Color Scheme:
+ *   🟢 Green (#10B981)  = AVAILABLE (Active & ready for inspection)
+ *   🟠 Orange (#F59E0B) = COMING_SOON (Pre-listing or upcoming lodge)
+ *   🔴 Red (#EF4444)    = UNAVAILABLE (Delisted, recently let, or placed on hold by Admin)
  */
-export type PinColor = 'green' | 'orange' | 'blue' | 'grey' | 'red'
 
-const COLOR_HEX: Record<PinColor, string> = {
-  green: '#10B981',
-  orange: '#F59E0B',
-  blue: '#3B82F6',
-  grey: '#64748B',
-  red: '#F43F5E',
+export type PinState = 'AVAILABLE' | 'COMING_SOON' | 'UNAVAILABLE'
+
+export function getPinState(status: string): PinState {
+  switch (status) {
+    case 'AVAILABLE':
+    case 'VERIFIED':
+      return 'AVAILABLE'
+    case 'COMING_SOON':
+    case 'UNDER_INSPECTION':
+      return 'COMING_SOON'
+    case 'RECENTLY_LET':
+    case 'DELISTED':
+    case 'UNAVAILABLE':
+      return 'UNAVAILABLE'
+    default:
+      return 'AVAILABLE'
+  }
 }
 
-const COLOR_DARK: Record<PinColor, string> = {
-  green: '#064E3B',
-  orange: '#78350F',
-  blue: '#1E3A8A',
-  grey: '#334155',
-  red: '#881337',
+const PIN_THEMES: Record<
+  PinState,
+  {
+    bgGradient: string
+    border: string
+    glow: string
+    starFill: string
+    textBadgeBg: string
+    pulseColor: string
+    label: string
+  }
+> = {
+  AVAILABLE: {
+    bgGradient: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+    border: '#047857',
+    glow: 'rgba(16, 185, 129, 0.45)',
+    starFill: '#FFFFFF',
+    textBadgeBg: '#064E3B',
+    pulseColor: '#34D399',
+    label: 'Available',
+  },
+  COMING_SOON: {
+    bgGradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+    border: '#B45309',
+    glow: 'rgba(245, 158, 11, 0.45)',
+    starFill: '#FFFFFF',
+    textBadgeBg: '#78350F',
+    pulseColor: '#FBBF24',
+    label: 'Coming Soon',
+  },
+  UNAVAILABLE: {
+    bgGradient: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+    border: '#991B1B',
+    glow: 'rgba(239, 68, 68, 0.45)',
+    starFill: '#FFFFFF',
+    textBadgeBg: '#7F1D1D',
+    pulseColor: '#F87171',
+    label: 'Unavailable',
+  },
 }
 
-export function createStarIcon(
-  color: PinColor,
-  opts: { featured?: boolean; selected?: boolean; size?: number } = {}
-): L.DivIcon {
-  const size = opts.size ?? 32
-  const fill = COLOR_HEX[color]
-  const stroke = COLOR_DARK[color]
-  const ringStroke = opts.featured ? '#38BDF8' : 'none'
-  const ringWidth = opts.featured ? 3.5 : 0
-  const scale = opts.selected ? 1.3 : 1
-  const dim = size * scale
-  const glow = opts.selected
-    ? `filter: drop-shadow(0 0 10px #3B82F6) drop-shadow(0 0 16px rgba(59, 130, 246, 0.7)); z-index: 999;`
-    : opts.featured
-    ? `filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.7));`
-    : `filter: drop-shadow(0 2px 6px rgba(0,0,0,0.8));`
+export function createMapstarListingIcon({
+  status,
+  annualRent,
+  featured = false,
+  selected = false,
+  title = '',
+}: {
+  status: string
+  annualRent: number
+  featured?: boolean
+  selected?: boolean
+  title?: string
+}): L.DivIcon {
+  const pinState = getPinState(status)
+  const theme = PIN_THEMES[pinState]
+  const formattedRent = formatNaira(annualRent).replace('₦', '₦')
 
-  // 5-point star SVG path, centered in a 32x32 viewBox
+  // Dimensions
+  const scale = selected ? 1.15 : 1
+  const width = Math.round(92 * scale)
+  const height = Math.round(48 * scale)
+
+  const ringStyle = featured
+    ? `box-shadow: 0 0 0 3px #FDE047, 0 0 16px rgba(250, 204, 21, 0.8), 0 4px 14px ${theme.glow};`
+    : selected
+    ? `box-shadow: 0 0 0 3px #FFFFFF, 0 0 20px ${theme.pulseColor}, 0 6px 18px rgba(0,0,0,0.4); transform: scale(1.12);`
+    : `box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), 0 1px 4px ${theme.glow};`
+
+  // Star SVG Path
   const starPath =
-    'M16 2 L19.6 12.2 L30.4 12.5 L21.7 19.0 L24.7 29.3 L16 23.2 L7.3 29.3 L10.3 19.0 L1.6 12.5 L12.4 12.2 Z'
+    'M12 2 L14.7 8.2 L21.4 8.7 L16.3 13.1 L17.9 19.6 L12 16.1 L6.1 19.6 L7.7 13.1 L2.6 8.7 L9.3 8.2 Z'
 
   const html = `
-<div style="
-  width: ${dim}px;
-  height: ${dim}px;
-  ${glow}
+<div class="mapstar-creative-pin group" style="
   position: relative;
+  width: ${width}px;
+  height: ${height}px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
 ">
-  <svg width="${dim}" height="${dim}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-    ${opts.featured ? `<circle cx="16" cy="16" r="14.5" fill="none" stroke="${ringStroke}" stroke-width="${ringWidth}" opacity="0.95"/>` : ''}
-    ${opts.selected ? `<circle cx="16" cy="16" r="15" fill="rgba(59, 130, 246, 0.35)" stroke="#60A5FA" stroke-width="1.8"/>` : ''}
-    <path d="${starPath}"
-      fill="${fill}"
-      stroke="${stroke}"
-      stroke-width="1.2"
-      stroke-linejoin="round"
-    />
-    <circle cx="16" cy="16" r="2.4" fill="#ffffff" opacity="0.95"/>
-  </svg>
+  <!-- Listing Pill Card (Star Emblem + Price Tag) -->
+  <div style="
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px 3px 4px;
+    border-radius: 9999px;
+    background: ${theme.bgGradient};
+    border: 1.5px solid ${theme.border};
+    color: #ffffff;
+    ${ringStyle}
+    white-space: nowrap;
+  ">
+    <!-- Crowned Star Emblem Inside Pin Head -->
+    <div style="
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.22);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      backdrop-filter: blur(4px);
+    ">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="${theme.starFill}">
+        <path d="${starPath}" />
+      </svg>
+    </div>
+
+    <!-- Listing Sign Price / Info -->
+    <div style="display: flex; flex-direction: column; line-height: 1; padding-right: 2px;">
+      <span style="
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: -0.2px;
+        color: #ffffff;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+      ">${formattedRent}</span>
+      <span style="
+        font-size: 7.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        opacity: 0.92;
+        margin-top: 1px;
+      ">${theme.label}</span>
+    </div>
+  </div>
+
+  <!-- Signpost Pin Needle / Arrow Tail -->
+  <div style="
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid ${theme.border};
+    margin-top: -1px;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
+  "></div>
+
+  <!-- Ground Contact Dot -->
+  <div style="
+    width: 5px;
+    height: 3px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.35);
+    margin-top: 1px;
+  "></div>
 </div>
 `.trim()
 
   return L.divIcon({
     html,
-    className: 'mapstar-star-pin',
-    iconSize: [dim, dim],
-    iconAnchor: [dim / 2, dim / 2],
-    popupAnchor: [0, -dim / 2],
+    className: 'mapstar-custom-pin-container',
+    iconSize: [width, height],
+    iconAnchor: [width / 2, height],
+    popupAnchor: [0, -height],
   })
-}
-
-export function statusToColor(status: string): PinColor {
-  switch (status) {
-    case 'AVAILABLE':
-      return 'green'
-    case 'COMING_SOON':
-      return 'orange'
-    case 'UNDER_INSPECTION':
-      return 'blue'
-    case 'RECENTLY_LET':
-      return 'grey'
-    case 'VERIFIED':
-      return 'red'
-    default:
-      return 'green'
-  }
 }
