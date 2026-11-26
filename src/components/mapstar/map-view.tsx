@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Route as RouteIcon,
   Search,
+  X,
 } from 'lucide-react'
 
 interface MapViewProps {
@@ -69,15 +70,20 @@ export default function MapView({
   const [customStartInput, setCustomStartInput] = useState<string>('')
   const [isUsingGps, setIsUsingGps] = useState<boolean>(false)
 
+  // Active lodge - only display if selected by user, with ability to close/dismiss
+  const [cardDismissed, setCardDismissed] = useState(false)
+
   // Auto-sync active target lodge with selectedId
   useEffect(() => {
     if (selectedId) {
       setTargetListingId(selectedId)
+      setCardDismissed(false)
     }
   }, [selectedId])
 
   // Active lodge
   const activeLodge = useMemo(() => {
+    if (cardDismissed) return null
     if (targetListingId) {
       const found = listings.find((l) => l.id === targetListingId)
       if (found) return found
@@ -86,8 +92,8 @@ export default function MapView({
       const found = listings.find((l) => l.id === selectedId)
       if (found) return found
     }
-    return listings[0] ?? null
-  }, [listings, targetListingId, selectedId])
+    return null
+  }, [listings, targetListingId, selectedId, cardDismissed])
 
   // Get User GPS Location
   const handleGetGpsLocation = () => {
@@ -369,8 +375,20 @@ export default function MapView({
          ========================================================================= */}
       {activeLodge && (
         <div className="absolute bottom-3 left-3 right-3 z-20 pointer-events-none flex justify-center">
-          <div className="pointer-events-auto w-full max-w-xl rounded-2xl bg-white/95 dark:bg-[#1A120B]/95 p-3 sm:p-4 shadow-xl dark:shadow-2xl border border-[#E5DAC8] dark:border-[#382618] backdrop-blur-xl text-[#271810] dark:text-[#FAF6F0] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200 transition-colors">
-            <div className="flex-1 min-w-0">
+          <div className="pointer-events-auto relative w-full max-w-xl rounded-2xl bg-white/95 dark:bg-[#1A120B]/95 p-3 sm:p-4 shadow-xl dark:shadow-2xl border border-[#E5DAC8] dark:border-[#382618] backdrop-blur-xl text-[#271810] dark:text-[#FAF6F0] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200 transition-colors">
+            {/* Dismiss / Close button */}
+            <button
+              onClick={() => {
+                setCardDismissed(true)
+                onSelect(null)
+              }}
+              title="Close card and view full map"
+              className="absolute top-2.5 right-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-lg transition cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="flex-1 min-w-0 pr-6 sm:pr-2">
               <div className="flex items-center gap-2 mb-1">
                 <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 text-amber-900 border border-amber-200 dark:bg-[#2A1810] dark:border-[#382618] px-2 py-0.5 text-[10px] font-bold dark:text-amber-200 uppercase tracking-wider">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#78350F] dark:bg-[#E0904E]" />
