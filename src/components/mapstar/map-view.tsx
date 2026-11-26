@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState, useMemo } from 'react'
-import { Loader } from '@googlemaps/js-api-loader'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 import { MockListing, formatNaira, PROPERTY_TYPE_LABELS } from '@/lib/mock-data'
 import { buildStarPinElement, getPinState } from './star-pin'
 import {
@@ -12,10 +13,13 @@ import {
   Layers,
   Sparkles,
   MapPin,
-  AlertTriangle,
-  RefreshCw,
+  Compass,
+  Building,
+  Maximize2,
+  ChevronRight,
+  Eye,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface MapViewProps {
   listings: MockListing[]
@@ -25,23 +29,30 @@ interface MapViewProps {
   zoom?: number
 }
 
+// Mapbox public access token configured via environment variable
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ''
+
 export default function MapView({
   listings,
   selectedId,
   onSelect,
   center,
-  zoom = 14,
+  zoom = 13,
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<google.maps.Map | null>(null)
-  const markersRef = useRef<any[]>([])
+  const mapRef = useRef<mapboxgl.Map | null>(null)
+  const markersRef = useRef<mapboxgl.Marker[]>([])
 
-  const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'hybrid'>('roadmap')
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [mapStyle, setMapStyle] = useState<'streets' | 'satellite' | 'dark'>('streets')
   const [cardDismissed, setCardDismissed] = useState(false)
+  const [googlePinpointOpen, setGooglePinpointOpen] = useState(false)
 
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+  // Mapbox style URLs
+  const STYLES = {
+    streets: 'mapbox://styles/mapbox/streets-v12',
+    satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
+    dark: 'mapbox://styles/mapbox/dark-v11',
+  }
 
   // Active selected lodge
   const activeLodge = useMemo(() => {
@@ -49,109 +60,87 @@ export default function MapView({
     return listings.find((l) => l.id === selectedId) || null
   }, [listings, selectedId, cardDismissed])
 
-  // Initialize Google Maps instance
-  useEffect(() => {
-    let isCancelled = false
+  // Google Maps Free Embed URL for Pinpoint inspection & Directions
+  const googlePinpointEmbedUrl = useMemo(() => {
+    if (!activeLodge) return ''
+    const q = encodeURIComponent(`${activeLodge.latitude},${activeLodge.longitude}`)
+    return `https://maps.google.com/maps?q=${q}&t=k&z=19&hl=en&output=embed`
+  }, [activeLodge])
 
+  const googleDirectionsUrl = useMemo(() => {
+    if (!activeLodge) return ''
+    return `https://www.google.com/maps/dir/?api=1&destination=${activeLodge.latitude},${activeLodge.longitude}`
+  }, [activeLodge])
+
+  // Initialize Mapbox map
+  useEffect(() => {
     if (!mapContainerRef.current) return
 
-    // If API key is missing, flag gracefully so user can configure it
-    if (!apiKey) {
-      setLoadError('MISSING_API_KEY')
-      setLoading(false)
-      return
-    }
+    mapboxgl.accessToken = MAPBOX_TOKEN
 
-    const loader = new Loader({
-      apiKey,
-      version: 'weekly',
-      libraries: ['marker', 'places', 'geometry'],
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: STYLES[mapStyle],
+      center: [center[1], center[0]], // [lng, lat] for Mapbox
+      zoom,
+      attributionControl: false,
     })
 
-    loader
-      .load()
-      .then(async (google) => {
-        if (isCancelled || !mapContainerRef.current) return
+    // Navigation Controls (zoom + compass)
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right')
 
-        try {
-          const map = new google.maps.Map(mapContainerRef.current, {
-            center: { lat: center[0], lng: center[1] },
-            zoom,
-            mapTypeId: mapType,
-            mapId: 'MAPSTAR_GOOGLE_MAP_ID', // Enables AdvancedMarkerElement
-            disableDefaultUI: false,
-            zoomControl: true,
-            mapTypeControl: false,
-            streetViewControl: false,
-            fullscreenControl: false,
-            gestureHandling: 'greedy',
-          })
-
-          mapInstanceRef.current = map
-          setLoading(false)
-          setLoadError(null)
-        } catch (err: any) {
-          console.error('[Google Maps Init Error]', err)
-          setLoadError(err.message || 'Failed to initialize Google Maps')
-          setLoading(false)
-        }
-      })
-      .catch((err) => {
-        if (!isCancelled) {
-          console.error('[Google Maps Load Error]', err)
-          setLoadError(err.message || 'Failed to load Google Maps JavaScript API')
-          setLoading(false)
-        }
-      })
+    mapRef.current = map
 
     return () => {
-      isCancelled = true
+      map.remove()
     }
-  }, [apiKey])
+  }, [])
 
-  // Change Map Type (Roadmap / Satellite)
+  // Switch Mapbox layer styles
   useEffect(() => {
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.setMapTypeId(mapType)
+    if (mapRef.current) {
+      mapRef.current.setStyle(STYLES[mapStyle])
     }
-  }, [mapType])
+  }, [mapStyle])
 
-  // Center / Pan map when center prop or selectedId changes
+  // Fly to selected property or pan to center
   useEffect(() => {
-    if (!mapInstanceRef.current) return
+    if (!mapRef.current) return
 
     if (selectedId) {
       const selected = listings.find((l) => l.id === selectedId)
       if (selected?.latitude && selected?.longitude) {
-        mapInstanceRef.current.panTo({ lat: selected.latitude, lng: selected.longitude })
-        mapInstanceRef.current.setZoom(16)
+        mapRef.current.flyTo({
+          center: [selected.longitude, selected.latitude],
+          zoom: Math.max(mapRef.current.getZoom(), 15),
+          essential: true,
+          duration: 1200,
+        })
         setCardDismissed(false)
         return
       }
     }
 
-    mapInstanceRef.current.panTo({ lat: center[0], lng: center[1] })
-  }, [selectedId, center, listings])
+    mapRef.current.easeTo({
+      center: [center[1], center[0]],
+      zoom,
+      duration: 1000,
+    })
+  }, [selectedId, center, listings, zoom])
 
-  // Render Star Listing Pins on the Google Map
+  // Render & Update Custom Star + Listing Sign Pins on Mapbox canvas
   useEffect(() => {
-    if (!mapInstanceRef.current || typeof google === 'undefined') return
+    if (!mapRef.current) return
 
     // Clear previous markers
-    markersRef.current.forEach((marker) => {
-      if ('setMap' in marker) {
-        marker.setMap(null)
-      } else if ('map' in marker) {
-        marker.map = null
-      }
-    })
+    markersRef.current.forEach((m) => m.remove())
     markersRef.current = []
 
     listings.forEach((listing) => {
       if (!listing.latitude || !listing.longitude) return
 
       const isSelected = selectedId === listing.id
-      const pinElement = buildStarPinElement({
+      const pinEl = buildStarPinElement({
         status: listing.status,
         annualRent: listing.annualRent,
         featured: listing.featured,
@@ -159,45 +148,47 @@ export default function MapView({
         title: listing.title,
       })
 
-      pinElement.addEventListener('click', (e) => {
+      // Popup for quick micro-inspection
+      const popupHtml = `
+        <div style="font-family: inherit; padding: 4px 6px; min-width: 170px;">
+          <div style="font-weight: 700; font-size: 12px; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            ${listing.title}
+          </div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+            ${listing.area}, ${listing.city}
+          </div>
+          <div style="margin-top: 6px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-weight: 800; font-size: 12px; color: #78350F;">
+              ${formatNaira(listing.annualRent)}/yr
+            </span>
+          </div>
+        </div>
+      `
+
+      const popup = new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML(popupHtml)
+
+      pinEl.addEventListener('click', (e) => {
         e.stopPropagation()
         onSelect(listing.id)
         setCardDismissed(false)
       })
 
-      try {
-        // Attempt AdvancedMarkerElement (Google Maps modern vector markers)
-        if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
-          const advMarker = new google.maps.marker.AdvancedMarkerElement({
-            map: mapInstanceRef.current,
-            position: { lat: listing.latitude, lng: listing.longitude },
-            content: pinElement,
-            title: `${listing.title} — ${formatNaira(listing.annualRent)}/yr`,
-          })
-          markersRef.current.push(advMarker)
-        } else {
-          // Standard marker fallback with Custom Overlay or icon
-          const marker = new google.maps.Marker({
-            map: mapInstanceRef.current,
-            position: { lat: listing.latitude, lng: listing.longitude },
-            title: listing.title,
-          })
-          marker.addListener('click', () => {
-            onSelect(listing.id)
-            setCardDismissed(false)
-          })
-          markersRef.current.push(marker)
-        }
-      } catch (err) {
-        console.warn('Marker creation fallback:', err)
-      }
+      const marker = new mapboxgl.Marker({
+        element: pinEl,
+        anchor: 'bottom',
+      })
+        .setLngLat([listing.longitude, listing.latitude])
+        .setPopup(popup)
+        .addTo(mapRef.current!)
+
+      markersRef.current.push(marker)
     })
   }, [listings, selectedId, onSelect])
 
   return (
     <div className="relative h-full w-full flex flex-col bg-[#FAF7F2] dark:bg-[#120C08] overflow-hidden select-none">
       {/* =========================================================================
-          TOP MAP BAR: Status Legend & Layer Toggle
+          TOP MAP BAR: Hybrid Control, Status Legend & Map Style Selector
          ========================================================================= */}
       <div className="z-10 bg-white/95 dark:bg-[#1A120B]/95 border-b border-[#E5DAC8] dark:border-[#382618] px-3 py-2 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 shadow-xs transition-colors">
         {/* Visual Pin State Legend */}
@@ -216,22 +207,22 @@ export default function MapView({
           </div>
         </div>
 
-        {/* Layer Switcher (Roadmap vs Satellite) */}
+        {/* Layer Switcher (Streets / Satellite / Dark) */}
         <div className="flex items-center gap-1 bg-[#FAF7F2] dark:bg-[#120C08] p-1 rounded-xl border border-[#E5DAC8] dark:border-[#382618]">
           <button
-            onClick={() => setMapType('roadmap')}
+            onClick={() => setMapStyle('streets')}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              mapType === 'roadmap'
+              mapStyle === 'streets'
                 ? 'bg-white text-[#78350F] shadow-2xs dark:bg-[#2A1810] dark:text-[#E0904E] font-semibold border border-[#E5DAC8]/60 dark:border-[#382618]'
                 : 'text-[#7C6859] hover:text-[#271810] dark:text-[#B8A598] dark:hover:text-[#FAF6F0]'
             }`}
           >
-            Google Map
+            Vector Map
           </button>
           <button
-            onClick={() => setMapType('satellite')}
+            onClick={() => setMapStyle('satellite')}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              mapType === 'satellite'
+              mapStyle === 'satellite'
                 ? 'bg-white text-[#78350F] shadow-2xs dark:bg-[#2A1810] dark:text-[#E0904E] font-semibold border border-[#E5DAC8]/60 dark:border-[#382618]'
                 : 'text-[#7C6859] hover:text-[#271810] dark:text-[#B8A598] dark:hover:text-[#FAF6F0]'
             }`}
@@ -242,47 +233,14 @@ export default function MapView({
       </div>
 
       {/* =========================================================================
-          GOOGLE MAP CANVAS CONTAINER
+          MAPBOX GL VECTOR CANVAS
          ========================================================================= */}
       <div className="flex-1 w-full h-full relative">
         <div ref={mapContainerRef} className="w-full h-full" />
-
-        {/* Loading State */}
-        {loading && (
-          <div className="absolute inset-0 bg-[#FAF7F2]/80 dark:bg-[#120C08]/80 backdrop-blur-xs flex flex-col items-center justify-center gap-2.5 z-20">
-            <div className="h-7 w-7 border-3 border-[#78350F] border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs font-semibold text-[#78350F] dark:text-[#E0904E]">
-              Loading Google Maps Platform…
-            </span>
-          </div>
-        )}
-
-        {/* Fallback / Configuration Notice if API Key is not yet set */}
-        {loadError === 'MISSING_API_KEY' && (
-          <div className="absolute inset-0 bg-[#FAF7F2]/95 dark:bg-[#120C08]/95 p-6 flex flex-col items-center justify-center text-center z-30">
-            <div className="max-w-md w-full bg-white dark:bg-[#1A120B] p-6 rounded-3xl border border-[#E5DAC8] dark:border-[#382618] shadow-2xl">
-              <div className="h-12 w-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 mx-auto mb-3">
-                <MapPin className="h-6 w-6" />
-              </div>
-              <h3 className="font-bold text-base text-[#271810] dark:text-[#FAF6F0]">
-                Google Maps API Key Setup
-              </h3>
-              <p className="text-xs text-[#7C6859] dark:text-[#B8A598] mt-2 mb-4 leading-relaxed">
-                Mapstar is ready to render the Google Maps JavaScript API with custom star pins.
-                Add <code className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[11px] text-[#78350F] dark:text-[#E0904E]">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to your environment variables.
-              </p>
-              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-left text-[11px] text-amber-900 dark:text-amber-300 space-y-1 mb-4">
-                <div className="font-semibold">Quick Checklist:</div>
-                <div>1. Enable <strong>Maps JavaScript API</strong> in Google Cloud Console.</div>
-                <div>2. Set <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in Vercel &amp; local <code>.env</code>.</div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* =========================================================================
-          FLOATING BOTTOM CARD: Selected Lodge Summary & Quick Actions
+          FLOATING BOTTOM CARD: Selected Lodge Summary + Google Pinpoint Trigger
          ========================================================================= */}
       {activeLodge && (
         <div className="absolute bottom-3 left-3 right-3 z-30 pointer-events-none flex justify-center">
@@ -340,7 +298,7 @@ export default function MapView({
               </p>
             </div>
 
-            {/* Price & Actions */}
+            {/* Price & Action Buttons */}
             <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#E5DAC8]/70 dark:border-[#382618]">
               <div className="text-left sm:text-right">
                 <div className="text-base sm:text-lg font-extrabold text-[#78350F] dark:text-[#E0904E] leading-none">
@@ -350,12 +308,23 @@ export default function MapView({
               </div>
 
               <div className="flex items-center gap-1.5">
+                {/* Micro Google Pinpoint Inspection Modal */}
+                <button
+                  onClick={() => setGooglePinpointOpen(true)}
+                  className="flex items-center gap-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1.5 text-xs font-semibold shadow-md shadow-blue-700/30 transition cursor-pointer"
+                  title="View micro pinpoint on Google Satellite"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  <span>Google Pinpoint</span>
+                </button>
+
+                {/* Google Turn-by-Turn GPS Navigation */}
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${activeLodge.latitude},${activeLodge.longitude}`}
+                  href={googleDirectionsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 text-xs font-semibold shadow-md shadow-emerald-800/30 transition cursor-pointer"
-                  title="Open GPS Turn-by-Turn Directions in Google Maps"
+                  className="flex items-center gap-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white px-2.5 py-1.5 text-xs font-semibold shadow-md shadow-emerald-800/30 transition cursor-pointer"
+                  title="Open GPS Navigation in Google Maps"
                 >
                   <Navigation className="h-3.5 w-3.5" />
                   <span>Directions</span>
@@ -371,6 +340,57 @@ export default function MapView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* =========================================================================
+          GOOGLE MAPS PINPOINT EMBED MODAL (Ultra-detailed Local View)
+         ========================================================================= */}
+      {activeLodge && (
+        <Dialog open={googlePinpointOpen} onOpenChange={setGooglePinpointOpen}>
+          <DialogContent className="sm:max-w-3xl max-h-[90vh] p-0 overflow-hidden bg-[#FAF7F2] dark:bg-[#120C08] border-[#E5DAC8] dark:border-[#382618] rounded-3xl z-[9999]">
+            <DialogHeader className="p-4 bg-white dark:bg-[#1A120B] border-b border-[#E5DAC8] dark:border-[#382618]">
+              <div className="flex items-center justify-between pr-6">
+                <div>
+                  <DialogTitle className="text-base font-bold text-[#271810] dark:text-[#FAF6F0] flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-[#78350F] dark:text-[#E0904E]" />
+                    Google Satellite Pinpoint — {activeLodge.title}
+                  </DialogTitle>
+                  <p className="text-xs text-[#7C6859] dark:text-[#B8A598] mt-0.5">
+                    {activeLodge.address}, {activeLodge.area}, {activeLodge.city}
+                  </p>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="relative w-full h-[450px] bg-slate-900">
+              <iframe
+                src={googlePinpointEmbedUrl}
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                title="Google Maps Pinpoint"
+              />
+            </div>
+
+            <div className="p-3 bg-white dark:bg-[#1A120B] border-t border-[#E5DAC8] dark:border-[#382618] flex items-center justify-between">
+              <span className="text-xs text-[#7C6859] dark:text-[#B8A598]">
+                Coordinates: {activeLodge.latitude}, {activeLodge.longitude}
+              </span>
+              <a
+                href={googleDirectionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
+              >
+                <Navigation className="h-3.5 w-3.5" />
+                Launch Google Audio Navigation
+              </a>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )
