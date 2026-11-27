@@ -18,11 +18,16 @@ export async function GET(req: NextRequest) {
 
     // 1. Stats endpoint for Star Power database space management
     if (searchParams.get('stats') === 'true') {
-      const adminSession = await getAdminSession()
-      const user = await getUserSession()
+      let adminSession = null
+      let user = null
+      try { adminSession = await getAdminSession() } catch {}
+      try { user = await getUserSession() } catch {}
       const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
 
       const totalCount = await db.chatMessage.count()
+      const dmCount = await db.chatMessage.count({
+        where: { channelId: { startsWith: 'dm-' } },
+      })
       const oldestMessage = await db.chatMessage.findFirst({
         orderBy: { createdAt: 'asc' },
         select: { createdAt: true },
@@ -35,6 +40,7 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json({
         totalCount,
+        dmCount,
         channelCount: channels.length,
         channels: channels.map((c) => ({
           channelId: c.channelId,
@@ -82,6 +88,54 @@ export async function GET(req: NextRequest) {
         .filter(Boolean)
 
       return NextResponse.json({ channels: parsedChannels })
+    }
+
+    // 3. Discover all DMs for Admin oversight
+    if (searchParams.get('action') === 'dms') {
+      let adminSession = null
+      let user = null
+      try { adminSession = await getAdminSession() } catch {}
+      try { user = await getUserSession() } catch {}
+      const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
+
+      const dmMessages = await db.chatMessage.findMany({
+        where: { channelId: { startsWith: 'dm-' } },
+        orderBy: { createdAt: 'desc' },
+        take: 300,
+        select: {
+          id: true,
+          channelId: true,
+          senderId: true,
+          senderName: true,
+          senderRole: true,
+          content: true,
+          createdAt: true,
+        },
+      })
+
+      const dmsMap: Record<string, any> = {}
+      for (const m of dmMessages) {
+        if (!dmsMap[m.channelId]) {
+          dmsMap[m.channelId] = {
+            id: m.channelId,
+            channelId: m.channelId,
+            name: `DM #${m.channelId.replace('dm-', '')}`,
+            lastMessage: m.content,
+            lastTime: m.createdAt,
+            participantNames: [m.senderName],
+            messageCount: 1,
+            role: m.senderRole,
+          }
+        } else {
+          if (!dmsMap[m.channelId].participantNames.includes(m.senderName)) {
+            dmsMap[m.channelId].participantNames.push(m.senderName)
+            dmsMap[m.channelId].name = dmsMap[m.channelId].participantNames.join(' & ')
+          }
+          dmsMap[m.channelId].messageCount++
+        }
+      }
+
+      return NextResponse.json({ dms: Object.values(dmsMap), isAdmin })
     }
 
     // 3. Regular channel messages fetch
@@ -167,8 +221,10 @@ export async function POST(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
-    const adminSession = await getAdminSession()
-    const user = await getUserSession()
+    let adminSession = null
+    let user = null
+    try { adminSession = await getAdminSession() } catch {}
+    try { user = await getUserSession() } catch {}
     const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
 
     const { searchParams } = new URL(req.url)
@@ -176,9 +232,10 @@ export async function DELETE(req: NextRequest) {
     const purge = searchParams.get('purge') === 'true'
     const channelId = searchParams.get('channelId')
     const olderThanDays = searchParams.get('olderThanDays')
+    const scope = searchParams.get('scope')
 
     // 1. Delete single message: allowed for message author OR Admin
-    if (messageId && !purge && !olderThanDays) {
+    if (messageId && !purge && !olderThanDays && !scope) {
       const existing = await db.chatMessage.findUnique({
         where: { id: messageId },
         select: { id: true, senderId: true },
@@ -201,6 +258,27 @@ export async function DELETE(req: NextRequest) {
     // 2. Star Power (Admin) features to preserve database space
     if (!isAdmin) {
       return NextResponse.json({ error: 'Unauthorized: Star Power (Admin) required to purge chat storage.' }, { status: 403 })
+    }
+
+    // Purge/Clear all DMs (Direct Messages) to save database storage
+    if (scope === 'dms') {
+      let whereClause: any = { channelId: { startsWith: 'dm-' } }
+      if (olderThanDays) {
+        const days = parseInt(olderThanDays, 10)
+        if (!isNaN(days) && days > 0) {
+          const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+          whereClause = { channelId: { startsWith: 'dm-' }, createdAt: { lt: cutoff } }
+        }
+      }
+
+      const result = await db.chatMessage.deleteMany({
+        where: whereClause,
+      })
+      return NextResponse.json({
+        success: true,
+        message: `Permanently cleared all text from ${result.count} direct messages (DMs) to preserve database space.`,
+        deletedCount: result.count,
+      })
     }
 
     // Purge messages older than N days

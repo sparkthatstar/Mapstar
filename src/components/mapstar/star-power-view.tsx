@@ -403,6 +403,46 @@ export default function StarPowerView({
     }
   }
 
+  // Admin action: Clear all text in DMs across the database to preserve space
+  async function handleClearAllDMsText() {
+    if (!confirm('Are you sure you want to permanently clear ALL direct message (DM) texts across the database to preserve space?')) return
+    setPurgingChat(true)
+    try {
+      const res = await fetch('/api/chat?scope=dms', { method: 'DELETE' })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Cleared all DM texts from database.')
+        fetchChatStats()
+      } else {
+        toast.error(data.error || 'Failed to clear DMs')
+      }
+    } catch (err: any) {
+      toast.error('Error clearing DMs: ' + err.message)
+    } finally {
+      setPurgingChat(false)
+    }
+  }
+
+  // Admin action: Purge DMs older than N days
+  async function handlePurgeOldDMs(days: number) {
+    if (!confirm(`Are you sure you want to delete all DM messages older than ${days} days?`)) return
+    setPurgingChat(true)
+    try {
+      const res = await fetch(`/api/chat?scope=dms&olderThanDays=${days}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || `Deleted DMs older than ${days} days.`)
+        fetchChatStats()
+      } else {
+        toast.error(data.error || 'Failed to purge DMs')
+      }
+    } catch (err: any) {
+      toast.error('Error: ' + err.message)
+    } finally {
+      setPurgingChat(false)
+    }
+  }
+
   // Action: Purge specific channel
   async function handlePurgeChannel(channelId: string) {
     setPurgingChat(true)
@@ -1488,11 +1528,62 @@ export default function StarPowerView({
 
                 <div className="bg-[#090D18] border border-slate-800 rounded-2xl p-5 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400">Space Strategy</span>
-                    <Database className="h-4 w-4 text-[#E0904E]" />
+                    <span className="text-xs text-slate-400">Direct Messages (DMs)</span>
+                    <Lock className="h-4 w-4 text-amber-400" />
                   </div>
-                  <div className="text-sm font-bold text-[#E0904E] mt-2">Space Preserved</div>
-                  <span className="text-[10px] text-slate-500 mt-1 block">On-demand table purge ready</span>
+                  <div className="text-2xl font-black text-amber-400 mt-2">
+                    {chatStats?.dmCount ?? 0}
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">Preserve via DM text wipe</span>
+                </div>
+              </div>
+
+              {/* Direct Messages (DMs) Storage & Vault Recovery */}
+              <div className="bg-gradient-to-r from-amber-950/20 via-slate-900 to-slate-900 border border-amber-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-amber-400" />
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      Direct Messages (DMs) Storage & Vault Oversight
+                      <Badge className="bg-amber-950/60 text-amber-300 border-amber-600/40 text-[10px]">
+                        E2EE User View · Admin Vault Access
+                      </Badge>
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xl">
+                    Users see direct messages as End-to-End Encrypted. Admin has oversight access and can wipe or purge DM message bodies at any time to preserve Supabase database quota.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-slate-700 bg-slate-900 text-xs text-slate-300 hover:text-white cursor-pointer"
+                    onClick={() => handlePurgeOldDMs(30)}
+                    disabled={purgingChat}
+                  >
+                    DMs &gt; 30 Days
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-slate-700 bg-slate-900 text-xs text-slate-300 hover:text-white cursor-pointer"
+                    onClick={() => handlePurgeOldDMs(7)}
+                    disabled={purgingChat}
+                  >
+                    DMs &gt; 7 Days
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-8 px-3 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/30 cursor-pointer"
+                    onClick={handleClearAllDMsText}
+                    disabled={purgingChat}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Clear All DMs Text
+                  </Button>
                 </div>
               </div>
 

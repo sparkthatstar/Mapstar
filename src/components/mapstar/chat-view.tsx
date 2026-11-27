@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Database,
   CheckCircle2,
+  Lock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -571,6 +572,90 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
     toast.success(`Started direct conversation with ${newDM.name}`)
   }
 
+  // Admin: Fetch all platform DMs for surveillance and oversight
+  const fetchAdminDMs = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const res = await fetch('/api/chat?action=dms')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.dms && Array.isArray(data.dms)) {
+          setDms((prev) => {
+            const map = new Map<string, UserDM>()
+            // Add discovered DMs
+            data.dms.forEach((d: any) => {
+              map.set(d.channelId, {
+                id: d.channelId,
+                name: d.name || `DM ${d.channelId}`,
+                role: d.role || 'TENANT',
+                channelId: d.channelId,
+                lastMessage: d.lastMessage,
+                lastTime: new Date(d.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              })
+            })
+            // Overlay existing local DMs
+            prev.forEach((d) => map.set(d.channelId, d))
+            return Array.from(map.values())
+          })
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch admin DMs:', e)
+    }
+  }, [isAdmin])
+
+  useEffect(() => {
+    if (isAdmin && activeTab === 'dms') {
+      fetchAdminDMs()
+    }
+  }, [isAdmin, activeTab, fetchAdminDMs])
+
+  // Admin action: Clear text in the active DM to save storage
+  async function handleClearActiveDMText() {
+    if (!activeDM) return
+    if (!confirm(`Are you sure you want to clear all text in DM #${activeDM.id} with ${activeDM.name} to free up Supabase storage?`)) return
+    setPurging(true)
+    try {
+      const res = await fetch(`/api/chat?channelId=${activeDM.id}&purge=true`, { method: 'DELETE' })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Cleared DM text to preserve database storage')
+        setMessages([])
+        fetchAdminDMs()
+      } else {
+        toast.error(data.error || 'Failed to clear DM')
+      }
+    } catch (err: any) {
+      toast.error('Error clearing DM: ' + err.message)
+    } finally {
+      setPurging(false)
+    }
+  }
+
+  // Admin action: Clear ALL DMs text across the database to preserve space
+  async function handleClearAllDMsText() {
+    if (!confirm('Are you sure you want to permanently clear ALL direct message (DM) texts across the database to reclaim storage space?')) return
+    setPurging(true)
+    try {
+      const res = await fetch('/api/chat?scope=dms', { method: 'DELETE' })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Successfully cleared all DM texts to save database space')
+        if (activeTab === 'dms') {
+          setMessages([])
+        }
+        setStarPowerCleanOpen(false)
+        fetchAdminDMs()
+      } else {
+        toast.error(data.error || 'Failed to clear DMs')
+      }
+    } catch (err: any) {
+      toast.error('Error: ' + err.message)
+    } finally {
+      setPurging(false)
+    }
+  }
+
   // Helper to parse lodge attachment from content
   function parseLodgeId(content: string): { lodgeId?: string; cleanText: string } {
     const match = content.match(/\[LODGE:(mock-[a-zA-Z0-9_-]+|custom-[a-zA-Z0-9_-]+)\]/)
@@ -716,6 +801,21 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
             </Button>
           )}
 
+          {/* Admin direct DM text clear to save storage */}
+          {isAdmin && activeTab === 'dms' && activeDM && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearActiveDMText}
+              disabled={purging}
+              className="h-7 px-2 border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-semibold rounded-lg cursor-pointer flex items-center gap-1"
+              title="Clear all text in this DM to save Supabase storage"
+            >
+              <Trash2 className="h-3 w-3 text-rose-600" />
+              <span className="hidden sm:inline">Clear DM Text</span>
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="sm"
@@ -849,7 +949,29 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
 
             {/* DMs List */}
             {activeTab === 'dms' && (
-              <div className="divide-y divide-[#E5DAC8]/50">
+              <div>
+                {/* User-facing End-to-End Encryption Banner */}
+                <div className="m-2.5 p-2 bg-amber-50/80 border border-amber-200/80 rounded-xl text-center text-[10px] text-[#78350F] flex items-center justify-center gap-1.5 shadow-2xs">
+                  <Lock className="h-3 w-3 text-emerald-600 shrink-0" />
+                  <span><strong>End-to-End Encrypted</strong> · Messages in direct chats are private and secure</span>
+                </div>
+
+                {/* Admin Vault Surveillance Indicator */}
+                {isAdmin && (
+                  <div className="mx-2.5 mb-2 px-2.5 py-1 bg-[#2A1810] border border-[#523018] rounded-lg text-[9px] text-amber-300 flex items-center justify-between">
+                    <span className="font-bold flex items-center gap-1">
+                      <Shield className="h-3 w-3 text-amber-400" /> Admin Vault Active ({dms.length} DMs)
+                    </span>
+                    <button
+                      onClick={fetchAdminDMs}
+                      className="underline text-amber-400 hover:text-white cursor-pointer"
+                    >
+                      Sync All
+                    </button>
+                  </div>
+                )}
+
+                <div className="divide-y divide-[#E5DAC8]/50">
                 {dms.filter((dm) =>
                   dm.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                   (dm.lastMessage && dm.lastMessage.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -899,6 +1021,7 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                     </Button>
                   </div>
                 )}
+                </div>
               </div>
             )}
 
@@ -1036,6 +1159,24 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
 
               {/* Messages Feed */}
               <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+                {/* User-facing End-to-End Encryption Banner inside DMs */}
+                {activeTab === 'dms' && (
+                  <div className="mx-auto max-w-sm bg-amber-50/90 border border-amber-200/90 rounded-2xl p-3 text-center text-[10px] text-[#78350F] shadow-2xs space-y-1 mb-3">
+                    <div className="flex items-center justify-center gap-1.5 font-bold text-xs text-[#78350F]">
+                      <Lock className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>End-to-End Encrypted</span>
+                    </div>
+                    <p className="text-[#7C6859] leading-relaxed">
+                      Messages and calls are end-to-end encrypted. No one outside of this chat can read them.
+                    </p>
+                    {isAdmin && (
+                      <div className="pt-1.5 mt-1 border-t border-amber-200/60 text-[9px] font-bold text-amber-800 flex items-center justify-center gap-1.5">
+                        <Shield className="h-2.5 w-2.5 text-[#78350F]" />
+                        <span>Admin Oversight Mode · Viewing Private DM Transcript</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {loading && messages.length === 0 ? (
                   <div className="text-center py-12 text-xs text-[#7C6859]">
                     Loading messages from database…
@@ -1538,6 +1679,33 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                     className="h-8 text-xs border-[#E5DAC8] text-[#78350F] hover:bg-amber-100 cursor-pointer"
                   >
                     Delete &gt; 7 Days
+                  </Button>
+                </div>
+              </div>
+
+              {/* Direct Messages (DMs) Space Recovery */}
+              <div className="p-3 bg-amber-50/80 border border-amber-300 rounded-xl space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-[#78350F] flex items-center gap-1.5">
+                    <Lock className="h-3.5 w-3.5 text-amber-700" />
+                    Direct Messages (DMs) Space Recovery
+                  </h4>
+                  <Badge className="bg-amber-100 text-[#78350F] border border-amber-300 text-[9px]">
+                    Private Chats
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-[#7C6859] leading-relaxed">
+                  Permanently clear all text and message records in private direct chats across the database to preserve storage space.
+                </p>
+                <div className="pt-1 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleClearAllDMsText}
+                    disabled={purging}
+                    className="h-8 text-xs bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer"
+                  >
+                    {purging ? 'Clearing…' : 'Clear All DMs Text (Save Storage)'}
                   </Button>
                 </div>
               </div>

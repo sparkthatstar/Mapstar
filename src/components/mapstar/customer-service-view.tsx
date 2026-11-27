@@ -102,7 +102,10 @@ export default function CustomerServiceView({
   onOpenAuth,
   onOpenListingDetail,
 }: CustomerServiceViewProps) {
-  const [activeTab, setActiveTab] = useState<'file' | 'track' | 'faq'>('file')
+  const isAdmin = user?.role === 'ADMIN'
+  const [activeTab, setActiveTab] = useState<'investigate' | 'file' | 'track' | 'faq'>(
+    user?.role === 'ADMIN' ? 'investigate' : 'file'
+  )
 
   // Form states
   const [category, setCategory] = useState(COMPLAINT_CATEGORIES[0].id)
@@ -121,23 +124,35 @@ export default function CustomerServiceView({
   const [loadingTickets, setLoadingTickets] = useState(false)
   const [selectedTicket, setSelectedTicket] = useState<ComplaintTicket | null>(null)
   const [ticketSearch, setTicketSearch] = useState('')
+  const [adminStatusFilter, setAdminStatusFilter] = useState<'ALL' | 'OPEN' | 'INVESTIGATING' | 'RESOLVED' | 'DISMISSED'>('ALL')
+  const [resolvingTicket, setResolvingTicket] = useState<ComplaintTicket | null>(null)
+  const [resolutionAction, setResolutionAction] = useState<'RESOLVED' | 'DISMISSED' | null>(null)
+  const [resolutionNotesInput, setResolutionNotesInput] = useState('')
+  const [updatingTicket, setUpdatingTicket] = useState(false)
 
   // Prefill contact info when user logs in
   useEffect(() => {
     if (user?.email) setContactEmail(user.email)
     if (user?.phone) setContactPhone(user.phone)
+    if (user?.role === 'ADMIN') setActiveTab('investigate')
   }, [user])
 
   // Load existing tickets
   async function fetchTickets() {
     setLoadingTickets(true)
     try {
-      const res = await fetch('/api/support')
-      if (res.ok) {
-        const data = await res.json()
-        if (data.tickets) {
-          setTickets(data.tickets)
-        }
+      let data: any = null
+      if (isAdmin) {
+        const resAdmin = await fetch('/api/admin/complaints')
+        if (resAdmin.ok) data = await resAdmin.json()
+      }
+      if (!data) {
+        const res = await fetch('/api/support')
+        if (res.ok) data = await res.json()
+      }
+      if (data) {
+        const list = data.complaints || data.tickets || []
+        setTickets(list)
       }
     } catch (err: any) {
       console.warn('[Support fetch error]', err)
@@ -146,9 +161,47 @@ export default function CustomerServiceView({
     }
   }
 
+  // Admin action handler: update complaint status and add resolution notes
+  async function handleAdminUpdateStatus(ticket: ComplaintTicket, status: 'INVESTIGATING' | 'RESOLVED' | 'DISMISSED', notes?: string) {
+    setUpdatingTicket(true)
+    try {
+      let res = await fetch('/api/admin/complaints', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId: ticket.ticketId, status, resolutionNotes: notes }),
+      })
+      if (!res.ok) {
+        res = await fetch('/api/support', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticketId: ticket.ticketId, status, resolutionNotes: notes }),
+        })
+      }
+      const data = await res.json()
+      if (res.ok && (data.success || data.ticket)) {
+        toast.success(`Complaint #${ticket.ticketId} status updated to ${status}`)
+        setTickets((prev) =>
+          prev.map((t) => (t.ticketId === ticket.ticketId ? { ...t, status, resolutionNotes: notes, updatedAt: new Date().toISOString() } : t))
+        )
+        if (selectedTicket?.ticketId === ticket.ticketId) {
+          setSelectedTicket((prev) => prev ? { ...prev, status, resolutionNotes: notes, updatedAt: new Date().toISOString() } : null)
+        }
+        setResolvingTicket(null)
+        setResolutionAction(null)
+        setResolutionNotesInput('')
+      } else {
+        toast.error(data.error || 'Failed to update ticket')
+      }
+    } catch (err: any) {
+      toast.error('Error updating ticket: ' + err.message)
+    } finally {
+      setUpdatingTicket(false)
+    }
+  }
+
   useEffect(() => {
     fetchTickets()
-  }, [])
+  }, [isAdmin])
 
   // Submit new complaint
   async function handleSubmitComplaint(e: React.FormEvent) {
@@ -274,15 +327,16 @@ export default function CustomerServiceView({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm sm:text-base font-extrabold text-[#271810] truncate">
-                Customer Service Center
+                {isAdmin ? 'Admin Complaints Desk' : 'Customer Service Center'}
               </h1>
-              <Badge className="bg-emerald-50 text-emerald-800 border border-emerald-300 text-[9px] font-semibold">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
-                Live Desk
+              <Badge className={isAdmin ? "bg-amber-100 text-[#78350F] border border-amber-300 text-[9px] font-bold" : "bg-emerald-50 text-emerald-800 border border-emerald-300 text-[9px] font-semibold"}>
+                {isAdmin ? '🛡️ Admin Center' : <><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" /> Live Desk</>}
               </Badge>
             </div>
             <p className="text-[10px] text-[#7C6859] truncate">
-              Dispute resolution · 5% fee cap protection · Fraud reporting · 24/7 assistance
+              {isAdmin
+                ? 'Review, investigate, and enforce resolutions on tenant complaints & fee disputes'
+                : 'Dispute resolution · 5% fee cap protection · Fraud reporting · 24/7 assistance'}
             </p>
           </div>
         </div>
@@ -310,59 +364,329 @@ export default function CustomerServiceView({
       </header>
 
       {/* =========================================================================
-          NAVIGATION TABS: File Complaint / Track Tickets / Consumer Rights
+          NAVIGATION TABS: Admin Investigation vs Student Complaint / FAQ
          ========================================================================= */}
       <nav className="shrink-0 bg-white border-b border-[#E5DAC8] px-4 py-1.5">
-        <div className="flex items-center gap-1.5 bg-[#FAF7F2] p-1 rounded-xl max-w-lg mx-auto sm:mx-0">
-          <button
-            onClick={() => setActiveTab('file')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
-              activeTab === 'file'
-                ? 'bg-[#78350F] text-white shadow-xs'
-                : 'text-[#7C6859] hover:text-[#271810]'
-            }`}
-          >
-            <ShieldAlert className="h-3.5 w-3.5" />
-            <span>File Complaint</span>
-          </button>
+        {isAdmin ? (
+          <div className="flex items-center gap-1.5 bg-[#FAF7F2] p-1 rounded-xl max-w-lg mx-auto sm:mx-0">
+            <button
+              onClick={() => {
+                setActiveTab('investigate')
+                fetchTickets()
+              }}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'investigate'
+                  ? 'bg-[#78350F] text-white shadow-xs'
+                  : 'text-[#7C6859] hover:text-[#271810]'
+              }`}
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              <span>Investigate Complaints</span>
+              {tickets.length > 0 && (
+                <Badge className="h-4 px-1.5 bg-rose-500 text-white text-[9px] font-bold">
+                  {tickets.filter((t) => t.status === 'OPEN').length || tickets.length}
+                </Badge>
+              )}
+            </button>
 
-          <button
-            onClick={() => {
-              setActiveTab('track')
-              fetchTickets()
-            }}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition relative ${
-              activeTab === 'track'
-                ? 'bg-[#78350F] text-white shadow-xs'
-                : 'text-[#7C6859] hover:text-[#271810]'
-            }`}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            <span>Track Complaints</span>
-            {tickets.length > 0 && (
-              <Badge className="h-4 px-1 bg-amber-500 text-white text-[9px] font-bold">
-                {tickets.length}
-              </Badge>
-            )}
-          </button>
+            <button
+              onClick={() => setActiveTab('faq')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'faq'
+                  ? 'bg-[#78350F] text-white shadow-xs'
+                  : 'text-[#7C6859] hover:text-[#271810]'
+              }`}
+            >
+              <Scale className="h-3.5 w-3.5" />
+              <span>5% Fee Cap Law</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 bg-[#FAF7F2] p-1 rounded-xl max-w-lg mx-auto sm:mx-0">
+            <button
+              onClick={() => setActiveTab('file')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'file'
+                  ? 'bg-[#78350F] text-white shadow-xs'
+                  : 'text-[#7C6859] hover:text-[#271810]'
+              }`}
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              <span>File Complaint</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('faq')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
-              activeTab === 'faq'
-                ? 'bg-[#78350F] text-white shadow-xs'
-                : 'text-[#7C6859] hover:text-[#271810]'
-            }`}
-          >
-            <Scale className="h-3.5 w-3.5" />
-            <span>Rights & FAQs</span>
-          </button>
-        </div>
+            <button
+              onClick={() => {
+                setActiveTab('track')
+                fetchTickets()
+              }}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition relative ${
+                activeTab === 'track'
+                  ? 'bg-[#78350F] text-white shadow-xs'
+                  : 'text-[#7C6859] hover:text-[#271810]'
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>Track Complaints</span>
+              {tickets.length > 0 && (
+                <Badge className="h-4 px-1 bg-amber-500 text-white text-[9px] font-bold">
+                  {tickets.length}
+                </Badge>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('faq')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'faq'
+                  ? 'bg-[#78350F] text-white shadow-xs'
+                  : 'text-[#7C6859] hover:text-[#271810]'
+              }`}
+            >
+              <Scale className="h-3.5 w-3.5" />
+              <span>Rights & FAQs</span>
+            </button>
+          </div>
+        )}
       </nav>
 
       {/* =========================================================================
           MAIN BODY
          ========================================================================= */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+        <div className="max-w-4xl mx-auto space-y-6">
+
+          {/* =====================================================================
+              TAB: ADMIN INVESTIGATE COMPLAINTS (Admin Center View)
+             ===================================================================== */}
+          {activeTab === 'investigate' && (
+            <div className="space-y-4">
+              {/* Admin Metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-white border border-[#E5DAC8] rounded-xl p-3 shadow-2xs">
+                  <span className="text-[10px] uppercase font-bold text-[#7C6859]">Total Cases</span>
+                  <div className="text-lg font-extrabold text-[#271810] mt-0.5">{tickets.length}</div>
+                </div>
+                <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-3 shadow-2xs">
+                  <span className="text-[10px] uppercase font-bold text-rose-800">Open Disputes</span>
+                  <div className="text-lg font-extrabold text-rose-700 mt-0.5">
+                    {tickets.filter((t) => t.status === 'OPEN').length}
+                  </div>
+                </div>
+                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 shadow-2xs">
+                  <span className="text-[10px] uppercase font-bold text-amber-800">Investigating</span>
+                  <div className="text-lg font-extrabold text-[#78350F] mt-0.5">
+                    {tickets.filter((t) => t.status === 'INVESTIGATING').length}
+                  </div>
+                </div>
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 shadow-2xs">
+                  <span className="text-[10px] uppercase font-bold text-emerald-800">Resolved</span>
+                  <div className="text-lg font-extrabold text-emerald-700 mt-0.5">
+                    {tickets.filter((t) => t.status === 'RESOLVED').length}
+                  </div>
+                </div>
+              </div>
+
+              {/* Search & Filter Bar */}
+              <div className="bg-white border border-[#E5DAC8] rounded-2xl p-3 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7C6859]" />
+                  <Input
+                    value={ticketSearch}
+                    onChange={(e) => setTicketSearch(e.target.value)}
+                    placeholder="Search by ticket #, tenant, phone, lodge, or accused..."
+                    className="pl-8 h-8 text-xs bg-[#FAF7F2] border-[#E5DAC8] rounded-xl w-full"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+                  {(['ALL', 'OPEN', 'INVESTIGATING', 'RESOLVED', 'DISMISSED'] as const).map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => setAdminStatusFilter(st)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                        adminStatusFilter === st
+                          ? 'bg-[#78350F] text-white'
+                          : 'bg-[#FAF7F2] text-[#7C6859] hover:text-[#271810]'
+                      }`}
+                    >
+                      {st === 'ALL' ? 'All' : st.replace('_', ' ')}
+                    </button>
+                  ))}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={fetchTickets}
+                    disabled={loadingTickets}
+                    className="h-7 text-xs border-[#E5DAC8] text-[#78350F] hover:bg-[#FAF7F2] shrink-0"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${loadingTickets ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Tickets List */}
+              <div className="space-y-3">
+                {tickets
+                  .filter((t) => {
+                    if (adminStatusFilter !== 'ALL' && t.status !== adminStatusFilter) return false
+                    if (ticketSearch.trim()) {
+                      const q = ticketSearch.toLowerCase()
+                      const match =
+                        t.ticketId.toLowerCase().includes(q) ||
+                        t.subject.toLowerCase().includes(q) ||
+                        t.userName.toLowerCase().includes(q) ||
+                        (t.userPhone && t.userPhone.includes(q)) ||
+                        (t.lodgeName && t.lodgeName.toLowerCase().includes(q)) ||
+                        (t.accusedPerson && t.accusedPerson.toLowerCase().includes(q))
+                      if (!match) return false
+                    }
+                    return true
+                  })
+                  .map((t) => {
+                    const waLink = t.userPhone ? `https://wa.me/234${t.userPhone.replace(/^0/, '').replace(/\D/g, '')}?text=${encodeURIComponent(`Hello, this is Mapstar Dispute Resolution regarding ticket #${t.ticketId}.`)}` : null
+
+                    return (
+                      <div
+                        key={t.ticketId}
+                        className="bg-white border border-[#E5DAC8] hover:border-[#78350F] rounded-2xl p-4 sm:p-5 shadow-2xs space-y-3 transition"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-[#E5DAC8]/60">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-bold text-[#78350F]">
+                              #{t.ticketId}
+                            </span>
+                            {renderStatusBadge(t.status)}
+                            {renderUrgencyBadge(t.urgency)}
+                            <Badge className="bg-[#FAF7F2] text-[#78350F] border border-[#E5DAC8] text-[10px]">
+                              {t.category}
+                            </Badge>
+                          </div>
+                          <span className="text-[10px] text-[#7C6859]">
+                            {new Date(t.createdAt).toLocaleDateString()} {new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-bold text-[#271810]">{t.subject}</h3>
+                          <div className="mt-1.5 p-3 rounded-xl bg-[#FAF7F2] border border-[#E5DAC8] text-xs text-[#271810] leading-relaxed whitespace-pre-wrap">
+                            {t.description}
+                          </div>
+                        </div>
+
+                        {/* Complainant & Incident Meta */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                          <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+                            <span className="text-[10px] uppercase font-bold text-[#7C6859] block">Complainant</span>
+                            <div className="font-bold text-[#271810]">{t.userName}</div>
+                            <div className="text-[11px] text-[#7C6859] truncate">{t.userEmail}</div>
+                            {t.userPhone && <div className="text-[11px] font-mono text-amber-800">{t.userPhone}</div>}
+                          </div>
+
+                          <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+                            <span className="text-[10px] uppercase font-bold text-[#7C6859] block">Property & Opposing Party</span>
+                            <div className="font-bold text-[#78350F]">{t.lodgeName || 'Lodge not specified'}</div>
+                            <div className="text-[11px] text-rose-700 font-semibold">{t.accusedPerson ? `Accused: ${t.accusedPerson}` : 'No person specified'}</div>
+                          </div>
+
+                          <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+                            <span className="text-[10px] uppercase font-bold text-[#7C6859] block">Disputed Amount</span>
+                            <div className="font-extrabold text-amber-800 text-sm">
+                              {t.disputedAmount ? formatNaira(t.disputedAmount) : 'None reported'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Resolution notes if present */}
+                        {t.resolutionNotes && (
+                          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-0.5">
+                            <span className="font-bold flex items-center gap-1">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Resolution Note:
+                            </span>
+                            <p className="text-[11px] leading-relaxed">{t.resolutionNotes}</p>
+                          </div>
+                        )}
+
+                        {/* Admin Action Bar */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#E5DAC8]/60">
+                          <div className="flex items-center gap-1.5">
+                            {waLink && (
+                              <a
+                                href={waLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition"
+                              >
+                                <MessageCircle className="h-3 w-3" /> WhatsApp
+                              </a>
+                            )}
+                            {t.userPhone && (
+                              <a
+                                href={`tel:${t.userPhone}`}
+                                className="inline-flex items-center gap-1 h-7 px-2 rounded-lg bg-[#FAF7F2] border border-[#E5DAC8] text-[#271810] text-xs font-semibold hover:bg-white transition"
+                              >
+                                <Phone className="h-3 w-3" /> Call
+                              </a>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {t.status !== 'INVESTIGATING' && t.status !== 'RESOLVED' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAdminUpdateStatus(t, 'INVESTIGATING', 'Officer assigned and investigating claim.')}
+                                disabled={updatingTicket}
+                                className="h-7 text-xs border-amber-300 bg-amber-50 text-[#78350F] hover:bg-amber-100 cursor-pointer"
+                              >
+                                <Clock className="h-3 w-3 mr-1" /> Mark Investigating
+                              </Button>
+                            )}
+
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setResolvingTicket(t)
+                                setResolutionAction('RESOLVED')
+                                setResolutionNotesInput(t.resolutionNotes || '')
+                              }}
+                              disabled={updatingTicket}
+                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer"
+                            >
+                              <CheckCircle2 className="h-3 w-3 mr-1" /> Enforce Resolution
+                            </Button>
+
+                            {t.status !== 'DISMISSED' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setResolvingTicket(t)
+                                  setResolutionAction('DISMISSED')
+                                  setResolutionNotesInput('')
+                                }}
+                                disabled={updatingTicket}
+                                className="h-7 text-xs text-[#7C6859] hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                              >
+                                Dismiss
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                {tickets.length === 0 && !loadingTickets && (
+                  <div className="bg-white border border-[#E5DAC8] rounded-2xl p-12 text-center text-[#7C6859]">
+                    <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto mb-2" />
+                    <p className="text-sm font-bold text-[#271810]">No Complaints Filed</p>
+                    <p className="text-xs text-[#7C6859] mt-1">All complaints filed from customer service will appear here for review.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
         <div className="max-w-4xl mx-auto space-y-6">
 
@@ -791,15 +1115,112 @@ export default function CustomerServiceView({
                 >
                   Close
                 </Button>
-                <a
-                  href={`https://wa.me/2348000000000?text=Hello%20Mapstar%20Officer%2C%20following%20up%20on%20Complaint%20%23${selectedTicket.ticketId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                {isAdmin ? (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setResolvingTicket(selectedTicket)
+                      setResolutionAction('RESOLVED')
+                      setResolutionNotesInput(selectedTicket.resolutionNotes || '')
+                      setSelectedTicket(null)
+                    }}
+                    className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Enforce Resolution
+                  </Button>
+                ) : (
+                  <a
+                    href={`https://wa.me/2348000000000?text=Hello%20Mapstar%20Officer%2C%20following%20up%20on%20Complaint%20%23${selectedTicket.ticketId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    Chat with Dispute Officer
+                  </a>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* =========================================================================
+          ADMIN ACTION DIALOG: Enforce Resolution & Refund or Dismiss
+         ========================================================================= */}
+      {resolvingTicket && (
+        <Dialog open={Boolean(resolvingTicket)} onOpenChange={() => setResolvingTicket(null)}>
+          <DialogContent className="max-w-md bg-white border-[#E5DAC8] text-[#271810] rounded-2xl p-5 shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold flex items-center gap-1.5">
+                {resolutionAction === 'RESOLVED' ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span>Enforce Resolution for #{resolvingTicket.ticketId}</span>
+                  </>
+                ) : (
+                  <>
+                    <X className="h-4 w-4 text-rose-600" />
+                    <span>Dismiss Complaint #{resolvingTicket.ticketId}</span>
+                  </>
+                )}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-[#7C6859]">
+                {resolutionAction === 'RESOLVED'
+                  ? 'Record settlement, excess fee refund, or disciplinary warning to landlord/agent.'
+                  : 'Document legal reason for dismissing this complaint.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 mt-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#E5DAC8] space-y-1">
+                <div className="font-bold text-[#271810]">{resolvingTicket.subject}</div>
+                <div className="text-[11px] text-[#7C6859]">
+                  Complainant: <span className="font-semibold text-[#271810]">{resolvingTicket.userName}</span>
+                  {resolvingTicket.disputedAmount ? ` · Disputed: ${formatNaira(resolvingTicket.disputedAmount)}` : ''}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#271810] block mb-1">
+                  {resolutionAction === 'RESOLVED' ? 'Resolution & Refund Notes (Visible to Customer):' : 'Dismissal Justification:'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={resolutionNotesInput}
+                  onChange={(e) => setResolutionNotesInput(e.target.value)}
+                  placeholder={
+                    resolutionAction === 'RESOLVED'
+                      ? 'e.g. Landlord refunded ₦38,888 excess inspection fees. Official sanction issued to agent.'
+                      : 'e.g. Tenancy fee within 5% cap. Complaint unsubstantiated.'
+                  }
+                  className="w-full p-2.5 rounded-xl bg-[#FAF7F2] border border-[#E5DAC8] text-xs text-[#271810] placeholder:text-[#7C6859] focus:border-[#78350F] outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setResolvingTicket(null)}
+                  className="h-8 text-xs cursor-pointer"
                 >
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  Chat with Dispute Officer
-                </a>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={updatingTicket}
+                  onClick={() => {
+                    if (resolvingTicket && resolutionAction) {
+                      handleAdminUpdateStatus(resolvingTicket, resolutionAction, resolutionNotesInput.trim() || undefined)
+                    }
+                  }}
+                  className={`h-8 text-xs font-bold text-white shadow-xs cursor-pointer ${
+                    resolutionAction === 'RESOLVED' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
+                >
+                  {updatingTicket ? 'Saving…' : resolutionAction === 'RESOLVED' ? 'Enforce & Resolve' : 'Confirm Dismissal'}
+                </Button>
               </div>
             </div>
           </DialogContent>
