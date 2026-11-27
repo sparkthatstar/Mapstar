@@ -28,6 +28,8 @@ import {
   HelpCircle,
   X,
   Play,
+  Radio,
+  Move,
 } from 'lucide-react'
 import MapstarAppIcon from '@/components/mapstar/app-icon'
 
@@ -48,9 +50,10 @@ export default function WelcomeOnboardingModal({
 }: WelcomeOnboardingModalProps) {
   // Step 0: Welcome overview with choice to take tour or jump in
   // Step 1: Browse & Filter
-  // Step 2: Map & Voice GPS Directions
-  // Step 3: Transparent Regulated Fees
-  // Step 4: Request Inspection & Done
+  // Step 2: Floating Map Tools & Radar Scan
+  // Step 3: Live Map & Voice GPS Directions
+  // Step 4: Transparent Regulated Fees
+  // Step 5: Request Inspection & Done
   const [currentStep, setCurrentStep] = useState<number>(0)
 
   // Mark as seen whenever closed or completed
@@ -67,7 +70,7 @@ export default function WelcomeOnboardingModal({
   }
 
   const handleNext = () => {
-    if (currentStep < 4) {
+    if (currentStep < 5) {
       setCurrentStep((prev) => prev + 1)
     } else {
       handleDismiss()
@@ -105,7 +108,7 @@ export default function WelcomeOnboardingModal({
 
             {currentStep > 0 && (
               <span className="text-xs font-semibold text-amber-100 bg-[#78350F]/70 border border-[#B45309]/60 rounded-full px-2.5 py-0.5">
-                Step {currentStep} of 4
+                Step {currentStep} of 5
               </span>
             )}
           </div>
@@ -113,9 +116,10 @@ export default function WelcomeOnboardingModal({
           <DialogTitle className="text-xl sm:text-2xl font-bold text-white mt-3 leading-snug">
             {currentStep === 0 && 'Welcome to Mapstar 👋'}
             {currentStep === 1 && '1. Find Verified Lodges 🔍'}
-            {currentStep === 2 && '2. Live Map & GPS Directions 🗺️'}
-            {currentStep === 3 && '3. Transparent Regulated Fees 🛡️'}
-            {currentStep === 4 && '4. Inspect & Move In Safely 🎉'}
+            {currentStep === 2 && '2. Floating Map Tools & Radar Scan 🧭'}
+            {currentStep === 3 && '3. Live Map & GPS Directions 🗺️'}
+            {currentStep === 4 && '4. Transparent Regulated Fees 🛡️'}
+            {currentStep === 5 && '5. Inspect & Move In Safely 🎉'}
           </DialogTitle>
 
           <DialogDescription className="text-amber-100/90 text-xs sm:text-sm mt-1 leading-relaxed">
@@ -124,10 +128,12 @@ export default function WelcomeOnboardingModal({
             {currentStep === 1 &&
               'Filter by running borehole water, prepaid meter, private toilet, and your budget range.'}
             {currentStep === 2 &&
-              'Get turn-by-turn navigation straight to the lodge gate from IMSU, FUTO, UNN, or your current GPS location.'}
+              'Discover movable map tools, the spinning GPS locator, and the 30-second glassy radar wave scan.'}
             {currentStep === 3 &&
-              'No surprise agent charges or duplicate payments. Every fee is regulated and broken down transparently.'}
+              'Get turn-by-turn navigation straight to the lodge gate from IMSU, FUTO, UNN, or your current GPS location.'}
             {currentStep === 4 &&
+              'No surprise agent charges or duplicate payments. Every fee is regulated and broken down transparently.'}
+            {currentStep === 5 &&
               'Request a physical inspection, chat directly with verified landlords, and secure your key handover.'}
           </DialogDescription>
         </div>
@@ -238,8 +244,80 @@ export default function WelcomeOnboardingModal({
             </div>
           )}
 
-          {/* STEP 2: MAP & DIRECTIONS */}
+          {/* STEP 2: FLOATING MAP TOOLS & RADAR SCAN */}
           {currentStep === 2 && (
+            <div className="space-y-3 animate-in fade-in duration-200">
+              {/* 1. Movable Toolbar */}
+              <div className="rounded-xl border border-[#E5DAC8] dark:border-[#382618] bg-[#FAF7F2] dark:bg-[#120C08] p-3.5 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 rounded-md bg-amber-100 dark:bg-amber-950/60 text-[#78350F] dark:text-[#E0904E]">
+                    <Move className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-bold text-[#271810] dark:text-[#FAF6F0]">
+                    Floating & Movable Map Toolbar
+                  </span>
+                </div>
+                <p className="text-xs text-[#7C6859] dark:text-[#B8A598] leading-relaxed">
+                  Located directly on the map canvas. Drag its top grip handle to reposition the toolbar anywhere on your screen for convenient access on both desktop and mobile.
+                </p>
+              </div>
+
+              {/* 2. Spinning GPS Locator Tool */}
+              <div className="rounded-xl border border-sky-300 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/30 p-3.5 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-[#78350F] dark:bg-[#B45309] text-white flex items-center justify-center shrink-0 shadow-xs">
+                    {/* Round GPS Crosshair */}
+                    <svg
+                      className="w-3.5 h-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="7" />
+                      <circle cx="12" cy="12" r="2" fill="currentColor" />
+                      <line x1="12" y1="2" x2="12" y2="5" />
+                      <line x1="12" y1="19" x2="12" y2="22" />
+                      <line x1="2" y1="12" x2="5" y2="12" />
+                      <line x1="19" y1="12" x2="22" y2="12" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-bold text-[#271810] dark:text-[#FAF6F0]">
+                    Round GPS Locator Tool
+                  </span>
+                  <span className="text-[10px] bg-sky-200/80 dark:bg-sky-900/80 text-sky-900 dark:text-sky-200 px-1.5 py-0.5 rounded font-medium">
+                    Spins & Pinpoints
+                  </span>
+                </div>
+                <p className="text-xs text-[#3B2314] dark:text-[#E2D9D2] leading-relaxed">
+                  Tap the round GPS sign tool. The icon <strong>spins continuously</strong> while acquiring your actual GPS position, drops a pulsing beacon at your coordinates, and smoothly glides the camera there.
+                </p>
+              </div>
+
+              {/* 3. Glassy Radar Wave Scan */}
+              <div className="rounded-xl border border-amber-300 dark:border-[#523018] bg-amber-50/80 dark:bg-[#2A1810] p-3.5 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Radio className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-[#271810] dark:text-[#FAF6F0]">
+                    Glassy Radar Wave Scan (30s Highlight)
+                  </span>
+                  <span className="text-[10px] bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 px-1.5 py-0.5 rounded font-medium">
+                    Right-Click or Long-Press
+                  </span>
+                </div>
+                <p className="text-xs text-[#3B2314] dark:text-[#E2D9D2] leading-relaxed">
+                  <strong>Right-click</strong> on the map, <strong>long-press</strong> on mobile screens (hold for 0.5s), or tap the <strong>Radar Tool</strong>. Transparent light-blue glassy waves ripple across the map, making nearby lodge pins <strong>enlarge and glow with a bright golden aura for 30 seconds</strong>.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: MAP & DIRECTIONS */}
+          {currentStep === 3 && (
             <div className="space-y-3.5 animate-in fade-in duration-200">
               <div className="rounded-xl border border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/30 p-4 space-y-2">
                 <div className="flex items-center gap-2">
@@ -265,8 +343,8 @@ export default function WelcomeOnboardingModal({
             </div>
           )}
 
-          {/* STEP 3: REGULATED FEES */}
-          {currentStep === 3 && (
+          {/* STEP 4: REGULATED FEES */}
+          {currentStep === 4 && (
             <div className="space-y-3.5 animate-in fade-in duration-200">
               <div className="rounded-xl border border-amber-300 dark:border-[#523018] bg-amber-50/70 dark:bg-[#2A1810] p-4 space-y-2">
                 <div className="flex items-center gap-2">
@@ -292,8 +370,8 @@ export default function WelcomeOnboardingModal({
             </div>
           )}
 
-          {/* STEP 4: INSPECT & MOVE IN */}
-          {currentStep === 4 && (
+          {/* STEP 5: INSPECT & MOVE IN */}
+          {currentStep === 5 && (
             <div className="space-y-3.5 animate-in fade-in duration-200">
               <div className="rounded-xl border border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/30 p-4 space-y-2">
                 <div className="flex items-center gap-2">
@@ -360,7 +438,7 @@ export default function WelcomeOnboardingModal({
                   onClick={handleNext}
                   className="h-9 px-4 bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] dark:hover:bg-[#C2783B] text-white font-semibold text-xs shadow-md shadow-[#78350F]/25 cursor-pointer transition"
                 >
-                  {currentStep === 4 ? (
+                  {currentStep === 5 ? (
                     <>
                       <span>Start Exploring</span>
                       <CheckCircle2 className="h-3.5 w-3.5 ml-1.5" />
