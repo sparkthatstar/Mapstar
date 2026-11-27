@@ -16,7 +16,6 @@ import {
   ChevronRight,
   Search,
   FileText,
-  BadgeAlert,
   Sparkles,
   HelpCircle,
   Scale,
