@@ -75,30 +75,13 @@ const ENLARGED_SCAN_ICON_SIZE: any = [
   2.1,
 ]
 
-const GLOW_CIRCLE_RADIUS: any = [
-  'interpolate',
-  ['linear'],
-  ['zoom'],
-  9,
-  28,
-  12,
-  44,
-  14,
-  60,
-  17,
-  86,
-]
-
 // Breathing animation frames for radar scanning state
-// Continuous rhythmic expansion and contraction (20 steps @ 100ms = 2.0s per breath cycle)
+// Continuous rhythmic expansion and contraction of listing pins (20 steps @ 100ms = 2.0s per breath cycle)
 const BREATHING_CYCLE_STEPS = 20
 const BREATHING_STEP_MS = 100
 
 interface BreathingFrame {
   iconSize: any
-  haloRadius: any
-  circleOpacity: number
-  strokeOpacity: number
 }
 
 const BREATHING_FRAMES: BreathingFrame[] = Array.from({ length: BREATHING_CYCLE_STEPS }, (_, i) => {
@@ -106,7 +89,6 @@ const BREATHING_FRAMES: BreathingFrame[] = Array.from({ length: BREATHING_CYCLE_
   // Smooth sine wave progress (0 = fully contracted, 1 = fully expanded)
   const progress = (Math.sin(theta - Math.PI / 2) + 1) / 2
   const iconScale = 1.05 + 0.50 * progress
-  const haloScale = 0.90 + 0.40 * progress
 
   return {
     iconSize: [
@@ -122,21 +104,6 @@ const BREATHING_FRAMES: BreathingFrame[] = Array.from({ length: BREATHING_CYCLE_
       17,
       Number((1.25 * iconScale).toFixed(2)),
     ],
-    haloRadius: [
-      'interpolate',
-      ['linear'],
-      ['zoom'],
-      9,
-      Math.round(28 * haloScale),
-      12,
-      Math.round(44 * haloScale),
-      14,
-      Math.round(60 * haloScale),
-      17,
-      Math.round(86 * haloScale),
-    ],
-    circleOpacity: Number((0.35 + 0.25 * progress).toFixed(2)),
-    strokeOpacity: Number((0.50 + 0.30 * progress).toFixed(2)),
   }
 })
 
@@ -506,26 +473,6 @@ export default function MapView({
         })
       }
 
-      // 3. Add Glowing Radar Halo Layer (Rendered underneath pins with subtle dark blue frame theme)
-      if (!map.getLayer('listings-glow-layer')) {
-        map.addLayer({
-          id: 'listings-glow-layer',
-          type: 'circle',
-          source: 'listings-source',
-          paint: {
-            'circle-radius': GLOW_CIRCLE_RADIUS,
-            'circle-color': '#1E3A5F',
-            'circle-blur': 0.35,
-            'circle-opacity': 0,
-            'circle-opacity-transition': { duration: 250 },
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#38BDF8',
-            'circle-stroke-opacity': 0,
-            'circle-stroke-opacity-transition': { duration: 250 },
-          },
-        })
-      }
-
       // 4. Add Native Symbol Layer with zoom-based size interpolation
       if (!map.getLayer('listings-pins-layer')) {
         map.addLayer({
@@ -619,7 +566,7 @@ export default function MapView({
   }, [])
 
   // =========================================================================
-  // REACTIVE LAYER ADJUSTMENT: Breathing icon expansion & subtle dark blue frame glow
+  // REACTIVE LAYER ADJUSTMENT: Breathing icon expansion & contraction during radar scan
   // =========================================================================
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return
@@ -630,17 +577,17 @@ export default function MapView({
       breathingIntervalRef.current = null
     }
 
+    // Ensure glow aura layer is completely removed
+    if (map.getLayer('listings-glow-layer')) {
+      map.removeLayer('listings-glow-layer')
+    }
+
     if (isScanning) {
       breathingStepRef.current = 0
       const initialFrame = BREATHING_FRAMES[0]
 
       if (map.getLayer('listings-pins-layer')) {
         map.setLayoutProperty('listings-pins-layer', 'icon-size', initialFrame.iconSize)
-      }
-      if (map.getLayer('listings-glow-layer')) {
-        map.setPaintProperty('listings-glow-layer', 'circle-radius', initialFrame.haloRadius)
-        map.setPaintProperty('listings-glow-layer', 'circle-opacity', initialFrame.circleOpacity)
-        map.setPaintProperty('listings-glow-layer', 'circle-stroke-opacity', initialFrame.strokeOpacity)
       }
 
       // Smooth rhythmic breathing loop (100ms interval for fluid expansion & contraction)
@@ -652,21 +599,11 @@ export default function MapView({
         if (map.getLayer('listings-pins-layer')) {
           map.setLayoutProperty('listings-pins-layer', 'icon-size', frame.iconSize)
         }
-        if (map.getLayer('listings-glow-layer')) {
-          map.setPaintProperty('listings-glow-layer', 'circle-radius', frame.haloRadius)
-          map.setPaintProperty('listings-glow-layer', 'circle-opacity', frame.circleOpacity)
-          map.setPaintProperty('listings-glow-layer', 'circle-stroke-opacity', frame.strokeOpacity)
-        }
       }, BREATHING_STEP_MS)
     } else {
       // Revert to default standard stationary state
       if (map.getLayer('listings-pins-layer')) {
         map.setLayoutProperty('listings-pins-layer', 'icon-size', DEFAULT_ICON_SIZE)
-      }
-      if (map.getLayer('listings-glow-layer')) {
-        map.setPaintProperty('listings-glow-layer', 'circle-radius', GLOW_CIRCLE_RADIUS)
-        map.setPaintProperty('listings-glow-layer', 'circle-opacity', 0)
-        map.setPaintProperty('listings-glow-layer', 'circle-stroke-opacity', 0)
       }
     }
 
@@ -709,23 +646,9 @@ export default function MapView({
         })
       }
 
-      if (!map.getLayer('listings-glow-layer')) {
-        map.addLayer({
-          id: 'listings-glow-layer',
-          type: 'circle',
-          source: 'listings-source',
-          paint: {
-            'circle-radius': isScanning ? (BREATHING_FRAMES[breathingStepRef.current]?.haloRadius || GLOW_CIRCLE_RADIUS) : GLOW_CIRCLE_RADIUS,
-            'circle-color': '#1E3A5F',
-            'circle-blur': 0.35,
-            'circle-opacity': isScanning ? 0.55 : 0,
-            'circle-opacity-transition': { duration: 250 },
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#38BDF8',
-            'circle-stroke-opacity': isScanning ? 0.75 : 0,
-            'circle-stroke-opacity-transition': { duration: 250 },
-          },
-        })
+      // Ensure no glow aura layer is present after style reload
+      if (map.getLayer('listings-glow-layer')) {
+        map.removeLayer('listings-glow-layer')
       }
 
       if (!map.getLayer('listings-pins-layer')) {
