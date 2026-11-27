@@ -13,6 +13,7 @@ import {
   Shield, Save, RefreshCw, Lock, LogOut, DollarSign, Building, Users,
   Flag, BarChart3, LayoutDashboard, Loader2, ExternalLink, Star,
   Database, CheckCircle2, AlertTriangle, Settings, Key, Link2, Sparkles,
+  LifeBuoy, Phone, Mail, MessageSquare, AlertCircle, Clock, Check, X, Search,
 } from 'lucide-react'
 import {
   Dialog,
@@ -34,6 +35,35 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
   const [tab, setTab] = useState<Tab>('overview')
+  const [openComplaintsCount, setOpenComplaintsCount] = useState<number>(0)
+
+  const loadComplaintsCount = useCallback(() => {
+    fetch('/api/admin/complaints')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.counts?.open !== undefined) {
+          setOpenComplaintsCount(d.counts.open)
+        } else if (d.complaints) {
+          const count = d.complaints.filter((c: any) => c.status === 'OPEN').length
+          setOpenComplaintsCount(count)
+        }
+      })
+      .catch(() => {
+        fetch('/api/support')
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.tickets) {
+              const count = d.tickets.filter((t: any) => t.status === 'OPEN').length
+              setOpenComplaintsCount(count)
+            }
+          })
+          .catch(() => {})
+      })
+  }, [])
+
+  useEffect(() => {
+    loadComplaintsCount()
+  }, [loadComplaintsCount])
 
   function logout() {
     fetch('/api/admin/logout', { method: 'POST' }).then(() => {
@@ -89,7 +119,12 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
               { id: 'fees', label: 'Fee Configuration', icon: DollarSign },
               { id: 'listings', label: 'Listings', icon: Building },
               { id: 'users', label: 'Users', icon: Users },
-              { id: 'reports', label: 'Reports Queue', icon: Flag },
+              {
+                id: 'reports',
+                label: 'Customer Complaints',
+                icon: LifeBuoy,
+                badge: openComplaintsCount > 0 ? openComplaintsCount : null,
+              },
               { id: 'analytics', label: 'Analytics', icon: BarChart3 },
             ].map((item) => {
               const Icon = item.icon
@@ -98,14 +133,21 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
                 <li key={item.id}>
                   <button
                     onClick={() => setTab(item.id as Tab)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
                       active
                         ? 'bg-[#78350F] dark:bg-[#B45309] text-white shadow-md shadow-[#78350F]/25'
                         : 'text-slate-400 hover:bg-[#0E1526] hover:text-slate-200'
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">
+                        {item.badge}
+                      </span>
+                    )}
                   </button>
                 </li>
               )
@@ -120,7 +162,10 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
             { id: 'fees', label: 'Fees' },
             { id: 'listings', label: 'Listings' },
             { id: 'users', label: 'Users' },
-            { id: 'reports', label: 'Reports' },
+            {
+              id: 'reports',
+              label: openComplaintsCount > 0 ? `Complaints (${openComplaintsCount})` : 'Complaints',
+            },
             { id: 'analytics', label: 'Analytics' },
           ].map((item) => (
             <button
@@ -137,11 +182,15 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
 
         {/* Main panel */}
         <main className="flex-1 min-w-0 bg-[#090D18] rounded-2xl shadow-2xl border border-slate-800 overflow-hidden text-slate-100">
-          {tab === 'overview' && <OverviewTab onNavigate={setTab} />}
+          {tab === 'overview' && (
+            <OverviewTab onNavigate={setTab} openComplaintsCount={openComplaintsCount} />
+          )}
           {tab === 'fees' && <FeesTab />}
           {tab === 'listings' && <ListingsTab />}
           {tab === 'users' && <UsersTab />}
-          {tab === 'reports' && <ReportsTab />}
+          {tab === 'reports' && (
+            <ReportsTab onCountChange={setOpenComplaintsCount} />
+          )}
           {tab === 'analytics' && <AnalyticsTab />}
         </main>
       </div>
@@ -151,7 +200,13 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
 
 /* ---------------- Overview ---------------- */
 
-function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
+function OverviewTab({
+  onNavigate,
+  openComplaintsCount = 0,
+}: {
+  onNavigate: (t: Tab) => void
+  openComplaintsCount?: number
+}) {
   const [dbStatus, setDbStatus] = useState<any>(null)
   const [dbLoading, setDbLoading] = useState(false)
   const [seeding, setSeeding] = useState(false)
@@ -479,7 +534,13 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
           <StatCard label="Physically verified" value={String(stats.verified)} icon={<Shield className="h-4 w-4" />} accent="bg-[#2A1810] border border-[#523018] text-amber-400" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+          <StatCard
+            label="Customer complaints"
+            value={String(openComplaintsCount)}
+            icon={<LifeBuoy className="h-4 w-4" />}
+            accent={openComplaintsCount > 0 ? "bg-rose-950/70 border border-rose-800/60 text-rose-400" : "bg-[#2A1810] border border-[#523018] text-amber-400"}
+          />
           <StatCard label="Coming soon (orange)" value={String(stats.comingSoon)} icon={<Building className="h-4 w-4" />} accent="bg-amber-950/60 border border-amber-800/40 text-amber-400" />
           <StatCard label="Total annual rent value" value={formatNaira(stats.totalRentValue)} icon={<DollarSign className="h-4 w-4" />} accent="bg-[#2A1810] border border-[#523018] text-amber-400" wide />
         </div>
@@ -504,10 +565,10 @@ function OverviewTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
             onClick={() => onNavigate('listings')}
           />
           <ActionCard
-            title="Reports queue"
-            description="Triage community reports of fake listings, scam landlords, or duplicate properties."
-            cta="View reports"
-            icon={<Flag className="h-5 w-5" />}
+            title="Customer Complaints & Disputes"
+            description="Triage illegal agency fees, fake lodges, caution fee deductions, and facility failures reported by tenants."
+            cta="Open complaints center"
+            icon={<LifeBuoy className="h-5 w-5" />}
             onClick={() => onNavigate('reports')}
           />
         </div>
@@ -1164,98 +1225,617 @@ function UsersTab() {
   )
 }
 
-/* ---------------- Reports ---------------- */
+/* ---------------- Reports & Customer Complaints ---------------- */
 
-function ReportsTab() {
-  const [reports, setReports] = useState([
-    { id: 'r1', property: 'Self-con near IMSU main gate', reason: 'Fake photos — actual lodge is much smaller', reporter: 'Chidinma N.', status: 'OPEN', createdAt: '2 hours ago' },
-    { id: 'r2', property: '2-Bedroom flat in Independence Layout', reason: 'Landlord asked for inspection fee outside app', reporter: 'Emeka O.', status: 'OPEN', createdAt: '5 hours ago' },
-    { id: 'r3', property: 'Room & parlour near Relief Market', reason: 'Listed twice by different agents', reporter: 'Anonymous', status: 'UNDER_REVIEW', createdAt: '1 day ago' },
-    { id: 'r4', property: '3-Bedroom flat in Aladinma', reason: 'Price changed after inspection', reporter: 'Anonymous', status: 'RESOLVED', createdAt: '3 days ago' },
-  ])
+interface ComplaintTicket {
+  ticketId: string
+  userId: string
+  userName: string
+  userEmail: string
+  userPhone?: string
+  category: string
+  subject: string
+  lodgeName?: string
+  accusedPerson?: string
+  description: string
+  disputedAmount?: number
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+  status: 'OPEN' | 'INVESTIGATING' | 'RESOLVED' | 'DISMISSED'
+  createdAt: string
+  updatedAt?: string
+  resolutionNotes?: string
+  dbMessageId?: string
+}
 
-  function markInvestigating(id: string) {
-    setReports((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          toast('Report marked Under Investigation')
-          return { ...r, status: 'UNDER_REVIEW' }
-        }
-        return r
+const CATEGORY_MAP: Record<string, { label: string; badgeClass: string }> = {
+  EXCESS_FEES: { label: 'Illegal Agent Fee (>5%)', badgeClass: 'bg-amber-950/80 border-amber-600/70 text-amber-300' },
+  FAKE_LISTING: { label: 'Fake Lodge / Fraud', badgeClass: 'bg-rose-950/80 border-rose-600/70 text-rose-300' },
+  CAUTION_FEE: { label: 'Caution Fee Dispute', badgeClass: 'bg-blue-950/80 border-blue-600/70 text-blue-300' },
+  FACILITY_FAILURE: { label: 'Facility Breakdown', badgeClass: 'bg-purple-950/80 border-purple-600/70 text-purple-300' },
+  AGENT_CONDUCT: { label: 'Agent Conduct / Harassment', badgeClass: 'bg-orange-950/80 border-orange-600/70 text-orange-300' },
+  OTHER: { label: 'General Dispute / App Issue', badgeClass: 'bg-slate-900 border-slate-700 text-slate-300' },
+}
+
+function ReportsTab({ onCountChange }: { onCountChange?: (count: number) => void }) {
+  const [complaints, setComplaints] = useState<ComplaintTicket[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'INVESTIGATING' | 'RESOLVED' | 'DISMISSED'>('ALL')
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Resolution modal state
+  const [resolvingTicket, setResolvingTicket] = useState<ComplaintTicket | null>(null)
+  const [targetStatus, setTargetStatus] = useState<'INVESTIGATING' | 'RESOLVED' | 'DISMISSED' | null>(null)
+  const [resolutionNotes, setResolutionNotes] = useState('')
+  const [submittingAction, setSubmittingAction] = useState(false)
+
+  const fetchComplaints = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
+
+    try {
+      let data: any = null
+      const res = await fetch('/api/admin/complaints', { cache: 'no-store' })
+      if (res.ok) {
+        data = await res.json()
+      } else {
+        const res2 = await fetch('/api/support', { cache: 'no-store' })
+        if (res2.ok) data = await res2.json()
+      }
+
+      if (data) {
+        const list = data.complaints || data.tickets || []
+        setComplaints(list)
+        const openCount = list.filter((c: any) => c.status === 'OPEN').length
+        onCountChange?.(openCount)
+        if (isRefresh) toast.success(`Loaded ${list.length} complaint ticket${list.length === 1 ? '' : 's'}`)
+      }
+    } catch (err: any) {
+      toast.error('Failed to load complaints: ' + (err.message || 'Network error'))
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [onCountChange])
+
+  useEffect(() => {
+    fetchComplaints()
+  }, [fetchComplaints])
+
+  async function handleUpdateStatus(ticket: ComplaintTicket, status: 'INVESTIGATING' | 'RESOLVED' | 'DISMISSED', notes?: string) {
+    setSubmittingAction(true)
+    try {
+      let success = false
+      let updatedTicket: ComplaintTicket | null = null
+
+      const res = await fetch('/api/admin/complaints', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId: ticket.ticketId, status, resolutionNotes: notes }),
       })
-    )
+
+      if (res.ok) {
+        const data = await res.json()
+        success = data.success
+        updatedTicket = data.ticket
+      } else {
+        const res2 = await fetch('/api/support', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticketId: ticket.ticketId, status, resolutionNotes: notes }),
+        })
+        if (res2.ok) {
+          const data2 = await res2.json()
+          success = data2.success
+          updatedTicket = data2.ticket
+        }
+      }
+
+      if (success || updatedTicket) {
+        toast.success(`Complaint #${ticket.ticketId} marked as ${status}`)
+        setComplaints((prev) =>
+          prev.map((c) =>
+            c.ticketId === ticket.ticketId
+              ? { ...c, status, resolutionNotes: notes || c.resolutionNotes, updatedAt: new Date().toISOString() }
+              : c
+          )
+        )
+        const updatedList = complaints.map((c) => c.ticketId === ticket.ticketId ? { ...c, status } : c)
+        onCountChange?.(updatedList.filter((c) => c.status === 'OPEN').length)
+        setResolvingTicket(null)
+        setTargetStatus(null)
+        setResolutionNotes('')
+      } else {
+        toast.error('Could not update status. Please try again.')
+      }
+    } catch (err: any) {
+      toast.error('Failed to update complaint: ' + (err.message || 'Error'))
+    } finally {
+      setSubmittingAction(false)
+    }
   }
 
-  function resolveReport(id: string) {
-    setReports((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          toast.success('Report resolved and closed')
-          return { ...r, status: 'RESOLVED' }
-        }
-        return r
-      })
-    )
-  }
+  const counts = useMemo(() => {
+    return {
+      total: complaints.length,
+      open: complaints.filter((c) => c.status === 'OPEN').length,
+      investigating: complaints.filter((c) => c.status === 'INVESTIGATING').length,
+      resolved: complaints.filter((c) => c.status === 'RESOLVED').length,
+      dismissed: complaints.filter((c) => c.status === 'DISMISSED').length,
+    }
+  }, [complaints])
 
-  function dismissReport(id: string) {
-    setReports((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          toast('Report dismissed')
-          return { ...r, status: 'RESOLVED' }
-        }
-        return r
-      })
-    )
+  const filtered = useMemo(() => {
+    return complaints.filter((c) => {
+      if (statusFilter !== 'ALL' && c.status !== statusFilter) return false
+      if (categoryFilter !== 'ALL' && c.category !== categoryFilter) return false
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const match =
+          c.ticketId.toLowerCase().includes(q) ||
+          c.subject.toLowerCase().includes(q) ||
+          c.description.toLowerCase().includes(q) ||
+          c.userName.toLowerCase().includes(q) ||
+          c.userEmail.toLowerCase().includes(q) ||
+          (c.userPhone && c.userPhone.includes(q)) ||
+          (c.lodgeName && c.lodgeName.toLowerCase().includes(q)) ||
+          (c.accusedPerson && c.accusedPerson.toLowerCase().includes(q))
+        if (!match) return false
+      }
+      return true
+    })
+  }, [complaints, statusFilter, categoryFilter, searchQuery])
+
+  function getWhatsAppLink(phone?: string, ticketId?: string) {
+    if (!phone) return null
+    const cleaned = phone.replace(/^0/, '234').replace(/\D/g, '')
+    const msg = encodeURIComponent(`Hello, this is Mapstar Customer Service regarding dispute ticket #${ticketId}.`)
+    return `https://wa.me/${cleaned}?text=${msg}`
   }
 
   return (
     <ScrollArea className="h-[calc(100vh-120px)]">
       <div className="p-6">
-        <h1 className="text-xl font-bold text-slate-900">Reports queue</h1>
-        <p className="text-sm text-slate-500 mt-1">Community reports of fake listings, scam landlords, or duplicate properties.</p>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 mb-5">
-          <StatCard label="Open" value={String(reports.filter((r) => r.status === 'OPEN').length)} icon={<Flag className="h-4 w-4" />} accent="bg-red-50 text-red-700" />
-          <StatCard label="Under review" value={String(reports.filter((r) => r.status === 'UNDER_REVIEW').length)} icon={<Flag className="h-4 w-4" />} accent="bg-amber-50 text-amber-700" />
-          <StatCard label="Resolved" value={String(reports.filter((r) => r.status === 'RESOLVED').length)} icon={<Flag className="h-4 w-4" />} accent="bg-emerald-50 text-emerald-700" />
-          <StatCard label="SLA breach (<24h)" value="0" icon={<Flag className="h-4 w-4" />} accent="bg-emerald-50 text-emerald-700" />
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-white tracking-tight">Customer Complaints & Disputes</h1>
+              <Badge variant="outline" className="bg-[#2A1810] border-amber-600/70 text-amber-300 text-xs px-2">
+                Live Supabase Feed
+              </Badge>
+            </div>
+            <p className="text-sm text-slate-400 mt-1">
+              Review and address customer service complaints filed by tenants, landlords, and agents.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchComplaints(true)}
+            disabled={refreshing || loading}
+            className="h-8 text-xs border-slate-800 bg-[#070A12] text-slate-200 hover:border-amber-600/60 hover:text-white cursor-pointer"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 text-amber-400 ${refreshing || loading ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing...' : 'Refresh Complaints'}
+          </Button>
         </div>
 
-        <div className="space-y-2">
-          {reports.map((r) => (
-            <div key={r.id} className="rounded-lg border border-slate-200 p-4 flex items-start gap-3">
-              <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
-                r.status === 'OPEN' ? 'bg-red-500' : r.status === 'UNDER_REVIEW' ? 'bg-amber-500' : 'bg-emerald-500'
-              }`} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-sm font-semibold text-slate-900">{r.property}</h3>
-                  <Badge variant="outline" className={
-                    r.status === 'OPEN' ? 'border-red-300 text-red-700' :
-                    r.status === 'UNDER_REVIEW' ? 'border-amber-300 text-amber-700' :
-                    'border-emerald-300 text-emerald-700'
-                  }>{r.status.replace('_', ' ')}</Badge>
-                  <span className="text-[10px] text-slate-500">{r.createdAt}</span>
+        {/* Stat metrics */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 mb-5">
+          <StatCard
+            label="Open disputes"
+            value={String(counts.open)}
+            icon={<AlertTriangle className="h-4 w-4" />}
+            accent={counts.open > 0 ? "bg-rose-950/70 border border-rose-800/60 text-rose-400" : "bg-slate-900 text-slate-400"}
+          />
+          <StatCard
+            label="Under investigation"
+            value={String(counts.investigating)}
+            icon={<Clock className="h-4 w-4" />}
+            accent="bg-amber-950/60 border border-amber-800/40 text-amber-400"
+          />
+          <StatCard
+            label="Resolved & enforced"
+            value={String(counts.resolved)}
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            accent="bg-emerald-950/60 border border-emerald-800/40 text-emerald-400"
+          />
+          <StatCard
+            label="Total tickets"
+            value={String(counts.total)}
+            icon={<LifeBuoy className="h-4 w-4" />}
+            accent="bg-[#2A1810] border border-[#523018] text-amber-300"
+          />
+        </div>
+
+        {/* Filters and search */}
+        <div className="bg-[#070A12] border border-slate-800 rounded-xl p-3.5 mb-4 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+              <Input
+                placeholder="Search ticket #MAP, tenant, lodge name, email, or accused agent..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9 text-xs bg-[#090D18] border-slate-800 text-white placeholder:text-slate-500 focus:border-[#78350F]"
+              />
+            </div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="h-9 px-3 rounded-md text-xs bg-[#090D18] border border-slate-800 text-slate-300 focus:border-[#78350F] outline-none cursor-pointer"
+            >
+              <option value="ALL">All Categories</option>
+              <option value="EXCESS_FEES">Illegal Agent Fees (&gt;5%)</option>
+              <option value="FAKE_LISTING">Fake Lodge / Fraud</option>
+              <option value="CAUTION_FEE">Caution Fee Dispute</option>
+              <option value="FACILITY_FAILURE">Facility Breakdown</option>
+              <option value="AGENT_CONDUCT">Agent Conduct</option>
+              <option value="OTHER">Other Issues</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            {(['ALL', 'OPEN', 'INVESTIGATING', 'RESOLVED', 'DISMISSED'] as const).map((st) => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                  statusFilter === st
+                    ? 'bg-[#78350F] dark:bg-[#B45309] text-white shadow-sm'
+                    : 'bg-[#090D18] border border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {st === 'ALL' ? 'All Status' : st.replace('_', ' ')}
+                {st === 'OPEN' && counts.open > 0 && (
+                  <span className="ml-1.5 bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">
+                    {counts.open}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Complaints list */}
+        {loading && complaints.length === 0 ? (
+          <div className="rounded-xl border border-slate-800 bg-[#070A12] p-12 text-center text-slate-400">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-amber-500 mb-3" />
+            <p className="text-sm font-semibold text-white">Loading customer complaints from Supabase...</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-xl border border-slate-800 bg-[#070A12] p-12 text-center text-slate-400">
+            <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-white">No complaints match your criteria</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {complaints.length === 0
+                ? 'No customer complaints have been filed yet.'
+                : 'Try clearing your search query or status filter.'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((ticket) => {
+              const catInfo = CATEGORY_MAP[ticket.category] || CATEGORY_MAP.OTHER
+              const waLink = getWhatsAppLink(ticket.userPhone, ticket.ticketId)
+
+              return (
+                <div
+                  key={ticket.ticketId}
+                  className="rounded-2xl border border-slate-800 bg-[#070A12] p-5 shadow-lg transition hover:border-slate-700 space-y-4"
+                >
+                  {/* Top row */}
+                  <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-slate-800/80">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-mono font-bold text-amber-400 bg-[#2A1810] border border-[#523018] px-2 py-0.5 rounded-md">
+                        #{ticket.ticketId}
+                      </span>
+                      <Badge variant="outline" className={`text-xs ${catInfo.badgeClass}`}>
+                        {catInfo.label}
+                      </Badge>
+                      {/* Urgency */}
+                      {ticket.urgency === 'CRITICAL' && (
+                        <Badge variant="outline" className="bg-red-950/80 border-red-500 text-red-200 text-[10px] gap-1 px-2 py-0.5 animate-pulse">
+                          <AlertTriangle className="h-3 w-3 text-red-400" /> CRITICAL
+                        </Badge>
+                      )}
+                      {ticket.urgency === 'HIGH' && (
+                        <Badge variant="outline" className="bg-rose-950/80 border-rose-500/70 text-rose-300 text-[10px] gap-1 px-2 py-0.5">
+                          <AlertCircle className="h-3 w-3 text-rose-400" /> HIGH
+                        </Badge>
+                      )}
+                      {ticket.urgency === 'MEDIUM' && (
+                        <Badge variant="outline" className="bg-amber-950/70 border-amber-600/60 text-amber-300 text-[10px] px-2 py-0.5">
+                          MEDIUM
+                        </Badge>
+                      )}
+                      {ticket.urgency === 'LOW' && (
+                        <Badge variant="outline" className="bg-slate-900 border-slate-700 text-slate-400 text-[10px] px-2 py-0.5">
+                          LOW
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {ticket.status === 'OPEN' && (
+                        <Badge variant="outline" className="bg-rose-950/80 border-rose-600/70 text-rose-300 text-xs font-bold px-2 py-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 mr-1.5 animate-ping" /> OPEN
+                        </Badge>
+                      )}
+                      {ticket.status === 'INVESTIGATING' && (
+                        <Badge variant="outline" className="bg-amber-950/80 border-amber-500/70 text-amber-300 text-xs font-bold px-2 py-0.5">
+                          <Clock className="h-3 w-3 mr-1 text-amber-400" /> INVESTIGATING
+                        </Badge>
+                      )}
+                      {ticket.status === 'RESOLVED' && (
+                        <Badge variant="outline" className="bg-emerald-950/80 border-emerald-500/70 text-emerald-300 text-xs font-bold px-2 py-0.5">
+                          <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-400" /> RESOLVED
+                        </Badge>
+                      )}
+                      {ticket.status === 'DISMISSED' && (
+                        <Badge variant="outline" className="bg-slate-900 border-slate-700 text-slate-400 text-xs font-bold px-2 py-0.5">
+                          DISMISSED
+                        </Badge>
+                      )}
+                      <span className="text-[11px] text-slate-500">
+                        {new Date(ticket.createdAt).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Subject and narrative */}
+                  <div>
+                    <h3 className="text-base font-bold text-white">{ticket.subject}</h3>
+                    <div className="mt-2 p-3.5 rounded-xl bg-[#090D18] border border-slate-800 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                      {ticket.description}
+                    </div>
+                  </div>
+
+                  {/* Complainant & Incident Meta Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+                    {/* Complainant */}
+                    <div className="p-2.5 rounded-xl bg-[#090D18] border border-slate-800/80">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Complainant</span>
+                      <div className="font-semibold text-white">{ticket.userName}</div>
+                      <div className="text-[11px] text-slate-400 truncate mt-0.5">{ticket.userEmail}</div>
+                      {ticket.userPhone && (
+                        <div className="text-[11px] text-amber-400 font-mono mt-0.5">{ticket.userPhone}</div>
+                      )}
+                    </div>
+
+                    {/* Affected Lodge */}
+                    <div className="p-2.5 rounded-xl bg-[#090D18] border border-slate-800/80">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Lodge / Property</span>
+                      <div className="font-semibold text-white">
+                        {ticket.lodgeName || <span className="text-slate-500 italic">Not specified</span>}
+                      </div>
+                    </div>
+
+                    {/* Accused Person */}
+                    <div className="p-2.5 rounded-xl bg-[#090D18] border border-slate-800/80">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Accused Landlord / Agent</span>
+                      <div className="font-semibold text-white">
+                        {ticket.accusedPerson || <span className="text-slate-500 italic">Not specified</span>}
+                      </div>
+                    </div>
+
+                    {/* Disputed Amount */}
+                    <div className="p-2.5 rounded-xl bg-[#090D18] border border-slate-800/80">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Disputed Amount</span>
+                      <div className="font-extrabold text-amber-400 text-sm">
+                        {ticket.disputedAmount ? formatNaira(ticket.disputedAmount) : 'None reported'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resolution notes if already resolved / investigating */}
+                  {ticket.resolutionNotes && (
+                    <div className="p-3 rounded-xl bg-[#2A1810] border border-[#523018] text-xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-amber-400" />
+                        <span>Admin Resolution Note</span>
+                        {ticket.updatedAt && (
+                          <span className="text-[10px] text-slate-400 font-normal ml-auto">
+                            Updated {new Date(ticket.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-200">{ticket.resolutionNotes}</p>
+                    </div>
+                  )}
+
+                  {/* Action Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                    <div className="flex items-center gap-2">
+                      {waLink && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs border-emerald-800/60 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-white"
+                          asChild
+                        >
+                          <a href={waLink} target="_blank" rel="noopener noreferrer">
+                            <MessageSquare className="h-3 w-3 mr-1" /> WhatsApp Customer
+                          </a>
+                        </Button>
+                      )}
+                      {ticket.userPhone && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs border-slate-800 bg-[#090D18] text-slate-300 hover:text-white"
+                          asChild
+                        >
+                          <a href={`tel:${ticket.userPhone}`}>
+                            <Phone className="h-3 w-3 mr-1" /> Call
+                          </a>
+                        </Button>
+                      )}
+                      {ticket.userEmail && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs border-slate-800 bg-[#090D18] text-slate-300 hover:text-white"
+                          asChild
+                        >
+                          <a href={`mailto:${ticket.userEmail}?subject=Mapstar%20Dispute%20Resolution%20Ticket%20%23${ticket.ticketId}`}>
+                            <Mail className="h-3 w-3 mr-1" /> Email
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {ticket.status !== 'INVESTIGATING' && ticket.status !== 'RESOLVED' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleUpdateStatus(ticket, 'INVESTIGATING', 'Officer assigned and investigating dispute.')}
+                          disabled={submittingAction}
+                          className="h-7 text-xs border-amber-600/60 bg-amber-950/40 text-amber-300 hover:bg-amber-900/50 cursor-pointer"
+                        >
+                          <Clock className="h-3 w-3 mr-1" /> Mark Investigating
+                        </Button>
+                      )}
+
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setResolvingTicket(ticket)
+                          setTargetStatus('RESOLVED')
+                          setResolutionNotes(ticket.resolutionNotes || '')
+                        }}
+                        disabled={submittingAction}
+                        className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-md shadow-emerald-900/30 cursor-pointer"
+                      >
+                        <Check className="h-3 w-3 mr-1" /> Enforce Resolution
+                      </Button>
+
+                      {ticket.status !== 'DISMISSED' && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setResolvingTicket(ticket)
+                            setTargetStatus('DISMISSED')
+                            setResolutionNotes('')
+                          }}
+                          disabled={submittingAction}
+                          className="h-7 text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 cursor-pointer"
+                        >
+                          <X className="h-3 w-3 mr-1" /> Dismiss
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <p className="text-sm text-slate-700 mt-1">{r.reason}</p>
-                <p className="text-[10px] text-slate-500 mt-1">Reported by: {r.reporter}</p>
-              </div>
-              <div className="flex flex-col gap-1 shrink-0">
-                {r.status !== 'RESOLVED' ? (
+              )
+            })}
+          </div>
+        )}
+
+        {/* Resolution Dialog Modal */}
+        <Dialog open={Boolean(resolvingTicket)} onOpenChange={(open) => { if (!open) setResolvingTicket(null) }}>
+          <DialogContent className="max-w-lg bg-[#090D18] border border-slate-800 text-white shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                {targetStatus === 'RESOLVED' ? (
                   <>
-                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => markInvestigating(r.id)}>Investigate</Button>
-                    <Button size="sm" variant="outline" className="h-7 text-[10px] text-emerald-700 hover:text-emerald-800" onClick={() => resolveReport(r.id)}>Resolve</Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-[10px] text-slate-500" onClick={() => dismissReport(r.id)}>Dismiss</Button>
+                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                    Enforce Resolution for #{resolvingTicket?.ticketId}
                   </>
                 ) : (
-                  <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Resolved</span>
+                  <>
+                    <AlertTriangle className="h-5 w-5 text-rose-400" />
+                    Dismiss Complaint #{resolvingTicket?.ticketId}
+                  </>
                 )}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-400">
+                {targetStatus === 'RESOLVED'
+                  ? 'Record dispute settlement, excess fee refund confirmation, or disciplinary action against landlord/agent.'
+                  : 'Specify reason for dismissal (e.g. non-violating tenancy dispute or unsubstantiated claim).'}
+              </DialogDescription>
+            </DialogHeader>
+
+            {resolvingTicket && (
+              <div className="space-y-4 pt-2">
+                <div className="p-3 rounded-xl bg-[#070A12] border border-slate-800 text-xs space-y-1">
+                  <div className="font-semibold text-white">{resolvingTicket.subject}</div>
+                  <div className="text-slate-400">
+                    Complainant: <span className="text-slate-200">{resolvingTicket.userName}</span>
+                    {resolvingTicket.lodgeName && <> · Lodge: <span className="text-slate-200">{resolvingTicket.lodgeName}</span></>}
+                    {resolvingTicket.disputedAmount ? <> · Disputed: <span className="text-amber-400 font-bold">{formatNaira(resolvingTicket.disputedAmount)}</span></> : null}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="resolution-notes" className="text-xs font-semibold text-slate-300">
+                    {targetStatus === 'RESOLVED' ? 'Resolution & Enforcement Notes (visible to customer):' : 'Dismissal Explanation:'}
+                  </Label>
+                  <textarea
+                    id="resolution-notes"
+                    rows={3}
+                    placeholder={
+                      targetStatus === 'RESOLVED'
+                        ? 'e.g., Landlord agreed to refund excess agency fee of ₦38,888 within 24 hours. Formal warning issued for breach of 5% fee cap.'
+                        : 'e.g., Reviewed documentation; charges complied with lease terms agreed before inspection.'
+                    }
+                    value={resolutionNotes}
+                    onChange={(e) => setResolutionNotes(e.target.value)}
+                    className="w-full p-2.5 rounded-lg bg-[#070A12] border border-slate-800 text-xs text-white placeholder:text-slate-500 focus:border-[#78350F] focus:outline-none"
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setResolvingTicket(null)}
+                    className="h-8 text-xs border-slate-800 bg-[#070A12] text-slate-300 hover:bg-slate-800"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={submittingAction}
+                    onClick={() => {
+                      if (resolvingTicket && targetStatus) {
+                        handleUpdateStatus(resolvingTicket, targetStatus, resolutionNotes.trim() || undefined)
+                      }
+                    }}
+                    className={`h-8 text-xs font-semibold text-white shadow-md ${
+                      targetStatus === 'RESOLVED'
+                        ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/30'
+                        : 'bg-rose-600 hover:bg-rose-500 shadow-rose-900/30'
+                    }`}
+                  >
+                    {submittingAction ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> Submitting...
+                      </>
+                    ) : targetStatus === 'RESOLVED' ? (
+                      <>
+                        <Check className="h-3 w-3 mr-1.5" /> Enforce & Close
+                      </>
+                    ) : (
+                      <>
+                        <X className="h-3 w-3 mr-1.5" /> Dismiss Complaint
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </ScrollArea>
   )

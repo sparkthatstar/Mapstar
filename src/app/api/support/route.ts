@@ -27,33 +27,73 @@ export interface ComplaintTicket {
 const SUPPORT_INDEX_CHANNEL = 'support-tickets-registry'
 
 /**
+ * Helper to fetch tickets via Supabase REST API fallback
+ */
+async function fetchTicketsViaSupabaseRest(): Promise<any[]> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !apiKey) return []
+
+  try {
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/ChatMessage?channelId=eq.${SUPPORT_INDEX_CHANNEL}&select=*&order=createdAt.desc`,
+      {
+        headers: {
+          apikey: apiKey,
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+      }
+    )
+    if (res.ok) return await res.json()
+  } catch (e) {
+    console.warn('[Support API] REST fallback error:', e)
+  }
+  return []
+}
+
+/**
  * GET /api/support
  * - If admin: returns all customer complaints/tickets.
  * - If logged-in user: returns their submitted complaints.
  */
 export async function GET(req: NextRequest) {
   try {
-    const adminSession = await getAdminSession()
-    const user = await getUserSession()
+    let adminSession = null
+    let user = null
+    try { adminSession = await getAdminSession() } catch {}
+    try { user = await getUserSession() } catch {}
     const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
 
     // Fetch complaint tickets from the registry channel
-    const messages = await db.chatMessage.findMany({
-      where: {
-        channelId: SUPPORT_INDEX_CHANNEL,
-        content: { startsWith: '[COMPLAINT_TICKET:' },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-      select: {
-        id: true,
-        channelId: true,
-        senderId: true,
-        senderName: true,
-        content: true,
-        createdAt: true,
-      },
-    })
+    let messages: any[] = []
+    try {
+      messages = await db.chatMessage.findMany({
+        where: {
+          channelId: SUPPORT_INDEX_CHANNEL,
+          content: { contains: '[COMPLAINT_TICKET:' },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        select: {
+          id: true,
+          channelId: true,
+          senderId: true,
+          senderName: true,
+          content: true,
+          createdAt: true,
+        },
+      })
+    } catch (dbErr) {
+      console.warn('[Support API] Prisma error, using REST fallback:', dbErr)
+      messages = await fetchTicketsViaSupabaseRest()
+    }
+
+    if (!messages || messages.length === 0) {
+      const restMsgs = await fetchTicketsViaSupabaseRest()
+      if (restMsgs.length > 0) messages = restMsgs
+    }
 
     const tickets: ComplaintTicket[] = []
 
@@ -170,8 +210,10 @@ export async function POST(req: NextRequest) {
  */
 export async function PATCH(req: NextRequest) {
   try {
-    const adminSession = await getAdminSession()
-    const user = await getUserSession()
+    let adminSession = null
+    let user = null
+    try { adminSession = await getAdminSession() } catch {}
+    try { user = await getUserSession() } catch {}
     const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
 
     if (!isAdmin) {
@@ -186,13 +228,24 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Find the message in the registry channel
-    const messages = await db.chatMessage.findMany({
-      where: {
-        channelId: SUPPORT_INDEX_CHANNEL,
-        content: { contains: `"ticketId":"${ticketId}"` },
-      },
-      take: 1,
-    })
+    let messages: any[] = []
+    try {
+      messages = await db.chatMessage.findMany({
+        where: {
+          channelId: SUPPORT_INDEX_CHANNEL,
+          content: { contains: `"ticketId":"${ticketId}"` },
+        },
+        take: 1,
+      })
+    } catch {
+      messages = await fetchTicketsViaSupabaseRest()
+      messages = messages.filter((m: any) => m.content && m.content.includes(`"ticketId":"${ticketId}"`))
+    }
+
+    if (messages.length === 0) {
+      const restMsgs = await fetchTicketsViaSupabaseRest()
+      messages = restMsgs.filter((m: any) => m.content && m.content.includes(`"ticketId":"${ticketId}"`))
+    }
 
     if (messages.length === 0) {
       return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 })
@@ -209,13 +262,30 @@ export async function PATCH(req: NextRequest) {
     if (resolutionNotes) currentTicket.resolutionNotes = resolutionNotes
     currentTicket.updatedAt = new Date().toISOString()
 
+    const updatedContent = `[COMPLAINT_TICKET:${JSON.stringify(currentTicket)}] Ticket #${ticketId}: ${currentTicket.subject}`
+
     // Update the record in Supabase Postgres
-    await db.chatMessage.update({
-      where: { id: targetMsg.id },
-      data: {
-        content: `[COMPLAINT_TICKET:${JSON.stringify(currentTicket)}] Ticket #${ticketId}: ${currentTicket.subject}`,
-      },
-    })
+    try {
+      await db.chatMessage.update({
+        where: { id: targetMsg.id },
+        data: { content: updatedContent },
+      })
+    } catch {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (supabaseUrl && apiKey) {
+        await fetch(`${supabaseUrl}/rest/v1/ChatMessage?id=eq.${targetMsg.id}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: apiKey,
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          },
+          body: JSON.stringify({ content: updatedContent }),
+        })
+      }
+    }
 
     // Also post resolution note to the ticket's private thread
     await db.chatMessage.create({

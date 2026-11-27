@@ -449,10 +449,16 @@ export default function StarPowerView({
   async function fetchComplaints() {
     setLoadingComplaints(true)
     try {
-      const res = await fetch('/api/support')
+      const res = await fetch('/api/admin/complaints')
       if (res.ok) {
         const data = await res.json()
-        setComplaints(data.tickets || [])
+        setComplaints(data.complaints || data.tickets || [])
+        return
+      }
+      const res2 = await fetch('/api/support')
+      if (res2.ok) {
+        const data2 = await res2.json()
+        setComplaints(data2.tickets || data2.complaints || [])
       }
     } catch {
       // fallback
@@ -465,11 +471,18 @@ export default function StarPowerView({
   async function handleUpdateComplaintStatus(ticketId: string, status: string, notes?: string) {
     setResolvingTicketId(ticketId)
     try {
-      const res = await fetch('/api/support', {
+      let res = await fetch('/api/admin/complaints', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticketId, status, resolutionNotes: notes }),
       })
+      if (!res.ok) {
+        res = await fetch('/api/support', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticketId, status, resolutionNotes: notes }),
+        })
+      }
       const data = await res.json()
       if (res.ok && data.success) {
         toast.success(data.message || `Ticket #${ticketId} status updated to ${status}`)
