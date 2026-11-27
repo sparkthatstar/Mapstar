@@ -84,14 +84,30 @@ export default function MapView({
       center: [center[1], center[0]], // [lng, lat] for Mapbox
       zoom,
       attributionControl: false,
+      trackResize: true,
+      fadeDuration: 0, // Instant vector tile rendering with 0 fade delay
     })
 
     // Navigation Controls (zoom + compass)
     map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right')
 
+    // Automatically trigger resize as soon as loaded and on container resize
+    map.on('load', () => {
+      map.resize()
+    })
+
+    // Observe container size changes (e.g. split view toggles, sidebar collapses, screen rotations)
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapRef.current) {
+        mapRef.current.resize()
+      }
+    })
+    resizeObserver.observe(mapContainerRef.current)
+
     mapRef.current = map
 
     return () => {
+      resizeObserver.disconnect()
       map.remove()
     }
   }, [])
@@ -235,8 +251,8 @@ export default function MapView({
       {/* =========================================================================
           MAPBOX GL VECTOR CANVAS
          ========================================================================= */}
-      <div className="flex-1 w-full h-full relative">
-        <div ref={mapContainerRef} className="w-full h-full" />
+      <div className="flex-1 w-full h-full relative overflow-hidden min-h-0">
+        <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
       </div>
 
       {/* =========================================================================

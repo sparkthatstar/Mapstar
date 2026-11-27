@@ -655,11 +655,11 @@ export default function Home() {
 
               {/* Right Side: Map */}
               <div
-                className={`h-full relative overflow-hidden border-l border-[#E5DAC8] dark:border-[#382618] transition-all duration-300 ${
+                className={`h-full relative overflow-hidden border-l border-[#E5DAC8] dark:border-[#382618] transition-all duration-300 min-h-0 ${
                   view === 'list'
                     ? 'hidden'
                     : view === 'map'
-                    ? 'w-full'
+                    ? 'w-full flex-1'
                     : 'hidden lg:flex flex-1'
                 }`}
               >
