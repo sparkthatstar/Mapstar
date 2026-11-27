@@ -4,19 +4,12 @@ import { useEffect, useRef, useState, useMemo } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { MockListing, formatNaira, PROPERTY_TYPE_LABELS } from '@/lib/mock-data'
-import { buildStarPinElement, getPinState } from './star-pin'
+import { generateStarHouseSvg, getPinState, PinState } from './star-pin'
 import {
   Navigation,
-  ExternalLink,
   ShieldCheck,
   X,
-  Layers,
-  Sparkles,
   MapPin,
-  Compass,
-  Building,
-  Maximize2,
-  ChevronRight,
   Eye,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -29,8 +22,25 @@ interface MapViewProps {
   zoom?: number
 }
 
-// Mapbox public access token configured via environment variable
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ''
+
+// Helper to convert raw SVG string to HTMLImageElement for Mapbox WebGL canvas
+function loadSvgImage(map: mapboxgl.Map, id: string, svgString: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (map.hasImage(id)) {
+      resolve()
+      return
+    }
+    const img = new Image(48, 58)
+    img.onload = () => {
+      if (!map.hasImage(id)) {
+        map.addImage(id, img, { pixelRatio: 2 })
+      }
+      resolve()
+    }
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString)
+  })
+}
 
 export default function MapView({
   listings,
@@ -41,17 +51,16 @@ export default function MapView({
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
-  const markersRef = useRef<mapboxgl.Marker[]>([])
+  const popupRef = useRef<mapboxgl.Popup | null>(null)
 
-  const [mapStyle, setMapStyle] = useState<'streets' | 'satellite' | 'dark'>('streets')
+  const [mapStyle, setMapStyle] = useState<'streets' | 'satellite'>('streets')
   const [cardDismissed, setCardDismissed] = useState(false)
   const [googlePinpointOpen, setGooglePinpointOpen] = useState(false)
+  const [mapLoaded, setMapLoaded] = useState(false)
 
-  // Mapbox style URLs
   const STYLES = {
     streets: 'mapbox://styles/mapbox/streets-v12',
     satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
-    dark: 'mapbox://styles/mapbox/dark-v11',
   }
 
   // Active selected lodge
@@ -72,6 +81,38 @@ export default function MapView({
     return `https://www.google.com/maps/dir/?api=1&destination=${activeLodge.latitude},${activeLodge.longitude}`
   }, [activeLodge])
 
+  // Format GeoJSON FeatureCollection from listings
+  const geojson = useMemo(() => {
+    return {
+      type: 'FeatureCollection' as const,
+      features: listings
+        .filter((l) => Boolean(l.latitude && l.longitude))
+        .map((l) => {
+          const pinState = getPinState(l.status)
+          const iconId = `pin-${pinState.toLowerCase()}${l.featured ? '-featured' : ''}`
+          return {
+            type: 'Feature' as const,
+            id: l.id,
+            geometry: {
+              type: 'Point' as const,
+              coordinates: [l.longitude, l.latitude] as [number, number],
+            },
+            properties: {
+              id: l.id,
+              title: l.title,
+              area: l.area,
+              city: l.city,
+              annualRent: l.annualRent,
+              formattedRent: formatNaira(l.annualRent),
+              status: l.status,
+              iconId,
+              isSelected: l.id === selectedId,
+            },
+          }
+        }),
+    }
+  }, [listings, selectedId])
+
   // Initialize Mapbox map
   useEffect(() => {
     if (!mapContainerRef.current) return
@@ -81,37 +122,127 @@ export default function MapView({
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: STYLES[mapStyle],
-      center: [center[1], center[0]], // [lng, lat] for Mapbox
+      center: [center[1], center[0]],
       zoom,
       attributionControl: false,
       trackResize: true,
-      fadeDuration: 0, // Instant vector tile rendering with 0 fade delay
+      fadeDuration: 0,
     })
 
-    // Navigation Controls (zoom + compass)
     map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right')
 
-    // Dynamic zoom-based pin scaling function:
-    // Keeps pin needle anchored to real coordinates while adjusting size subtly with zoom level
-    const updatePinZoomScale = () => {
-      const currentZoom = map.getZoom()
-      // Smooth scaling: from 0.8 at distant zoom (z<=11) up to 1.15 at street close-up (z>=16)
-      const scale = Math.min(Math.max(0.75 + (currentZoom - 10) * 0.08, 0.75), 1.25)
-      if (mapContainerRef.current) {
-        mapContainerRef.current.style.setProperty('--pin-zoom-scale', scale.toFixed(2))
-      }
-    }
+    map.on('load', async () => {
+      // 1. Register high-DPI vector icons in Mapbox WebGL context
+      const iconTypes: Array<{ id: string; state: PinState; featured: boolean }> = [
+        { id: 'pin-available', state: 'AVAILABLE', featured: false },
+        { id: 'pin-available-featured', state: 'AVAILABLE', featured: true },
+        { id: 'pin-coming_soon', state: 'COMING_SOON', featured: false },
+        { id: 'pin-coming_soon-featured', state: 'COMING_SOON', featured: true },
+        { id: 'pin-unavailable', state: 'UNAVAILABLE', featured: false },
+        { id: 'pin-unavailable-featured', state: 'UNAVAILABLE', featured: true },
+      ]
 
-    // Automatically trigger resize and initial scale on load
-    map.on('load', () => {
+      await Promise.all(
+        iconTypes.map(({ id, state, featured }) =>
+          loadSvgImage(map, id, generateStarHouseSvg(state, featured))
+        )
+      )
+
+      // 2. Add GeoJSON Source
+      if (!map.getSource('listings-source')) {
+        map.addSource('listings-source', {
+          type: 'geojson',
+          data: geojson,
+        })
+      }
+
+      // 3. Add Native Symbol Layer with zoom-based size interpolation
+      if (!map.getLayer('listings-pins-layer')) {
+        map.addLayer({
+          id: 'listings-pins-layer',
+          type: 'symbol',
+          source: 'listings-source',
+          layout: {
+            'icon-image': ['get', 'iconId'],
+            // Needle point anchors exactly at the bottom tip (0 drift across all zoom levels)
+            'icon-anchor': 'bottom',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+            // Zoom interpolation: smooth scale scaling with zoom
+            'icon-size': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              9,
+              0.55,
+              12,
+              0.75,
+              14,
+              0.95,
+              17,
+              1.25,
+            ],
+          },
+        })
+      }
+
+      setMapLoaded(true)
       map.resize()
-      updatePinZoomScale()
     })
 
-    // Listen to zoom events to seamlessly scale pin markers
-    map.on('zoom', updatePinZoomScale)
+    // Click on pin feature
+    map.on('click', 'listings-pins-layer', (e) => {
+      if (e.features && e.features[0]) {
+        const id = e.features[0].properties?.id
+        if (id) {
+          onSelect(id)
+          setCardDismissed(false)
+        }
+      }
+    })
 
-    // Observe container size changes (e.g. split view toggles, sidebar collapses, screen rotations)
+    // Cursor pointer on hover
+    map.on('mouseenter', 'listings-pins-layer', (e) => {
+      map.getCanvas().style.cursor = 'pointer'
+      if (e.features && e.features[0]) {
+        const props = e.features[0].properties
+        const coords = (e.features[0].geometry as any).coordinates.slice()
+
+        if (popupRef.current) popupRef.current.remove()
+
+        const html = `
+          <div style="font-family: inherit; padding: 4px 6px; min-width: 160px;">
+            <div style="font-weight: 700; font-size: 11.5px; color: #1e293b; line-height: 1.3;">
+              ${props?.title}
+            </div>
+            <div style="font-size: 10px; color: #64748b; margin-top: 1px;">
+              ${props?.area}, ${props?.city}
+            </div>
+            <div style="font-weight: 800; font-size: 12px; color: #78350F; margin-top: 4px;">
+              ${props?.formattedRent}/yr
+            </div>
+          </div>
+        `
+
+        popupRef.current = new mapboxgl.Popup({
+          offset: 15,
+          closeButton: false,
+          className: 'mapstar-micro-popup',
+        })
+          .setLngLat(coords)
+          .setHTML(html)
+          .addTo(map)
+      }
+    })
+
+    map.on('mouseleave', 'listings-pins-layer', () => {
+      map.getCanvas().style.cursor = ''
+      if (popupRef.current) {
+        popupRef.current.remove()
+        popupRef.current = null
+      }
+    })
+
     const resizeObserver = new ResizeObserver(() => {
       if (mapRef.current) {
         mapRef.current.resize()
@@ -122,18 +253,79 @@ export default function MapView({
     mapRef.current = map
 
     return () => {
-      map.off('zoom', updatePinZoomScale)
       resizeObserver.disconnect()
       map.remove()
     }
   }, [])
 
-  // Switch Mapbox layer styles
+  // Switch Mapbox layer styles and rebind source/layer
   useEffect(() => {
-    if (mapRef.current) {
-      mapRef.current.setStyle(STYLES[mapStyle])
-    }
+    if (!mapRef.current || !mapLoaded) return
+
+    mapRef.current.setStyle(STYLES[mapStyle])
+
+    mapRef.current.once('style.load', async () => {
+      const map = mapRef.current!
+
+      const iconTypes: Array<{ id: string; state: PinState; featured: boolean }> = [
+        { id: 'pin-available', state: 'AVAILABLE', featured: false },
+        { id: 'pin-available-featured', state: 'AVAILABLE', featured: true },
+        { id: 'pin-coming_soon', state: 'COMING_SOON', featured: false },
+        { id: 'pin-coming_soon-featured', state: 'COMING_SOON', featured: true },
+        { id: 'pin-unavailable', state: 'UNAVAILABLE', featured: false },
+        { id: 'pin-unavailable-featured', state: 'UNAVAILABLE', featured: true },
+      ]
+
+      await Promise.all(
+        iconTypes.map(({ id, state, featured }) =>
+          loadSvgImage(map, id, generateStarHouseSvg(state, featured))
+        )
+      )
+
+      if (!map.getSource('listings-source')) {
+        map.addSource('listings-source', {
+          type: 'geojson',
+          data: geojson,
+        })
+      }
+
+      if (!map.getLayer('listings-pins-layer')) {
+        map.addLayer({
+          id: 'listings-pins-layer',
+          type: 'symbol',
+          source: 'listings-source',
+          layout: {
+            'icon-image': ['get', 'iconId'],
+            'icon-anchor': 'bottom',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+            'icon-size': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              9,
+              0.55,
+              12,
+              0.75,
+              14,
+              0.95,
+              17,
+              1.25,
+            ],
+          },
+        })
+      }
+    })
   }, [mapStyle])
+
+  // Update GeoJSON source whenever listings or selectedId change
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded) return
+    const source = mapRef.current.getSource('listings-source') as mapboxgl.GeoJSONSource
+    if (source) {
+      source.setData(geojson)
+    }
+  }, [geojson, mapLoaded])
 
   // Fly to selected property or pan to center
   useEffect(() => {
@@ -160,63 +352,6 @@ export default function MapView({
     })
   }, [selectedId, center, listings, zoom])
 
-  // Render & Update Custom Star + Listing Sign Pins on Mapbox canvas
-  useEffect(() => {
-    if (!mapRef.current) return
-
-    // Clear previous markers
-    markersRef.current.forEach((m) => m.remove())
-    markersRef.current = []
-
-    listings.forEach((listing) => {
-      if (!listing.latitude || !listing.longitude) return
-
-      const isSelected = selectedId === listing.id
-      const pinEl = buildStarPinElement({
-        status: listing.status,
-        annualRent: listing.annualRent,
-        featured: listing.featured,
-        selected: isSelected,
-        title: listing.title,
-      })
-
-      // Popup for quick micro-inspection
-      const popupHtml = `
-        <div style="font-family: inherit; padding: 4px 6px; min-width: 170px;">
-          <div style="font-weight: 700; font-size: 12px; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            ${listing.title}
-          </div>
-          <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
-            ${listing.area}, ${listing.city}
-          </div>
-          <div style="margin-top: 6px; display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-weight: 800; font-size: 12px; color: #78350F;">
-              ${formatNaira(listing.annualRent)}/yr
-            </span>
-          </div>
-        </div>
-      `
-
-      const popup = new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML(popupHtml)
-
-      pinEl.addEventListener('click', (e) => {
-        e.stopPropagation()
-        onSelect(listing.id)
-        setCardDismissed(false)
-      })
-
-      const marker = new mapboxgl.Marker({
-        element: pinEl,
-        anchor: 'bottom',
-      })
-        .setLngLat([listing.longitude, listing.latitude])
-        .setPopup(popup)
-        .addTo(mapRef.current!)
-
-      markersRef.current.push(marker)
-    })
-  }, [listings, selectedId, onSelect])
-
   return (
     <div className="relative h-full w-full flex flex-col bg-[#FAF7F2] dark:bg-[#120C08] overflow-hidden select-none">
       {/* =========================================================================
@@ -239,7 +374,7 @@ export default function MapView({
           </div>
         </div>
 
-        {/* Layer Switcher (Streets / Satellite / Dark) */}
+        {/* Layer Switcher (Vector Map vs Satellite) */}
         <div className="flex items-center gap-1 bg-[#FAF7F2] dark:bg-[#120C08] p-1 rounded-xl border border-[#E5DAC8] dark:border-[#382618]">
           <button
             onClick={() => setMapStyle('streets')}

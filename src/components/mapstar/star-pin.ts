@@ -17,175 +17,98 @@ export function getPinState(status: string): PinState {
   }
 }
 
-export const PIN_THEMES: Record<
-  PinState,
-  {
-    bgGradient: string
-    border: string
-    glow: string
-    starFill: string
-    buildingColor: string
-    pulseColor: string
-    label: string
-  }
-> = {
+export const PIN_COLORS = {
   AVAILABLE: {
-    bgGradient: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-    border: '#047857',
-    glow: 'rgba(16, 185, 129, 0.55)',
-    starFill: '#FFFFFF',
-    buildingColor: '#064E3B',
-    pulseColor: '#34D399',
-    label: 'Available',
+    primary: '#10B981',
+    dark: '#047857',
+    houseFill: '#064E3B',
+    starFill: '#FBBF24', // golden star or crisp white
+    halo: '#34D399',
   },
   COMING_SOON: {
-    bgGradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
-    border: '#B45309',
-    glow: 'rgba(245, 158, 11, 0.55)',
+    primary: '#F59E0B',
+    dark: '#B45309',
+    houseFill: '#78350F',
     starFill: '#FFFFFF',
-    buildingColor: '#78350F',
-    pulseColor: '#FBBF24',
-    label: 'Coming Soon',
+    halo: '#FBBF24',
   },
   UNAVAILABLE: {
-    bgGradient: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
-    border: '#991B1B',
-    glow: 'rgba(239, 68, 68, 0.55)',
+    primary: '#EF4444',
+    dark: '#991B1B',
+    houseFill: '#7F1D1D',
     starFill: '#FFFFFF',
-    buildingColor: '#7F1D1D',
-    pulseColor: '#F87171',
-    label: 'Unavailable',
+    halo: '#F87171',
   },
 }
 
 /**
- * Creates a circular Mapstar Star + Building Pin Element.
+ * Generates an SVG Data URI / Image for Mapbox Native Symbol Layer.
  * Specifications:
- * 1. Fixed Real-World Positioning: Anchors precisely at [longitude, latitude] by its bottom needle point.
- * 2. Round Design: Modern circular disc badge with luminous outer ring.
- * 3. Inscribed Star: A crisp white 5-point star inscribed in the circle.
- * 4. Transparent Buildings Showing Through: Architectural residential building silhouette
- *    elegantly visible within the star geometry.
- * 5. Zoom-Adaptive Scale: Adjusts size subtly as user zooms (scale: var(--pin-zoom-scale, 1))
- *    while the transform-origin: bottom center ensures the pin tip remains 100% stuck to the exact map point.
+ * - Round circular outer badge (radius ~22)
+ * - Simple, clean geometric house shape that touches the inner edges of the circle:
+ *   - Roof apex touches upper arc
+ *   - Eaves touch left & right arcs
+ *   - Base touches lower arc
+ * - Inscribed Mapstar Star neatly positioned inside the house body
+ * - Needle pointer at bottom anchored exactly at the contact point (tip coordinate)
  */
-export function buildStarPinElement({
-  status,
-  featured = false,
-  selected = false,
-  title = '',
-}: {
-  status: string
-  annualRent?: number
-  featured?: boolean
-  selected?: boolean
-  title?: string
-}): HTMLElement {
-  const pinState = getPinState(status)
-  const theme = PIN_THEMES[pinState]
+export function generateStarHouseSvg(state: PinState, featured = false): string {
+  const colors = PIN_COLORS[state]
+  const strokeHighlight = featured ? '#FDE047' : '#FFFFFF'
+  const strokeWidth = featured ? 2.5 : 1.8
 
-  const container = document.createElement('div')
-  container.className = 'mapstar-star-listing-pin'
-  
-  // Notice: transform-origin: bottom center ensures scaling in/out occurs around the exact anchor point!
-  container.style.cssText = `
-    position: relative;
-    cursor: pointer;
-    user-select: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    transform-origin: bottom center;
-    transform: scale(calc(var(--pin-zoom-scale, 1) * ${selected ? 1.25 : 1}));
-    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-    ${selected ? 'z-index: 9999;' : 'z-index: 10;'}
-  `
+  return `<svg width="48" height="58" viewBox="0 0 48 58" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Drop Shadow for crisp 3D popping on vector tiles -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.38"/>
+    </filter>
+    <linearGradient id="circleGrad-${state}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${colors.primary}"/>
+      <stop offset="100%" stop-color="${colors.dark}"/>
+    </linearGradient>
+  </defs>
 
-  const ringStyle = featured
-    ? `box-shadow: 0 0 0 3px #FDE047, 0 0 16px rgba(250, 204, 21, 0.9), 0 4px 14px ${theme.glow};`
-    : selected
-    ? `box-shadow: 0 0 0 3px #FFFFFF, 0 0 20px ${theme.pulseColor}, 0 6px 18px rgba(0,0,0,0.5);`
-    : `box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35), 0 1px 4px ${theme.glow};`
+  <!-- Pin Group with Shadow -->
+  <g filter="url(#shadow)">
+    <!-- Bottom Needle Pointer (Anchors with 100% precision at (24, 56)) -->
+    <path d="M 19 44 L 24 55 L 29 44 Z" fill="${colors.dark}" stroke="${strokeHighlight}" stroke-width="0.8" stroke-linejoin="round"/>
 
-  // Round Disc containing:
-  // - Outer round badge in theme gradient
-  // - 5-point Inscribed Star with subtle inner depth
-  // - Building silhouette showing through inside the star
-  container.innerHTML = `
-    <!-- Round Head Disc -->
-    <div style="
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: ${theme.bgGradient};
-      border: 2px solid ${theme.border};
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      ${ringStyle}
-      transition: all 0.2s ease;
-      position: relative;
-      overflow: hidden;
-    ">
-      <svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <!-- Star Clip Path so the buildings show through the star -->
-          <clipPath id="star-clip-${pinState}">
-            <path d="M16 2 L20.2 11.2 L30.2 12.1 L22.8 18.7 L24.9 28.5 L16 23.3 L7.1 28.5 L9.2 18.7 L1.8 12.1 L11.8 11.2 Z" />
-          </clipPath>
-        </defs>
+    <!-- Round Outer Badge (Center 24, 24, Radius 21) -->
+    <circle cx="24" cy="24" r="21" fill="url(#circleGrad-${state})" stroke="${strokeHighlight}" stroke-width="${strokeWidth}"/>
 
-        <!-- Star Base Outline / Fill -->
-        <path
-          d="M16 2 L20.2 11.2 L30.2 12.1 L22.8 18.7 L24.9 28.5 L16 23.3 L7.1 28.5 L9.2 18.7 L1.8 12.1 L11.8 11.2 Z"
-          fill="#FFFFFF"
-          stroke="rgba(0,0,0,0.12)"
-          stroke-width="0.8"
-        />
+    <!-- Subtle inner glass highlight ring -->
+    <circle cx="24" cy="24" r="19.5" fill="none" stroke="#FFFFFF" stroke-width="0.75" opacity="0.4"/>
 
-        <!-- Buildings Showing Through Inside the Star Silhouette -->
-        <g clip-path="url(#star-clip-${pinState})">
-          <!-- Back taller building -->
-          <rect x="15" y="11" width="7" height="18" fill="${theme.buildingColor}" opacity="0.9" />
-          <line x1="17" y1="13" x2="17" y2="24" stroke="#FFFFFF" stroke-width="0.75" opacity="0.7" stroke-dasharray="1 1.5" />
-          <line x1="20" y1="13" x2="20" y2="24" stroke="#FFFFFF" stroke-width="0.75" opacity="0.7" stroke-dasharray="1 1.5" />
+    <!-- Simple, Clean House Shape touching the circle edges:
+         Apex at (24, 7), Eaves at (7, 21) and (41, 21), Base at (10, 39) to (38, 39) -->
+    <!-- Roof -->
+    <polygon points="24,6 42,21 6,21" fill="${colors.houseFill}" opacity="0.95"/>
+    <polyline points="6,21 24,6 42,21" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-linejoin="round" opacity="0.85"/>
 
-          <!-- Main center residential lodge building -->
-          <rect x="10" y="14" width="8" height="15" fill="${theme.buildingColor}" opacity="0.96" />
-          <!-- Windows grid -->
-          <rect x="11.5" y="16" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
-          <rect x="14.5" y="16" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
-          <rect x="11.5" y="19" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
-          <rect x="14.5" y="19" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
-          <rect x="11.5" y="22" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
-          <rect x="14.5" y="22" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
+    <!-- House Body (touching lower circle bounds) -->
+    <polygon points="9,21 39,21 37,39 11,39" fill="${colors.houseFill}" opacity="0.95"/>
 
-          <!-- Entrance door -->
-          <rect x="13" y="25" width="2" height="4" fill="#FFFFFF" opacity="0.9" />
-        </g>
-      </svg>
-    </div>
+    <!-- Neatly Inscribed Mapstar 5-Point Star inside the house body/center:
+         Centered at (24, 27) with radius ~8.5 -->
+    <!-- Star Path coordinates centered at 24, 27 -->
+    <path d="M 24 18.5 
+             L 26.2 24.2 
+             L 32.3 24.6 
+             L 27.6 28.5 
+             L 29.1 34.5 
+             L 24 31.2 
+             L 18.9 34.5 
+             L 20.4 28.5 
+             L 15.7 24.6 
+             L 21.8 24.2 Z" 
+          fill="#FFFFFF" 
+          stroke="${colors.houseFill}" 
+          stroke-width="0.75" 
+          stroke-linejoin="round"/>
 
-    <!-- Signpost Pointer Tip (Anchors precisely to physical GPS coordinates) -->
-    <div style="
-      width: 0;
-      height: 0;
-      border-left: 5px solid transparent;
-      border-right: 5px solid transparent;
-      border-top: 7px solid ${theme.border};
-      margin-top: -2px;
-      filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
-    "></div>
-
-    <!-- Precise Contact Point Shadow (Zero height contact baseline) -->
-    <div style="
-      width: 4px;
-      height: 2px;
-      border-radius: 50%;
-      background: rgba(0,0,0,0.45);
-      margin-top: 0px;
-    "></div>
-  `
-
-  return container
+    <!-- Little cozy house door at the bottom of the star -->
+    <rect x="22.5" y="34" width="3" height="5" rx="0.75" fill="#FFFFFF" opacity="0.9"/>
+  </g>
+</svg>`
 }
