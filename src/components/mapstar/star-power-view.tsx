@@ -26,6 +26,8 @@ import {
   Server,
   Zap,
   LogIn,
+  MessageSquare,
+  Radio,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,7 +50,7 @@ interface StarPowerViewProps {
   onOpenListingDetail?: (id: string) => void
 }
 
-type StarPowerTab = 'users' | 'verifications' | 'listings' | 'database' | 'activity'
+type StarPowerTab = 'users' | 'verifications' | 'listings' | 'database' | 'chats' | 'activity'
 
 export default function StarPowerView({
   user,
@@ -86,6 +88,13 @@ export default function StarPowerView({
   const [wipingDatabase, setWipingDatabase] = useState(false)
   const [confirmWipeModal, setConfirmWipeModal] = useState(false)
 
+  // Chat storage & space management state
+  const [chatStats, setChatStats] = useState<any>(null)
+  const [loadingChatStats, setLoadingChatStats] = useState(false)
+  const [purgingChat, setPurgingChat] = useState(false)
+  const [confirmPurgeAllChats, setConfirmPurgeAllChats] = useState(false)
+  const [confirmPurgeChannelId, setConfirmPurgeChannelId] = useState<string | null>(null)
+
   // Fetch initial data when user is ADMIN
   useEffect(() => {
     if (user?.role === 'ADMIN') {
@@ -93,6 +102,7 @@ export default function StarPowerView({
       fetchUsers()
       fetchVerifications()
       fetchListings()
+      fetchChatStats()
     }
   }, [user?.role])
 
@@ -351,6 +361,83 @@ export default function StarPowerView({
     }
   }
 
+  // 5. Fetch Chat DB Metrics
+  async function fetchChatStats() {
+    setLoadingChatStats(true)
+    try {
+      const res = await fetch('/api/chat?stats=true')
+      if (res.ok) {
+        const data = await res.json()
+        setChatStats(data)
+      }
+    } catch {
+      // fallback
+    } finally {
+      setLoadingChatStats(false)
+    }
+  }
+
+  // Action: Purge messages older than N days to preserve database space
+  async function handlePurgeOldChats(days: number) {
+    setPurgingChat(true)
+    try {
+      const res = await fetch(`/api/chat?olderThanDays=${days}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || `Deleted messages older than ${days} days`)
+        fetchChatStats()
+      } else {
+        toast.error(data.error || 'Failed to delete old messages')
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error purging old messages')
+    } finally {
+      setPurgingChat(false)
+    }
+  }
+
+  // Action: Purge specific channel
+  async function handlePurgeChannel(channelId: string) {
+    setPurgingChat(true)
+    try {
+      const res = await fetch(`/api/chat?channelId=${encodeURIComponent(channelId)}&purge=true`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || `Channel ${channelId} purged`)
+        setConfirmPurgeChannelId(null)
+        fetchChatStats()
+      } else {
+        toast.error(data.error || 'Failed to purge channel')
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error purging channel')
+    } finally {
+      setPurgingChat(false)
+    }
+  }
+
+  // Action: Wipe all chats to preserve database space
+  async function handlePurgeAllChats() {
+    setPurgingChat(true)
+    try {
+      const res = await fetch('/api/chat?purge=true', { method: 'DELETE' })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || 'All chat messages wiped from database to preserve space.')
+        setConfirmPurgeAllChats(false)
+        fetchChatStats()
+      } else {
+        toast.error(data.error || 'Failed to wipe chat database')
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error wiping chat database')
+    } finally {
+      setPurgingChat(false)
+    }
+  }
+
   // Filtered users
   const filteredUsers = useMemo(() => {
     if (!userSearch.trim()) return usersList
@@ -449,6 +536,7 @@ export default function StarPowerView({
                 fetchDbStatus()
                 fetchUsers()
                 fetchListings()
+                fetchChatStats()
                 toast.success('Database state synchronized!')
               }}
               disabled={loadingDb || loadingUsers || loadingListings}
@@ -535,6 +623,26 @@ export default function StarPowerView({
           >
             <Database className="h-3.5 w-3.5 text-amber-400" />
             <span>Database Hub</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('chats')
+              fetchChatStats()
+            }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
+              activeTab === 'chats'
+                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <MessageSquare className="h-3.5 w-3.5 text-amber-400" />
+            <span>Chat Storage & Space</span>
+            {chatStats?.totalCount !== undefined && (
+              <Badge className="bg-slate-800 text-slate-300 text-[10px] ml-1">
+                {chatStats.totalCount} msgs
+              </Badge>
+            )}
           </button>
 
           <button
@@ -1209,6 +1317,159 @@ export default function StarPowerView({
           )}
 
           {/* =========================================================================
+              TAB: CHAT STORAGE & SPACE MANAGEMENT
+             ========================================================================= */}
+          {activeTab === 'chats' && (
+            <div className="space-y-5">
+              {/* Top Warning & Clear Database Chats Control */}
+              <div className="bg-gradient-to-r from-rose-950/30 via-slate-900 to-slate-900 border border-rose-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4 text-rose-400" />
+                    <h2 className="text-sm font-bold text-white">
+                      Preserve Database Space — Chat Storage Control
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xl">
+                    Admin can delete historical messages, purge inactive group/channel threads, or wipe chat history directly from Supabase PostgreSQL to free up database table space.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-slate-700 bg-slate-900 text-xs text-slate-300 hover:text-white cursor-pointer"
+                    onClick={() => handlePurgeOldChats(30)}
+                    disabled={purgingChat}
+                  >
+                    Delete &gt; 30 Days
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-slate-700 bg-slate-900 text-xs text-slate-300 hover:text-white cursor-pointer"
+                    onClick={() => handlePurgeOldChats(7)}
+                    disabled={purgingChat}
+                  >
+                    Delete &gt; 7 Days
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-8 px-3 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/30 cursor-pointer"
+                    onClick={() => setConfirmPurgeAllChats(true)}
+                    disabled={purgingChat}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Wipe All Chats
+                  </Button>
+                </div>
+              </div>
+
+              {/* Chat Storage Metric Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-[#090D18] border border-slate-800 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Total Chat Messages</span>
+                    <MessageSquare className="h-4 w-4 text-amber-400" />
+                  </div>
+                  <div className="text-2xl font-black text-white mt-2">
+                    {chatStats?.totalCount ?? 0}
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">Stored in Supabase Postgres</span>
+                </div>
+
+                <div className="bg-[#090D18] border border-slate-800 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Active Channels</span>
+                    <Radio className="h-4 w-4 text-yellow-400" />
+                  </div>
+                  <div className="text-2xl font-black text-white mt-2">
+                    {chatStats?.channelCount ?? 0}
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">World, Groups, DMs & Channels</span>
+                </div>
+
+                <div className="bg-[#090D18] border border-slate-800 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Oldest Message</span>
+                    <Clock className="h-4 w-4 text-emerald-400" />
+                  </div>
+                  <div className="text-sm font-bold text-white mt-2 truncate">
+                    {chatStats?.oldestCreatedAt
+                      ? new Date(chatStats.oldestCreatedAt).toLocaleDateString()
+                      : 'None'}
+                  </div>
+                  <span className="text-[10px] text-emerald-400 mt-1 block">Timestamp tracked</span>
+                </div>
+
+                <div className="bg-[#090D18] border border-slate-800 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Space Strategy</span>
+                    <Database className="h-4 w-4 text-[#E0904E]" />
+                  </div>
+                  <div className="text-sm font-bold text-[#E0904E] mt-2">Space Preserved</div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">On-demand table purge ready</span>
+                </div>
+              </div>
+
+              {/* Channels Breakdown & Direct Purging Table */}
+              <div className="bg-[#090D18] border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Database className="h-4 w-4 text-amber-400" />
+                    Channel Breakdown & Space Management
+                  </h3>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={fetchChatStats}
+                    disabled={loadingChatStats}
+                    className="h-7 text-xs text-slate-400 hover:text-white"
+                  >
+                    <RefreshCw className={`h-3 w-3 mr-1 ${loadingChatStats ? 'animate-spin' : ''}`} /> Refresh
+                  </Button>
+                </div>
+
+                <div className="divide-y divide-slate-800">
+                  {chatStats?.channels?.map((chan: any) => (
+                    <div key={chan.channelId} className="py-3 flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white font-mono truncate">
+                            #{chan.channelId}
+                          </span>
+                          <Badge className="bg-slate-800 text-slate-300 text-[10px]">
+                            {chan.count} {chan.count === 1 ? 'message' : 'messages'}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setConfirmPurgeChannelId(chan.channelId)}
+                        disabled={purgingChat}
+                        className="h-8 px-2.5 text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 text-xs cursor-pointer"
+                        title="Purge all messages in this channel"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Purge Channel
+                      </Button>
+                    </div>
+                  ))}
+
+                  {(!chatStats?.channels || chatStats.channels.length === 0) && (
+                    <div className="py-8 text-center text-slate-500 text-xs">
+                      No chat messages currently stored in the database. Storage space is optimal!
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================================
               TAB 4: AUDIT STREAM / LOGIN ACTIVITY
              ========================================================================= */}
           {activeTab === 'activity' && (
@@ -1397,6 +1658,90 @@ export default function StarPowerView({
               disabled={wipingDatabase}
             >
               {wipingDatabase ? 'Wiping Clean...' : 'Yes, Wipe Everything Clean'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog: Purge All Chat Messages (Preserve Space) */}
+      <Dialog
+        open={confirmPurgeAllChats}
+        onOpenChange={setConfirmPurgeAllChats}
+      >
+        <DialogContent className="max-w-md bg-[#090D18] border border-rose-500/40 text-slate-100 rounded-3xl p-6 shadow-2xl">
+          <DialogHeader>
+            <div className="h-12 w-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-3 mx-auto">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-center text-lg font-bold text-white">
+              Purge All Chat History?
+            </DialogTitle>
+            <DialogDescription className="text-center text-xs text-slate-400 mt-1.5 leading-relaxed">
+              This will permanently delete ALL messages across World Square, Groups, Channels, and DMs from Supabase PostgreSQL to immediately reclaim database table space.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 rounded-xl bg-rose-950/30 border border-rose-800/40 text-[11px] text-rose-300 my-2">
+            <strong>Space Preservation:</strong> Removes all {chatStats?.totalCount || 0} messages and resets table space.
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-slate-800 text-xs"
+              onClick={() => setConfirmPurgeAllChats(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="bg-rose-600 hover:bg-rose-500 text-xs font-bold shadow-md shadow-rose-600/30"
+              onClick={handlePurgeAllChats}
+              disabled={purgingChat}
+            >
+              {purgingChat ? 'Purging…' : 'Yes, Purge All Chats'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog: Purge Specific Channel */}
+      <Dialog
+        open={Boolean(confirmPurgeChannelId)}
+        onOpenChange={(open) => !open && setConfirmPurgeChannelId(null)}
+      >
+        <DialogContent className="max-w-md bg-[#090D18] border border-slate-800 text-slate-100 rounded-3xl p-6">
+          <DialogHeader>
+            <div className="h-12 w-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-3 mx-auto">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-center text-lg font-bold text-white">
+              Purge Channel #{confirmPurgeChannelId}?
+            </DialogTitle>
+            <DialogDescription className="text-center text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Permanently delete all messages in this channel from Supabase PostgreSQL to free up database storage.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center justify-end gap-2.5 mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-slate-800 text-xs"
+              onClick={() => setConfirmPurgeChannelId(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="bg-rose-600 hover:bg-rose-500 text-xs font-bold"
+              onClick={() => confirmPurgeChannelId && handlePurgeChannel(confirmPurgeChannelId)}
+              disabled={purgingChat}
+            >
+              {purgingChat ? 'Purging…' : 'Purge Channel'}
             </Button>
           </div>
         </DialogContent>

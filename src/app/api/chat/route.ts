@@ -6,12 +6,85 @@ import { getAdminSession } from '@/lib/admin-auth'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/chat?channelId=...
- * Fetch messages for a given channel from Supabase Postgres.
+ * GET /api/chat
+ * Query params:
+ * - channelId: Fetch messages for a channel (default: world-square)
+ * - stats=true: Fetch database chat space metrics (total messages, active channels)
+ * - action=channels: Fetch user-created groups and channels from metadata messages
  */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
+
+    // 1. Stats endpoint for Star Power database space management
+    if (searchParams.get('stats') === 'true') {
+      const adminSession = await getAdminSession()
+      const user = await getUserSession()
+      const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
+
+      const totalCount = await db.chatMessage.count()
+      const oldestMessage = await db.chatMessage.findFirst({
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      })
+
+      const channels = await db.chatMessage.groupBy({
+        by: ['channelId'],
+        _count: { id: true },
+      })
+
+      return NextResponse.json({
+        totalCount,
+        channelCount: channels.length,
+        channels: channels.map((c) => ({
+          channelId: c.channelId,
+          count: c._count.id,
+        })),
+        oldestCreatedAt: oldestMessage?.createdAt || null,
+        isAdmin,
+      })
+    }
+
+    // 2. Discover channels and groups dynamically from messages
+    if (searchParams.get('action') === 'channels') {
+      const metaMessages = await db.chatMessage.findMany({
+        where: {
+          content: { startsWith: '[CHANNEL_META:' },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          channelId: true,
+          content: true,
+          senderName: true,
+          createdAt: true,
+        },
+      })
+
+      const parsedChannels = metaMessages
+        .map((m) => {
+          try {
+            const match = m.content.match(/\[CHANNEL_META:(.*?)\]/)
+            if (match && match[1]) {
+              const meta = JSON.parse(match[1])
+              return {
+                id: m.channelId,
+                ...meta,
+                createdAt: m.createdAt,
+                creatorName: m.senderName,
+              }
+            }
+          } catch {
+            return null
+          }
+          return null
+        })
+        .filter(Boolean)
+
+      return NextResponse.json({ channels: parsedChannels })
+    }
+
+    // 3. Regular channel messages fetch
     const channelId = searchParams.get('channelId') || 'world-square'
 
     const messages = await db.chatMessage.findMany({
@@ -38,7 +111,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/chat
- * Post a new message to a channel in Supabase Postgres.
+ * Post a new message or register a new group/channel via metadata message.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -85,8 +158,12 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * DELETE /api/chat?id=... OR /api/chat?channelId=...&purge=true
- * Allows an ADMIN to permanently delete a single message or purge channel history from Supabase Postgres.
+ * DELETE /api/chat
+ * Query parameters:
+ * - id: Delete single message (Admin or message author)
+ * - channelId & purge=true: Purge all messages in a channel (Admin)
+ * - purge=true: Purge all chat messages in the database (Admin / Star Power)
+ * - olderThanDays=N: Delete messages older than N days to preserve database space (Admin / Star Power)
  */
 export async function DELETE(req: NextRequest) {
   try {
@@ -94,46 +171,81 @@ export async function DELETE(req: NextRequest) {
     const user = await getUserSession()
     const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
 
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Unauthorized: Admin privileges required to delete chat history.' }, { status: 403 })
-    }
-
     const { searchParams } = new URL(req.url)
     const messageId = searchParams.get('id')
     const purge = searchParams.get('purge') === 'true'
     const channelId = searchParams.get('channelId')
+    const olderThanDays = searchParams.get('olderThanDays')
 
-    if (purge && channelId) {
-      const result = await db.chatMessage.deleteMany({
-        where: { channelId },
+    // 1. Delete single message: allowed for message author OR Admin
+    if (messageId && !purge && !olderThanDays) {
+      const existing = await db.chatMessage.findUnique({
+        where: { id: messageId },
+        select: { id: true, senderId: true },
       })
-      return NextResponse.json({
-        success: true,
-        message: `Permanently deleted all ${result.count} messages from ${channelId}`,
-        deletedCount: result.count,
-      })
-    }
 
-    if (purge && !channelId) {
-      // Purge all channels completely
-      const result = await db.chatMessage.deleteMany({})
-      return NextResponse.json({
-        success: true,
-        message: `Permanently cleared all ${result.count} messages from database`,
-        deletedCount: result.count,
-      })
-    }
+      if (!existing) {
+        return NextResponse.json({ success: true, message: 'Message not found or already deleted.' })
+      }
 
-    if (messageId) {
+      if (!isAdmin && (!user || existing.senderId !== user.id)) {
+        return NextResponse.json({ error: 'Unauthorized: You can only delete your own messages.' }, { status: 403 })
+      }
+
       await db.chatMessage.delete({
         where: { id: messageId },
       })
       return NextResponse.json({ success: true, message: 'Message permanently deleted.' })
     }
 
-    return NextResponse.json({ error: 'Specify an id to delete or channelId with purge=true' }, { status: 400 })
+    // 2. Star Power (Admin) features to preserve database space
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Unauthorized: Star Power (Admin) required to purge chat storage.' }, { status: 403 })
+    }
+
+    // Purge messages older than N days
+    if (olderThanDays) {
+      const days = parseInt(olderThanDays, 10)
+      if (!isNaN(days) && days > 0) {
+        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+        const result = await db.chatMessage.deleteMany({
+          where: {
+            createdAt: { lt: cutoff },
+          },
+        })
+        return NextResponse.json({
+          success: true,
+          message: `Cleared ${result.count} messages older than ${days} days to preserve database space.`,
+          deletedCount: result.count,
+        })
+      }
+    }
+
+    // Purge specific channel
+    if (purge && channelId) {
+      const result = await db.chatMessage.deleteMany({
+        where: { channelId },
+      })
+      return NextResponse.json({
+        success: true,
+        message: `Permanently deleted all ${result.count} messages from ${channelId}.`,
+        deletedCount: result.count,
+      })
+    }
+
+    // Purge all chat messages in entire database
+    if (purge && !channelId) {
+      const result = await db.chatMessage.deleteMany({})
+      return NextResponse.json({
+        success: true,
+        message: `Permanently wiped all ${result.count} chat messages from database.`,
+        deletedCount: result.count,
+      })
+    }
+
+    return NextResponse.json({ error: 'Invalid parameters for chat deletion.' }, { status: 400 })
   } catch (error: any) {
     console.error('[API /api/chat DELETE error]', error)
-    return NextResponse.json({ error: error.message || 'Failed to delete chat message' }, { status: 500 })
+    return NextResponse.json({ error: error.message || 'Failed to delete chat data' }, { status: 500 })
   }
 }
