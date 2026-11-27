@@ -51,13 +51,17 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // 2. Discover channels and groups dynamically from messages
+    // 2. Discover public channels and groups dynamically from messages and directory
     if (searchParams.get('action') === 'channels') {
       const metaMessages = await db.chatMessage.findMany({
         where: {
-          content: { startsWith: '[CHANNEL_META:' },
+          OR: [
+            { content: { contains: '[CHANNEL_META:' } },
+            { channelId: 'channels-directory' },
+          ],
         },
         orderBy: { createdAt: 'desc' },
+        take: 100,
         select: {
           id: true,
           channelId: true,
@@ -67,30 +71,194 @@ export async function GET(req: NextRequest) {
         },
       })
 
-      const parsedChannels = metaMessages
-        .map((m) => {
-          try {
-            const match = m.content.match(/\[CHANNEL_META:(.*?)\]/)
-            if (match && match[1]) {
-              const meta = JSON.parse(match[1])
-              return {
-                id: m.channelId,
+      const channelCounts = await db.chatMessage.groupBy({
+        by: ['channelId'],
+        _count: { id: true },
+      }).catch(() => [])
+
+      const countMap = new Map<string, number>()
+      channelCounts.forEach((c) => countMap.set(c.channelId, c._count.id))
+
+      const channelsMap = new Map<string, any>()
+
+      metaMessages.forEach((m) => {
+        try {
+          const match = m.content.match(/\[CHANNEL_META:(.*?)\]/)
+          if (match && match[1]) {
+            const meta = JSON.parse(match[1])
+            const targetChannelId = meta.channelId || m.channelId
+            if (targetChannelId && !channelsMap.has(targetChannelId) && targetChannelId !== 'channels-directory') {
+              const msgCount = countMap.get(targetChannelId) || 1
+              channelsMap.set(targetChannelId, {
+                id: targetChannelId,
                 ...meta,
+                isPublic: true,
                 createdAt: m.createdAt,
                 creatorName: m.senderName,
-              }
+                messageCount: msgCount,
+                membersCount: Math.max(1, msgCount),
+                subscribers: `${Math.max(1, msgCount)} ${msgCount === 1 ? 'member' : 'members'}`,
+              })
             }
-          } catch {
-            return null
           }
-          return null
-        })
-        .filter(Boolean)
+        } catch {
+          // ignore malformed
+        }
+      })
 
-      return NextResponse.json({ channels: parsedChannels })
+      const allPublicChannels = Array.from(channelsMap.values())
+      return NextResponse.json({
+        channels: allPublicChannels,
+        groups: allPublicChannels.filter((c) => c.type === 'group'),
+        broadcasts: allPublicChannels.filter((c) => c.type === 'channel'),
+      })
     }
 
-    // 3. Discover all DMs for Admin oversight
+    // 3. Search real existing registered accounts to direct message (DM)
+    if (searchParams.get('action') === 'search-users') {
+      let currentUser = null
+      try { currentUser = await getUserSession() } catch {}
+      const currentUserId = currentUser?.id
+      const q = (searchParams.get('q') || '').trim()
+
+      const where: any = {}
+      if (currentUserId) {
+        where.id = { not: currentUserId }
+      }
+      if (q) {
+        where.OR = [
+          { fullName: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { phone: { contains: q } },
+        ]
+      }
+
+      let users: any[] = []
+      try {
+        users = await db.user.findMany({
+          where,
+          take: 30,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+            role: true,
+            avatarUrl: true,
+            ninVerified: true,
+            bvnVerified: true,
+            createdAt: true,
+          },
+        })
+      } catch (dbErr) {
+        console.warn('[API /api/chat search-users] Prisma error, trying REST fallback', dbErr)
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        if (supabaseUrl && apiKey) {
+          const filter = q ? `&or=(fullName.ilike.*${encodeURIComponent(q)}*,email.ilike.*${encodeURIComponent(q)}*,phone.ilike.*${encodeURIComponent(q)}*)` : ''
+          const res = await fetch(`${supabaseUrl}/rest/v1/User?select=id,fullName,email,phone,role,avatarUrl,ninVerified,bvnVerified,createdAt${filter}&limit=30`, {
+            headers: { apikey: apiKey, Authorization: `Bearer ${apiKey}` },
+          })
+          if (res.ok) {
+            const data = await res.json()
+            users = currentUserId ? data.filter((u: any) => u.id !== currentUserId) : data
+          }
+        }
+      }
+
+      return NextResponse.json({ users })
+    }
+
+    // 4. Discover logged-in user's direct messages (DMs) with other real accounts
+    if (searchParams.get('action') === 'my-dms') {
+      let currentUser = null
+      try { currentUser = await getUserSession() } catch {}
+      if (!currentUser) {
+        return NextResponse.json({ dms: [] })
+      }
+
+      try {
+        const dmMessages = await db.chatMessage.findMany({
+          where: {
+            channelId: { startsWith: 'dm-', contains: currentUser.id },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 400,
+          select: {
+            id: true,
+            channelId: true,
+            senderId: true,
+            senderName: true,
+            senderRole: true,
+            content: true,
+            createdAt: true,
+          },
+        })
+
+        const channelMap = new Map<string, any>()
+        const otherUserIds = new Set<string>()
+
+        for (const msg of dmMessages) {
+          if (!channelMap.has(msg.channelId)) {
+            const clean = msg.channelId.replace('dm-', '')
+            const parts = clean.includes('__') ? clean.split('__') : clean.split('-')
+            const otherId = parts.find((p) => p !== currentUser.id) || (parts[0] === currentUser.id ? parts[1] : parts[0])
+            if (otherId) otherUserIds.add(otherId)
+
+            channelMap.set(msg.channelId, {
+              channelId: msg.channelId,
+              otherUserId: otherId,
+              latestMessage: msg,
+            })
+          }
+        }
+
+        const otherUsers = otherUserIds.size > 0
+          ? await db.user.findMany({
+              where: { id: { in: Array.from(otherUserIds) } },
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phone: true,
+                role: true,
+                avatarUrl: true,
+                ninVerified: true,
+                bvnVerified: true,
+              },
+            })
+          : []
+
+        const userMap = new Map(otherUsers.map((u) => [u.id, u]))
+
+        const myDms = Array.from(channelMap.values()).map((item) => {
+          const u = item.otherUserId ? userMap.get(item.otherUserId) : null
+          const latest = item.latestMessage
+          return {
+            id: item.channelId,
+            channelId: item.channelId,
+            otherUserId: item.otherUserId,
+            name: u?.fullName || u?.email || (latest.senderId !== currentUser.id ? latest.senderName : 'User'),
+            email: u?.email,
+            phone: u?.phone || undefined,
+            role: u?.role || latest.senderRole || 'TENANT',
+            avatarUrl: u?.avatarUrl,
+            verified: Boolean(u?.ninVerified || u?.bvnVerified),
+            lastMessage: latest.content,
+            lastTime: latest.createdAt,
+            unread: latest.senderId !== currentUser.id,
+          }
+        })
+
+        return NextResponse.json({ dms: myDms })
+      } catch (err: any) {
+        console.error('[API /api/chat my-dms error]', err)
+        return NextResponse.json({ dms: [] })
+      }
+    }
+
+    // 5. Discover all DMs for Admin oversight
     if (searchParams.get('action') === 'dms') {
       let adminSession = null
       let user = null
@@ -175,7 +343,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { channelId, content } = body
+    const { channelId, content, meta } = body
 
     if (!channelId || typeof channelId !== 'string') {
       return NextResponse.json({ error: 'Channel ID is required' }, { status: 400 })
@@ -183,6 +351,23 @@ export async function POST(req: NextRequest) {
 
     if (!content || typeof content !== 'string' || !content.trim()) {
       return NextResponse.json({ error: 'Message content cannot be empty' }, { status: 400 })
+    }
+
+    // If metadata was provided for a new public group or channel, index it into the channels-directory
+    if (meta && typeof meta === 'object') {
+      try {
+        await db.chatMessage.create({
+          data: {
+            channelId: 'channels-directory',
+            senderId: user.id,
+            senderName: user.fullName || user.email,
+            senderRole: user.role,
+            content: `[CHANNEL_META:${JSON.stringify({ ...meta, channelId, isPublic: true })}]`,
+          },
+        })
+      } catch (metaErr) {
+        console.warn('[API /api/chat] Failed to index channel metadata in directory:', metaErr)
+      }
     }
 
     const message = await db.chatMessage.create({

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Users,
   MessageSquare,
@@ -25,6 +25,8 @@ import {
   Database,
   CheckCircle2,
   Lock,
+  User,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -136,9 +138,11 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
   const [newChannelDesc, setNewChannelDesc] = useState('')
 
   const [createDMOpen, setCreateDMOpen] = useState(false)
-  const [newDMName, setNewDMName] = useState('')
-  const [newDMRole, setNewDMRole] = useState<'LANDLORD' | 'AGENT' | 'TENANT'>('LANDLORD')
-  const [newDMPhone, setNewDMPhone] = useState('')
+  const [searchUserQuery, setSearchUserQuery] = useState('')
+  const [userSearchResults, setUserSearchResults] = useState<any[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [refreshingDms, setRefreshingDms] = useState(false)
+  const [refreshingChannels, setRefreshingChannels] = useState(false)
 
   // Star Power / Admin cleanup modal state
   const [starPowerCleanOpen, setStarPowerCleanOpen] = useState(false)
@@ -147,72 +151,119 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isAdmin = user?.role === 'ADMIN'
 
-  // Load created groups, channels, and DMs from localStorage & backend on mount
-  useEffect(() => {
+  // Fetch real users registered on Mapstar to start direct messages
+  const fetchUsers = useCallback(async (q: string = '') => {
+    setLoadingUsers(true)
     try {
-      const savedGroups = localStorage.getItem('mapstar_user_groups')
-      if (savedGroups) setGroups(JSON.parse(savedGroups))
-
-      const savedChannels = localStorage.getItem('mapstar_user_channels')
-      if (savedChannels) setChannels(JSON.parse(savedChannels))
-
-      const savedDms = localStorage.getItem('mapstar_user_dms')
-      if (savedDms) setDms(JSON.parse(savedDms))
-    } catch {
-      // fallback
+      const res = await fetch(`/api/chat?action=search-users&q=${encodeURIComponent(q)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setUserSearchResults(data.users || [])
+      }
+    } catch (err) {
+      console.warn('Failed to search users:', err)
+    } finally {
+      setLoadingUsers(false)
     }
+  }, [])
 
-    // Also fetch any dynamic channels registered on the server
-    fetch('/api/chat?action=channels')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.channels && data.channels.length > 0) {
+  // Fetch user's real DMs from Supabase PostgreSQL
+  const fetchMyDMs = useCallback(async () => {
+    if (!user) return
+    setRefreshingDms(true)
+    try {
+      const res = await fetch('/api/chat?action=my-dms')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.dms && Array.isArray(data.dms)) {
+          setDms((prev) => {
+            const map = new Map<string, UserDM>()
+            data.dms.forEach((d: any) => {
+              map.set(d.channelId, {
+                id: d.channelId,
+                name: d.name,
+                role: d.role,
+                channelId: d.channelId,
+                phone: d.phone,
+                verified: d.verified,
+                lastMessage: d.lastMessage,
+                lastTime: d.lastTime ? new Date(d.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active',
+              })
+            })
+            prev.forEach((d) => {
+              if (!map.has(d.channelId)) map.set(d.channelId, d)
+            })
+            return Array.from(map.values())
+          })
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch my DMs:', err)
+    } finally {
+      setRefreshingDms(false)
+    }
+  }, [user])
+
+  // Fetch public groups and channels from Supabase
+  const fetchPublicChannels = useCallback(async () => {
+    setRefreshingChannels(true)
+    try {
+      const res = await fetch('/api/chat?action=channels')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.channels && Array.isArray(data.channels)) {
           const remoteGroups: UserGroup[] = []
           const remoteChannels: UserChannel[] = []
-
           data.channels.forEach((item: any) => {
             if (item.type === 'group') {
               remoteGroups.push({
                 id: item.id,
                 name: item.name,
                 category: item.category || 'General',
-                desc: item.desc || '',
+                desc: item.desc || 'Public community group',
                 createdBy: item.creatorName,
                 createdAt: item.createdAt,
-                membersCount: 1,
+                membersCount: item.membersCount || 1,
               })
             } else if (item.type === 'channel') {
               remoteChannels.push({
                 id: item.id,
                 name: item.name,
-                badgeText: item.badgeText || 'OFFICIAL',
-                desc: item.desc || '',
+                badgeText: item.badgeText || 'BROADCAST',
+                desc: item.desc || 'Official broadcast channel',
                 createdBy: item.creatorName,
                 createdAt: item.createdAt,
-                subscribers: '1 subscriber',
+                subscribers: item.subscribers || '1 subscriber',
               })
             }
           })
-
-          if (remoteGroups.length > 0) {
-            setGroups((prev) => {
-              const ids = new Set(prev.map((g) => g.id))
-              const merged = [...prev, ...remoteGroups.filter((g) => !ids.has(g.id))]
-              return merged
-            })
-          }
-
-          if (remoteChannels.length > 0) {
-            setChannels((prev) => {
-              const ids = new Set(prev.map((c) => c.id))
-              const merged = [...prev, ...remoteChannels.filter((c) => !ids.has(c.id))]
-              return merged
-            })
-          }
+          if (remoteGroups.length > 0) setGroups(remoteGroups)
+          if (remoteChannels.length > 0) setChannels(remoteChannels)
         }
-      })
-      .catch(() => {})
+      }
+    } catch (err) {
+      console.warn('Failed to fetch public channels:', err)
+    } finally {
+      setRefreshingChannels(false)
+    }
   }, [])
+
+  // Initial load: Fetch public channels and user DMs
+  useEffect(() => {
+    fetchPublicChannels()
+    if (user) {
+      fetchMyDMs()
+    }
+  }, [fetchPublicChannels, fetchMyDMs, user])
+
+  // Refresh data when switching tabs
+  useEffect(() => {
+    if (activeTab === 'dms' && user) {
+      fetchMyDMs()
+    } else if (activeTab === 'groups' || activeTab === 'channels') {
+      fetchPublicChannels()
+    }
+  }, [activeTab, user, fetchMyDMs, fetchPublicChannels])
 
   // Persist created groups to localStorage
   useEffect(() => {
@@ -450,9 +501,16 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
     }
   }
 
-  // Create real group
+  // Create public community group
   async function handleCreateGroup(e: React.FormEvent) {
     e.preventDefault()
+    if (!user) {
+      setCreateGroupOpen(false)
+      onOpenAuth('login')
+      toast.info('Please sign in to create a public group')
+      return
+    }
+
     if (!newGroupName.trim()) {
       toast.error('Group name is required')
       return
@@ -463,7 +521,7 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
       id: groupId,
       name: newGroupName.trim(),
       category: newGroupCategory.trim() || 'General',
-      desc: newGroupDesc.trim() || 'Community property group',
+      desc: newGroupDesc.trim() || 'Public community group',
       createdBy: user?.fullName || user?.email || 'User',
       createdAt: new Date().toISOString(),
       membersCount: 1,
@@ -471,34 +529,45 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
 
     setGroups((prev) => [newGroup, ...prev])
     setActiveGroup(newGroup)
+    setCurrentChannelId(groupId)
     setActiveTab('groups')
     setCreateGroupOpen(false)
     setNewGroupName('')
     setNewGroupDesc('')
 
-    // Broadcast group creation via metadata message so other users see it
-    if (user) {
-      fetch('/api/chat', {
+    // Broadcast public group creation via metadata message to Supabase
+    try {
+      await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channelId: groupId,
-          content: `[CHANNEL_META:${JSON.stringify({
+          content: `[PUBLIC GROUP CREATED] Welcome to "${newGroup.name}"! This is a public group open to all students, tenants, landlords, and agents on Mapstar.`,
+          meta: {
             type: 'group',
             name: newGroup.name,
             category: newGroup.category,
             desc: newGroup.desc,
-          })}] Group "${newGroup.name}" created by ${user.fullName || user.email}`,
+            isPublic: true,
+          },
         }),
-      }).catch(() => {})
-    }
+      })
+      fetchPublicChannels()
+    } catch {}
 
-    toast.success(`Group "${newGroup.name}" created!`)
+    toast.success(`Public group "${newGroup.name}" created!`)
   }
 
-  // Create real channel
+  // Create public announcement channel
   async function handleCreateChannel(e: React.FormEvent) {
     e.preventDefault()
+    if (!user) {
+      setCreateChannelOpen(false)
+      onOpenAuth('login')
+      toast.info('Please sign in to create an announcement channel')
+      return
+    }
+
     if (!newChannelName.trim()) {
       toast.error('Channel name is required')
       return
@@ -517,59 +586,75 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
 
     setChannels((prev) => [newChan, ...prev])
     setActiveBroadcast(newChan)
+    setCurrentChannelId(channelId)
     setActiveTab('channels')
     setCreateChannelOpen(false)
     setNewChannelName('')
     setNewChannelDesc('')
 
-    // Broadcast channel creation via metadata message
-    if (user) {
-      fetch('/api/chat', {
+    // Broadcast channel creation via metadata message to Supabase
+    try {
+      await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channelId,
-          content: `[CHANNEL_META:${JSON.stringify({
+          content: `[PUBLIC BROADCAST CHANNEL] Welcome to "${newChan.name}"! Vacancy drops, inspection alerts, and verified notices will be broadcasted here.`,
+          meta: {
             type: 'channel',
             name: newChan.name,
             badgeText: newChan.badgeText,
             desc: newChan.desc,
-          })}] Channel "${newChan.name}" created by ${user.fullName || user.email}`,
+            isPublic: true,
+          },
         }),
-      }).catch(() => {})
-    }
+      })
+      fetchPublicChannels()
+    } catch {}
 
-    toast.success(`Channel "${newChan.name}" created!`)
+    toast.success(`Public channel "${newChan.name}" created!`)
   }
 
-  // Create real DM
-  function handleCreateDM(e: React.FormEvent) {
-    e.preventDefault()
-    if (!newDMName.trim()) {
-      toast.error('Recipient name or contact is required')
+  // Select an existing registered user from Supabase to start a real direct message
+  function handleSelectUserToDM(targetUser: any) {
+    if (!user) {
+      setCreateDMOpen(false)
+      onOpenAuth('login')
+      toast.info('Please sign in to direct message users')
       return
     }
 
-    const dmChannelId = `dm-${Date.now()}`
-    const newDM: UserDM = {
-      id: dmChannelId,
-      name: newDMName.trim(),
-      role: newDMRole,
-      channelId: dmChannelId,
-      phone: newDMPhone.trim() || undefined,
-      verified: newDMRole === 'LANDLORD' || newDMRole === 'AGENT',
-      lastMessage: 'Conversation started',
-      lastTime: 'Just now',
+    if (targetUser.id === user.id) {
+      toast.error('You cannot direct message yourself')
+      return
     }
 
-    setDms((prev) => [newDM, ...prev])
+    const ids = [user.id, targetUser.id].sort()
+    const dmChannelId = `dm-${ids[0]}__${ids[1]}`
+    const newDM: UserDM = {
+      id: dmChannelId,
+      name: targetUser.fullName || targetUser.email,
+      role: targetUser.role,
+      channelId: dmChannelId,
+      phone: targetUser.phone,
+      verified: Boolean(targetUser.ninVerified || targetUser.bvnVerified),
+      lastMessage: 'Tap to send a direct message',
+      lastTime: 'Active now',
+    }
+
+    setDms((prev) => {
+      const exists = prev.find((d) => d.channelId === dmChannelId)
+      if (!exists) return [newDM, ...prev]
+      return prev
+    })
+
     setActiveDM(newDM)
+    setCurrentChannelId(dmChannelId)
     setActiveTab('dms')
     setCreateDMOpen(false)
-    setNewDMName('')
-    setNewDMPhone('')
-
-    toast.success(`Started direct conversation with ${newDM.name}`)
+    setSearchUserQuery('')
+    fetchMessages(dmChannelId)
+    toast.success(`Direct chat opened with ${newDM.name}`)
   }
 
   // Admin: Fetch all platform DMs for surveillance and oversight
@@ -912,13 +997,40 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                 />
               </div>
 
+              {/* Refresh Sync Button */}
+              {activeTab === 'dms' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={fetchMyDMs}
+                  disabled={refreshingDms}
+                  className="h-8 w-8 p-0 border-[#E5DAC8] text-[#78350F] hover:bg-[#FAF7F2] shrink-0 cursor-pointer"
+                  title="Refresh direct messages"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${refreshingDms ? 'animate-spin' : ''}`} />
+                </Button>
+              )}
+
+              {(activeTab === 'groups' || activeTab === 'channels') && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={fetchPublicChannels}
+                  disabled={refreshingChannels}
+                  className="h-8 w-8 p-0 border-[#E5DAC8] text-[#78350F] hover:bg-[#FAF7F2] shrink-0 cursor-pointer"
+                  title="Refresh public channels and groups"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${refreshingChannels ? 'animate-spin' : ''}`} />
+                </Button>
+              )}
+
               {/* Action Button: Create Group / Channel / DM */}
               {activeTab === 'groups' && (
                 <Button
                   size="sm"
                   onClick={() => setCreateGroupOpen(true)}
                   className="h-8 px-2.5 bg-[#78350F] hover:bg-[#854D0E] text-white text-xs font-semibold rounded-lg shrink-0 cursor-pointer"
-                  title="Create a new group"
+                  title="Create a new public group"
                 >
                   <Plus className="h-3.5 w-3.5 mr-1" /> Group
                 </Button>
@@ -1042,7 +1154,12 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                       }`}
                     >
                       <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-[#271810] truncate">{grp.name}</h4>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-xs font-bold text-[#271810] truncate">{grp.name}</h4>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
+                            <Globe className="h-2.5 w-2.5" /> Public
+                          </span>
+                        </div>
                         <div className="flex items-center gap-1.5 text-[10px] text-[#78350F] mt-0.5">
                           <span className="font-semibold">{grp.category}</span>
                           <span className="text-[#7C6859]">· {grp.membersCount} members</span>
@@ -1089,10 +1206,13 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                       }`}
                     >
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <h4 className="text-xs font-bold text-[#271810] truncate">{chan.name}</h4>
                           <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-[#78350F]">
                             {chan.badgeText}
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
+                            <Globe className="h-2.5 w-2.5" /> Public
                           </span>
                         </div>
                         <p className="text-[10px] text-[#7C6859] mt-0.5">{chan.subscribers}</p>
@@ -1419,10 +1539,13 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-[#271810]">
               <Users className="h-5 w-5 text-[#78350F]" />
-              Create Campus or Community Group
+              Create Public Community Group
+              <Badge className="bg-emerald-100 text-emerald-800 text-[10px] border-emerald-300">
+                🌐 Public to Everyone
+              </Badge>
             </DialogTitle>
             <DialogDescription className="text-xs text-[#7C6859]">
-              Create a group for your campus, neighborhood, or roommate finding.
+              This group will be public and visible to all Mapstar users across campuses and lodges.
             </DialogDescription>
           </DialogHeader>
 
@@ -1489,10 +1612,13 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-[#271810]">
               <Radio className="h-5 w-5 text-[#78350F]" />
-              Create Announcement Channel
+              Create Public Announcement Channel
+              <Badge className="bg-emerald-100 text-emerald-800 text-[10px] border-emerald-300">
+                📢 Public to Everyone
+              </Badge>
             </DialogTitle>
             <DialogDescription className="text-xs text-[#7C6859]">
-              Broadcast verified property vacancies, landlord bulletins, and inspection tours.
+              Broadcast alerts, vacancies, and updates to all Mapstar members platform-wide.
             </DialogDescription>
           </DialogHeader>
 
@@ -1552,74 +1678,119 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
       </Dialog>
 
       {/* =========================================================================
-          MODAL 3: Start Direct Message (DM) Dialog
+          MODAL 3: Start Direct Message (DM) Dialog - Real Registered Users Only
          ========================================================================= */}
-      <Dialog open={createDMOpen} onOpenChange={setCreateDMOpen}>
-        <DialogContent className="max-w-md bg-white border-[#E5DAC8] rounded-2xl p-5">
-          <DialogHeader>
+      <Dialog
+        open={createDMOpen}
+        onOpenChange={(open) => {
+          setCreateDMOpen(open)
+          if (open) {
+            setSearchUserQuery('')
+            fetchUsers('')
+          }
+        }}
+      >
+        <DialogContent className="max-w-md bg-white border-[#E5DAC8] rounded-2xl p-5 max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-[#271810]">
               <MessageSquare className="h-5 w-5 text-[#78350F]" />
               Start Direct Message
             </DialogTitle>
             <DialogDescription className="text-xs text-[#7C6859]">
-              Connect directly with a landlord, agent, or prospective tenant.
+              Search and direct message real registered accounts on Mapstar.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleCreateDM} className="space-y-3 mt-3">
-            <div>
-              <label className="text-xs font-semibold text-[#271810] block mb-1">Recipient Name</label>
-              <Input
-                value={newDMName}
-                onChange={(e) => setNewDMName(e.target.value)}
-                placeholder="e.g. Chief Emeka or Engr. Victor"
-                className="h-9 text-xs bg-[#FAF7F2] border-[#E5DAC8]"
-                required
-              />
-            </div>
+          {/* Search Input */}
+          <div className="relative mt-3 shrink-0">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#7C6859]" />
+            <Input
+              value={searchUserQuery}
+              onChange={(e) => {
+                setSearchUserQuery(e.target.value)
+                fetchUsers(e.target.value)
+              }}
+              placeholder="Search by name, email, or phone..."
+              className="pl-9 h-10 text-xs bg-[#FAF7F2] border-[#E5DAC8] rounded-xl text-[#271810] placeholder:text-[#7C6859]"
+              autoFocus
+            />
+          </div>
 
-            <div>
-              <label className="text-xs font-semibold text-[#271810] block mb-1">Role</label>
-              <select
-                value={newDMRole}
-                onChange={(e: any) => setNewDMRole(e.target.value)}
-                className="w-full h-9 text-xs bg-[#FAF7F2] border border-[#E5DAC8] rounded-lg px-2 text-[#271810] font-semibold"
-              >
-                <option value="LANDLORD">🏛️ Landlord (Property Owner)</option>
-                <option value="AGENT">🛡️ Verified Agent (5% Cap)</option>
-                <option value="TENANT">🎓 Student / Tenant</option>
-              </select>
-            </div>
+          {/* Registered Users List */}
+          <div className="mt-3 flex-1 overflow-y-auto space-y-2 min-h-[200px] max-h-[320px] pr-1">
+            {loadingUsers && (
+              <div className="py-8 text-center text-[#7C6859] flex items-center justify-center gap-2 text-xs">
+                <Loader2 className="h-4 w-4 animate-spin text-[#78350F]" />
+                Searching registered users...
+              </div>
+            )}
 
-            <div>
-              <label className="text-xs font-semibold text-[#271810] block mb-1">Phone Number (Optional)</label>
-              <Input
-                value={newDMPhone}
-                onChange={(e) => setNewDMPhone(e.target.value)}
-                placeholder="e.g. +234 803 123 4567"
-                className="h-9 text-xs bg-[#FAF7F2] border-[#E5DAC8]"
-              />
-            </div>
+            {!loadingUsers && userSearchResults.length === 0 && (
+              <div className="py-8 text-center text-[#7C6859] space-y-1">
+                <User className="h-8 w-8 mx-auto text-[#78350F]/40" />
+                <p className="text-xs font-semibold">No registered users found</p>
+                <p className="text-[11px] text-[#7C6859]">
+                  {searchUserQuery ? 'Try a different name or email' : 'No other users registered yet'}
+                </p>
+              </div>
+            )}
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setCreateDMOpen(false)}
-                className="h-9 text-xs cursor-pointer"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                className="h-9 bg-[#78350F] hover:bg-[#854D0E] text-white text-xs font-bold cursor-pointer"
-              >
-                Start Chat
-              </Button>
-            </div>
-          </form>
+            {!loadingUsers &&
+              userSearchResults.map((u: any) => (
+                <div
+                  key={u.id}
+                  onClick={() => handleSelectUserToDM(u)}
+                  className="p-2.5 rounded-xl border border-[#E5DAC8]/70 bg-[#FAF7F2] hover:bg-[#F3ECE0] hover:border-[#78350F]/40 cursor-pointer transition flex items-center justify-between gap-3 group"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="relative h-9 w-9 rounded-full bg-[#78350F] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                      {(u.fullName || u.email || 'U').substring(0, 2).toUpperCase()}
+                      {(u.ninVerified || u.bvnVerified) && (
+                        <CheckCircle2 className="h-3 w-3 text-amber-300 absolute -bottom-0.5 -right-0.5 bg-[#78350F] rounded-full" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-bold text-[#271810] truncate">
+                          {u.fullName || u.email}
+                        </span>
+                        {renderRoleBadge(u.role)}
+                      </div>
+                      <p className="text-[11px] text-[#7C6859] truncate mt-0.5">
+                        {u.email} {u.phone ? `· ${u.phone}` : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    className="h-7 px-2.5 bg-[#78350F] hover:bg-[#854D0E] text-white text-[11px] font-bold rounded-lg shrink-0 cursor-pointer shadow-xs"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleSelectUserToDM(u)
+                    }}
+                  >
+                    <Send className="h-3 w-3 mr-1" /> Chat
+                  </Button>
+                </div>
+              ))}
+          </div>
+
+          <div className="pt-3 border-t border-[#E5DAC8] flex items-center justify-between shrink-0">
+            <span className="text-[10px] text-[#7C6859] flex items-center gap-1">
+              <Lock className="h-3 w-3 text-emerald-600" /> Direct encrypted chat with real account
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCreateDMOpen(false)}
+              className="h-8 text-xs cursor-pointer"
+            >
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
