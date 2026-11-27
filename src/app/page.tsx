@@ -341,7 +341,7 @@ export default function Home() {
   }, [filters])
 
   return (
-    <div className="flex flex-col h-screen bg-[#FAF7F2] dark:bg-[#120C08] text-[#271810] dark:text-[#FAF6F0] overflow-hidden transition-colors duration-200">
+    <div className="flex flex-col h-screen h-[100dvh] max-h-[100dvh] bg-[#FAF7F2] dark:bg-[#120C08] text-[#271810] dark:text-[#FAF6F0] overflow-hidden transition-colors duration-200">
       {/* =========================================================================
           TOP HEADER: Pure, Centered Mapstar Brand Header
           (Search, filters, theme toggle, sign in/login, and list options moved)
@@ -372,7 +372,7 @@ export default function Home() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-h-0 relative flex flex-col overflow-hidden">
+      <main className="flex-1 min-h-0 relative flex flex-col overflow-hidden pb-16">
         {/* TAB 1: Real-time Property Socials & Community Hub */}
         {bottomTab === 'chat' && (
           <ChatView

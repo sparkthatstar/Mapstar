@@ -71,7 +71,7 @@ export default function BottomNavigation({
   return (
     <nav
       aria-label="Bottom Navigation"
-      className="shrink-0 w-full z-40 bg-white/95 dark:bg-[#1A120B]/95 border-t border-[#E5DAC8] dark:border-[#382618] backdrop-blur-md shadow-lg transition-colors py-1.5 px-3 sm:px-6"
+      className="fixed bottom-0 left-0 right-0 z-50 w-full bg-white/95 dark:bg-[#1A120B]/95 border-t border-[#E5DAC8] dark:border-[#382618] backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.08)] transition-colors py-1.5 px-3 sm:px-6 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
     >
       <div className="max-w-lg mx-auto flex items-center justify-around">
         {tabs.map((tab) => {
