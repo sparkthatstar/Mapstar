@@ -42,6 +42,9 @@ function loadSvgImage(map: mapboxgl.Map, id: string, svgString: string): Promise
       }
       resolve()
     }
+    img.onerror = () => {
+      resolve()
+    }
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString)
   })
 }
@@ -615,15 +618,23 @@ export default function MapView({
     }
   }, [isScanning, mapLoaded])
 
-  // Switch Mapbox layer styles and rebind source/layer
+  const geojsonRef = useRef(geojson)
+  useEffect(() => {
+    geojsonRef.current = geojson
+  }, [geojson])
+
+  const prevMapStyleRef = useRef<string>(mapStyle)
+
+  // Switch Mapbox layer styles and rebind source/layer (ONLY triggers when mapStyle vector/satellite actually changes)
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return
+    if (prevMapStyleRef.current === mapStyle) return
+    prevMapStyleRef.current = mapStyle
 
-    mapRef.current.setStyle(STYLES[mapStyle])
+    const map = mapRef.current
+    map.setStyle(STYLES[mapStyle])
 
-    mapRef.current.once('style.load', async () => {
-      const map = mapRef.current!
-
+    map.once('style.load', async () => {
       const iconTypes: Array<{ id: string; state: PinState; featured: boolean }> = [
         { id: 'pin-available', state: 'AVAILABLE', featured: false },
         { id: 'pin-available-featured', state: 'AVAILABLE', featured: true },
@@ -642,7 +653,7 @@ export default function MapView({
       if (!map.getSource('listings-source')) {
         map.addSource('listings-source', {
           type: 'geojson',
-          data: geojson,
+          data: geojsonRef.current,
         })
       }
 
@@ -666,16 +677,38 @@ export default function MapView({
         })
       }
     })
-  }, [mapStyle, geojson])
+  }, [mapStyle, mapLoaded])
 
   // Update GeoJSON source whenever listings or selectedId change
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return
-    const source = mapRef.current.getSource('listings-source') as mapboxgl.GeoJSONSource
+    const map = mapRef.current
+    const source = map.getSource('listings-source') as mapboxgl.GeoJSONSource
     if (source) {
       source.setData(geojson)
+    } else if (map.isStyleLoaded()) {
+      if (!map.getSource('listings-source')) {
+        map.addSource('listings-source', {
+          type: 'geojson',
+          data: geojson,
+        })
+      }
+      if (!map.getLayer('listings-pins-layer')) {
+        map.addLayer({
+          id: 'listings-pins-layer',
+          type: 'symbol',
+          source: 'listings-source',
+          layout: {
+            'icon-image': ['get', 'iconId'],
+            'icon-anchor': 'bottom',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+            'icon-size': isScanning ? (BREATHING_FRAMES[breathingStepRef.current]?.iconSize || DEFAULT_ICON_SIZE) : DEFAULT_ICON_SIZE,
+          },
+        })
+      }
     }
-  }, [geojson, mapLoaded])
+  }, [geojson, mapLoaded, isScanning])
 
   // Auto-center or fit bounds to filtered listings or fly to selected lodge
   useEffect(() => {
