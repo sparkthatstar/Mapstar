@@ -10,20 +10,25 @@ export const dynamic = 'force-dynamic'
  * Query params:
  * - channelId: Fetch messages for a channel (default: world-square)
  * - stats=true: Fetch database chat space metrics (total messages, active channels)
- * - action=channels: Fetch user-created groups and channels from metadata messages
+ * - action=channels: Fetch user-created groups and channels with moderation status & membership
+ * - action=search-users: Search registered accounts to start DMs
+ * - action=my-dms: Discover logged-in user's direct message threads
+ * - action=dms: Admin view of all direct message threads
+ * - action=appeals: Admin view of all group sanction appeals
+ * - action=all-threads: Admin master surveillance over all chats, DMs, groups, and channels
  */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
 
+    let adminSession = null
+    let currentUser = null
+    try { adminSession = await getAdminSession() } catch {}
+    try { currentUser = await getUserSession() } catch {}
+    const isAdmin = Boolean(adminSession || (currentUser && currentUser.role === 'ADMIN'))
+
     // 1. Stats endpoint for Star Power database space management
     if (searchParams.get('stats') === 'true') {
-      let adminSession = null
-      let user = null
-      try { adminSession = await getAdminSession() } catch {}
-      try { user = await getUserSession() } catch {}
-      const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
-
       const totalCount = await db.chatMessage.count()
       const dmCount = await db.chatMessage.count({
         where: { channelId: { startsWith: 'dm-' } },
@@ -51,22 +56,25 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // 2. Discover public channels and groups dynamically from messages and directory
+    // 2. Discover public channels and groups with live moderation and membership counts
     if (searchParams.get('action') === 'channels') {
       const metaMessages = await db.chatMessage.findMany({
         where: {
           OR: [
             { content: { contains: '[CHANNEL_META:' } },
+            { content: { contains: '[MODERATION_META:' } },
+            { content: { contains: '[MEMBERSHIP_META:' } },
             { channelId: 'channels-directory' },
           ],
         },
         orderBy: { createdAt: 'desc' },
-        take: 100,
+        take: 300,
         select: {
           id: true,
           channelId: true,
           content: true,
           senderName: true,
+          senderId: true,
           createdAt: true,
         },
       })
@@ -80,30 +88,89 @@ export async function GET(req: NextRequest) {
       channelCounts.forEach((c) => countMap.set(c.channelId, c._count.id))
 
       const channelsMap = new Map<string, any>()
+      const moderationMap = new Map<string, any>()
+      const channelMembersMap = new Map<string, Set<string>>()
 
+      // Process moderation and membership events first (latest events first)
       metaMessages.forEach((m) => {
         try {
-          const match = m.content.match(/\[CHANNEL_META:(.*?)\]/)
-          if (match && match[1]) {
-            const meta = JSON.parse(match[1])
-            const targetChannelId = meta.channelId || m.channelId
-            if (targetChannelId && !channelsMap.has(targetChannelId) && targetChannelId !== 'channels-directory') {
-              const msgCount = countMap.get(targetChannelId) || 1
-              channelsMap.set(targetChannelId, {
-                id: targetChannelId,
-                ...meta,
-                isPublic: true,
-                createdAt: m.createdAt,
-                creatorName: m.senderName,
-                messageCount: msgCount,
-                membersCount: Math.max(1, msgCount),
-                subscribers: `${Math.max(1, msgCount)} ${msgCount === 1 ? 'member' : 'members'}`,
-              })
+          if (m.content.includes('[MODERATION_META:')) {
+            const match = m.content.match(/\[MODERATION_META:(.*?)\]/)
+            if (match && match[1]) {
+              const mod = JSON.parse(match[1])
+              if (mod.channelId && !moderationMap.has(mod.channelId)) {
+                moderationMap.set(mod.channelId, {
+                  status: mod.status,
+                  reason: mod.reason,
+                  moderatedBy: mod.moderatedBy,
+                  moderatedAt: mod.moderatedAt || m.createdAt,
+                })
+              }
             }
           }
-        } catch {
-          // ignore malformed
-        }
+
+          if (m.content.includes('[MEMBERSHIP_META:')) {
+            const match = m.content.match(/\[MEMBERSHIP_META:(.*?)\]/)
+            if (match && match[1]) {
+              const mem = JSON.parse(match[1])
+              if (mem.channelId && mem.userId) {
+                if (!channelMembersMap.has(mem.channelId)) {
+                  channelMembersMap.set(mem.channelId, new Set<string>())
+                }
+                const set = channelMembersMap.get(mem.channelId)!
+                if (mem.action === 'join') {
+                  set.add(mem.userId)
+                } else if (mem.action === 'leave') {
+                  set.delete(mem.userId)
+                }
+              }
+            }
+          }
+        } catch {}
+      })
+
+      // Process channel definitions
+      metaMessages.forEach((m) => {
+        try {
+          if (m.content.includes('[CHANNEL_META:')) {
+            const match = m.content.match(/\[CHANNEL_META:(.*?)\]/)
+            if (match && match[1]) {
+              const meta = JSON.parse(match[1])
+              const targetChannelId = meta.channelId || m.channelId
+              if (targetChannelId && !channelsMap.has(targetChannelId) && targetChannelId !== 'channels-directory') {
+                const msgCount = countMap.get(targetChannelId) || 1
+                const mod = moderationMap.get(targetChannelId) || {}
+                const currentStatus = mod.status || meta.status || 'ACTIVE'
+
+                // Filter out DELETED channels for non-admins
+                if (currentStatus === 'DELETED' && !isAdmin) {
+                  return
+                }
+
+                const joinedUsers = channelMembersMap.get(targetChannelId) || new Set<string>()
+                const totalMembers = Math.max(1, (meta.membersCount || 1) + joinedUsers.size)
+                const creatorId = meta.creatorId || m.senderId
+
+                channelsMap.set(targetChannelId, {
+                  id: targetChannelId,
+                  ...meta,
+                  status: currentStatus,
+                  moderationReason: mod.reason || null,
+                  moderatedAt: mod.moderatedAt || null,
+                  isPublic: true,
+                  createdAt: m.createdAt,
+                  creatorName: m.senderName,
+                  creatorId,
+                  messageCount: msgCount,
+                  membersCount: totalMembers,
+                  hasJoined: currentUser ? joinedUsers.has(currentUser.id) || creatorId === currentUser.id : false,
+                  hasSubscribed: currentUser ? joinedUsers.has(currentUser.id) || creatorId === currentUser.id : false,
+                  subscribers: `${totalMembers} ${totalMembers === 1 ? 'member' : 'members'}`,
+                })
+              }
+            }
+          }
+        } catch {}
       })
 
       const allPublicChannels = Array.from(channelsMap.values())
@@ -114,10 +181,198 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // 3. Search real existing registered accounts to direct message (DM)
+    // 3. Appeals endpoint: Admin view of all group sanction appeals
+    if (searchParams.get('action') === 'appeals') {
+      const appealMessages = await db.chatMessage.findMany({
+        where: {
+          channelId: 'channels-directory',
+          OR: [
+            { content: { contains: '[APPEAL_META:' } },
+            { content: { contains: '[APPEAL_RESOLUTION:' } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        select: { content: true, createdAt: true },
+      })
+
+      const resolutions = new Map<string, any>()
+      appealMessages.forEach((m) => {
+        try {
+          if (m.content.includes('[APPEAL_RESOLUTION:')) {
+            const match = m.content.match(/\[APPEAL_RESOLUTION:(.*?)\]/)
+            if (match && match[1]) {
+              const res = JSON.parse(match[1])
+              if (res.appealId && !resolutions.has(res.appealId)) {
+                resolutions.set(res.appealId, res)
+              }
+            }
+          }
+        } catch {}
+      })
+
+      const appealsMap = new Map<string, any>()
+      appealMessages.forEach((m) => {
+        try {
+          if (m.content.includes('[APPEAL_META:')) {
+            const match = m.content.match(/\[APPEAL_META:(.*?)\]/)
+            if (match && match[1]) {
+              const appeal = JSON.parse(match[1])
+              if (appeal.appealId && !appealsMap.has(appeal.appealId)) {
+                const res = resolutions.get(appeal.appealId)
+                appealsMap.set(appeal.appealId, {
+                  ...appeal,
+                  status: res ? res.decision : appeal.status || 'PENDING',
+                  adminNotes: res?.adminNotes || null,
+                  resolvedAt: res?.resolvedAt || null,
+                  resolvedBy: res?.resolvedBy || null,
+                })
+              }
+            }
+          }
+        } catch {}
+      })
+
+      return NextResponse.json({ appeals: Array.from(appealsMap.values()), isAdmin })
+    }
+
+    // 4. Omni-Chat Surveillance: Admin master oversight of EVERY chat, DM, group, and broadcast
+    if (searchParams.get('action') === 'all-threads') {
+      if (!isAdmin) {
+        return NextResponse.json({ error: 'Unauthorized: Admin required for chat surveillance.' }, { status: 403 })
+      }
+
+      // Group by channelId to find all active threads
+      const channelCounts = await db.chatMessage.groupBy({
+        by: ['channelId'],
+        _count: { id: true },
+        _max: { createdAt: true },
+        orderBy: { _max: { createdAt: 'desc' } },
+        take: 100,
+      })
+
+      // Fetch directory metadata for groups/channels
+      const dirMessages = await db.chatMessage.findMany({
+        where: {
+          channelId: 'channels-directory',
+          OR: [
+            { content: { contains: '[CHANNEL_META:' } },
+            { content: { contains: '[MODERATION_META:' } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        select: { content: true },
+      })
+
+      const channelMetaMap = new Map<string, any>()
+      const modMap = new Map<string, any>()
+
+      dirMessages.forEach((m) => {
+        try {
+          if (m.content.includes('[MODERATION_META:')) {
+            const match = m.content.match(/\[MODERATION_META:(.*?)\]/)
+            if (match && match[1]) {
+              const mod = JSON.parse(match[1])
+              if (mod.channelId && !modMap.has(mod.channelId)) modMap.set(mod.channelId, mod)
+            }
+          }
+          if (m.content.includes('[CHANNEL_META:')) {
+            const match = m.content.match(/\[CHANNEL_META:(.*?)\]/)
+            if (match && match[1]) {
+              const meta = JSON.parse(match[1])
+              const cid = meta.channelId
+              if (cid && !channelMetaMap.has(cid)) channelMetaMap.set(cid, meta)
+            }
+          }
+        } catch {}
+      })
+
+      // Fetch the latest message for each thread
+      const threads: any[] = []
+      let totalDMs = 0
+      let totalGroups = 0
+      let totalChannels = 0
+      let totalWorld = 0
+
+      for (const item of channelCounts) {
+        const cid = item.channelId
+        if (cid === 'channels-directory') continue
+
+        const latestMsg = await db.chatMessage.findFirst({
+          where: { channelId: cid },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            content: true,
+            senderName: true,
+            senderRole: true,
+            senderId: true,
+            createdAt: true,
+          },
+        })
+
+        let type: 'world' | 'dm' | 'group' | 'channel' = 'world'
+        let title = cid
+        let subtitle = `${item._count.id} messages`
+        let status = 'ACTIVE'
+
+        if (cid === 'world-square') {
+          type = 'world'
+          title = 'World Square (Main Forum)'
+          subtitle = 'Public community live stream'
+          totalWorld++
+        } else if (cid.startsWith('dm-')) {
+          type = 'dm'
+          title = `Direct Message: ${latestMsg?.senderName || 'Members'}`
+          subtitle = `Private DM thread`
+          totalDMs++
+        } else {
+          const meta = channelMetaMap.get(cid)
+          const mod = modMap.get(cid)
+          status = mod?.status || 'ACTIVE'
+
+          if (meta?.type === 'channel') {
+            type = 'channel'
+            title = meta.name || cid
+            subtitle = `Broadcast Channel · ${meta.badgeText || 'Official'}`
+            totalChannels++
+          } else {
+            type = 'group'
+            title = meta?.name || cid
+            subtitle = `Community Group · ${meta?.category || 'General'}`
+            totalGroups++
+          }
+        }
+
+        threads.push({
+          channelId: cid,
+          type,
+          title,
+          subtitle,
+          status,
+          messageCount: item._count.id,
+          lastMessage: latestMsg?.content || 'No messages',
+          lastSenderName: latestMsg?.senderName || 'System',
+          lastTime: latestMsg?.createdAt || item._max.createdAt,
+        })
+      }
+
+      return NextResponse.json({
+        threads,
+        metrics: {
+          totalMessages: channelCounts.reduce((acc, curr) => acc + curr._count.id, 0),
+          totalThreads: threads.length,
+          totalDMs,
+          totalGroups,
+          totalChannels,
+          totalWorld,
+        },
+      })
+    }
+
+    // 5. Search real existing registered accounts to direct message (DM)
     if (searchParams.get('action') === 'search-users') {
-      let currentUser = null
-      try { currentUser = await getUserSession() } catch {}
       const currentUserId = currentUser?.id
       const q = (searchParams.get('q') || '').trim()
 
@@ -170,10 +425,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ users })
     }
 
-    // 4. Discover logged-in user's direct messages (DMs) with other real accounts
+    // 6. Discover logged-in user's direct messages (DMs)
     if (searchParams.get('action') === 'my-dms') {
-      let currentUser = null
-      try { currentUser = await getUserSession() } catch {}
       if (!currentUser) {
         return NextResponse.json({ dms: [] })
       }
@@ -258,61 +511,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 5. Discover all DMs for Admin oversight
-    if (searchParams.get('action') === 'dms') {
-      let adminSession = null
-      let user = null
-      try { adminSession = await getAdminSession() } catch {}
-      try { user = await getUserSession() } catch {}
-      const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
-
-      const dmMessages = await db.chatMessage.findMany({
-        where: { channelId: { startsWith: 'dm-' } },
-        orderBy: { createdAt: 'desc' },
-        take: 300,
-        select: {
-          id: true,
-          channelId: true,
-          senderId: true,
-          senderName: true,
-          senderRole: true,
-          content: true,
-          createdAt: true,
-        },
-      })
-
-      const dmsMap: Record<string, any> = {}
-      for (const m of dmMessages) {
-        if (!dmsMap[m.channelId]) {
-          dmsMap[m.channelId] = {
-            id: m.channelId,
-            channelId: m.channelId,
-            name: `DM #${m.channelId.replace('dm-', '')}`,
-            lastMessage: m.content,
-            lastTime: m.createdAt,
-            participantNames: [m.senderName],
-            messageCount: 1,
-            role: m.senderRole,
-          }
-        } else {
-          if (!dmsMap[m.channelId].participantNames.includes(m.senderName)) {
-            dmsMap[m.channelId].participantNames.push(m.senderName)
-            dmsMap[m.channelId].name = dmsMap[m.channelId].participantNames.join(' & ')
-          }
-          dmsMap[m.channelId].messageCount++
-        }
-      }
-
-      return NextResponse.json({ dms: Object.values(dmsMap), isAdmin })
-    }
-
-    // 3. Regular channel messages fetch
+    // 7. Regular channel messages fetch
     const channelId = searchParams.get('channelId') || 'world-square'
+    const limit = parseInt(searchParams.get('limit') || '100', 10)
 
     const messages = await db.chatMessage.findMany({
       where: { channelId },
       orderBy: { createdAt: 'asc' },
-      take: 100,
+      take: Math.min(limit, 300),
       select: {
         id: true,
         channelId: true,
@@ -333,27 +539,221 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/chat
- * Post a new message or register a new group/channel via metadata message.
+ * Handles message posting, channel creation, moderation, membership, and appeals.
  */
 export async function POST(req: NextRequest) {
   try {
-    const user = await getUserSession()
+    let adminSession = null
+    let user = null
+    try { adminSession = await getAdminSession() } catch {}
+    try { user = await getUserSession() } catch {}
+    const isAdmin = Boolean(adminSession || (user && user.role === 'ADMIN'))
+
+    const body = await req.json()
+    const { action } = body
+
+    // 1. Join / Leave Group or Subscribe / Unsubscribe Channel
+    if (action === 'join' || action === 'leave') {
+      if (!user) {
+        return NextResponse.json({ error: 'You must be signed in to join or leave a group.' }, { status: 401 })
+      }
+      const { channelId } = body
+      if (!channelId) {
+        return NextResponse.json({ error: 'Channel ID is required' }, { status: 400 })
+      }
+
+      await db.chatMessage.create({
+        data: {
+          channelId: 'channels-directory',
+          senderId: user.id,
+          senderName: user.fullName || user.email,
+          senderRole: user.role,
+          content: `[MEMBERSHIP_META:${JSON.stringify({
+            userId: user.id,
+            userName: user.fullName || user.email,
+            channelId,
+            action,
+            updatedAt: new Date().toISOString(),
+          })}]`,
+        },
+      })
+
+      return NextResponse.json({
+        success: true,
+        action,
+        channelId,
+        message: action === 'join' ? 'Joined successfully!' : 'Left group successfully.',
+      })
+    }
+
+    // 2. Admin Moderation: Ban, Suspend, Reinstate, or Delete a group
+    if (action === 'moderate-channel') {
+      if (!isAdmin) {
+        return NextResponse.json({ error: 'Unauthorized: Admin privileges required to moderate groups.' }, { status: 403 })
+      }
+      const { channelId, status, reason } = body // status: 'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'DELETED'
+      if (!channelId || !status) {
+        return NextResponse.json({ error: 'Channel ID and target status are required' }, { status: 400 })
+      }
+
+      await db.chatMessage.create({
+        data: {
+          channelId: 'channels-directory',
+          senderId: user?.id || 'admin-system',
+          senderName: user?.fullName || 'Mapstar Trust & Safety',
+          senderRole: 'ADMIN',
+          content: `[MODERATION_META:${JSON.stringify({
+            channelId,
+            status,
+            reason: reason || 'Trust & Safety policy enforcement',
+            moderatedBy: user?.email || 'admin',
+            moderatedAt: new Date().toISOString(),
+          })}]`,
+        },
+      })
+
+      // If action is delete, optionally purge all messages in that channel
+      if (status === 'DELETED') {
+        await db.chatMessage.deleteMany({
+          where: { channelId },
+        }).catch(() => {})
+      }
+
+      return NextResponse.json({
+        success: true,
+        channelId,
+        status,
+        message: `Group ${channelId} has been set to ${status}.`,
+      })
+    }
+
+    // 3. Owner Appeals: Submit an appeal for a banned or suspended group
+    if (action === 'submit-appeal') {
+      if (!user) {
+        return NextResponse.json({ error: 'You must be signed in to submit an appeal.' }, { status: 401 })
+      }
+      const { channelId, channelName, channelType, explanation, contactPhone, contactEmail, sanctionType, sanctionReason } = body
+      if (!channelId || !explanation || !explanation.trim()) {
+        return NextResponse.json({ error: 'Channel ID and appeal explanation are required.' }, { status: 400 })
+      }
+
+      const appealId = `app_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+      await db.chatMessage.create({
+        data: {
+          channelId: 'channels-directory',
+          senderId: user.id,
+          senderName: user.fullName || user.email,
+          senderRole: user.role,
+          content: `[APPEAL_META:${JSON.stringify({
+            appealId,
+            channelId,
+            channelName: channelName || channelId,
+            channelType: channelType || 'group',
+            ownerId: user.id,
+            ownerName: user.fullName || user.email,
+            ownerEmail: contactEmail || user.email,
+            ownerPhone: contactPhone || user.phone || '',
+            sanctionType: sanctionType || 'SUSPENDED',
+            sanctionReason: sanctionReason || 'Terms violation',
+            explanation: explanation.trim(),
+            status: 'PENDING',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })}]`,
+        },
+      })
+
+      return NextResponse.json({
+        success: true,
+        appealId,
+        message: 'Your appeal has been submitted to the Admin Review Board.',
+      })
+    }
+
+    // 4. Admin Resolve Appeal: Approve or Reject an appeal
+    if (action === 'resolve-appeal') {
+      if (!isAdmin) {
+        return NextResponse.json({ error: 'Unauthorized: Admin privileges required to resolve appeals.' }, { status: 403 })
+      }
+      const { appealId, channelId, decision, adminNotes } = body // decision: 'APPROVE' | 'REJECT'
+      if (!appealId || !decision) {
+        return NextResponse.json({ error: 'Appeal ID and decision (APPROVE/REJECT) are required' }, { status: 400 })
+      }
+
+      // Record appeal resolution
+      await db.chatMessage.create({
+        data: {
+          channelId: 'channels-directory',
+          senderId: user?.id || 'admin-system',
+          senderName: user?.fullName || 'Mapstar Trust & Safety',
+          senderRole: 'ADMIN',
+          content: `[APPEAL_RESOLUTION:${JSON.stringify({
+            appealId,
+            channelId,
+            decision: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+            adminNotes: adminNotes || (decision === 'APPROVE' ? 'Appeal approved and group reinstated.' : 'Appeal rejected.'),
+            resolvedBy: user?.email || 'admin',
+            resolvedAt: new Date().toISOString(),
+          })}]`,
+        },
+      })
+
+      // If approved, automatically reinstate the channel back to ACTIVE
+      if (decision === 'APPROVE' && channelId) {
+        await db.chatMessage.create({
+          data: {
+            channelId: 'channels-directory',
+            senderId: user?.id || 'admin-system',
+            senderName: user?.fullName || 'Mapstar Trust & Safety',
+            senderRole: 'ADMIN',
+            content: `[MODERATION_META:${JSON.stringify({
+              channelId,
+              status: 'ACTIVE',
+              reason: `Reinstated following approved appeal #${appealId}`,
+              moderatedBy: user?.email || 'admin',
+              moderatedAt: new Date().toISOString(),
+            })}]`,
+          },
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        appealId,
+        decision,
+        message: `Appeal ${appealId} ${decision === 'APPROVE' ? 'approved and group reinstated' : 'rejected'}.`,
+      })
+    }
+
+    // 5. Default Message Post
     if (!user) {
       return NextResponse.json({ error: 'You must be signed in to post in chat.' }, { status: 401 })
     }
 
-    const body = await req.json()
     const { channelId, content, meta } = body
-
     if (!channelId || typeof channelId !== 'string') {
       return NextResponse.json({ error: 'Channel ID is required' }, { status: 400 })
     }
-
     if (!content || typeof content !== 'string' || !content.trim()) {
       return NextResponse.json({ error: 'Message content cannot be empty' }, { status: 400 })
     }
 
-    // If metadata was provided for a new public group or channel, index it into the channels-directory
+    // Check if channel is suspended or banned
+    if (!isAdmin && channelId !== 'world-square' && !channelId.startsWith('dm-')) {
+      const latestMod = await db.chatMessage.findFirst({
+        where: {
+          channelId: 'channels-directory',
+          content: { contains: `"channelId":"${channelId}"` },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { content: true },
+      })
+      if (latestMod && (latestMod.content.includes('"status":"SUSPENDED"') || latestMod.content.includes('"status":"BANNED"'))) {
+        return NextResponse.json({ error: 'This group is suspended or banned by Mapstar Trust & Safety.' }, { status: 403 })
+      }
+    }
+
+    // If metadata was provided for a new group or channel, register it
     if (meta && typeof meta === 'object') {
       try {
         await db.chatMessage.create({
@@ -362,7 +762,13 @@ export async function POST(req: NextRequest) {
             senderId: user.id,
             senderName: user.fullName || user.email,
             senderRole: user.role,
-            content: `[CHANNEL_META:${JSON.stringify({ ...meta, channelId, isPublic: true })}]`,
+            content: `[CHANNEL_META:${JSON.stringify({
+              ...meta,
+              channelId,
+              creatorId: user.id,
+              isPublic: true,
+              status: 'ACTIVE',
+            })}]`,
           },
         })
       } catch (metaErr) {
@@ -403,6 +809,7 @@ export async function POST(req: NextRequest) {
  * - channelId & purge=true: Purge all messages in a channel (Admin)
  * - purge=true: Purge all chat messages in the database (Admin / Star Power)
  * - olderThanDays=N: Delete messages older than N days to preserve database space (Admin / Star Power)
+ * - scope=dms: Clear all direct messages
  */
 export async function DELETE(req: NextRequest) {
   try {
@@ -440,9 +847,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'Message permanently deleted.' })
     }
 
-    // 2. Star Power (Admin) features to preserve database space
+    // 2. Admin & Star Power operations to preserve database storage
     if (!isAdmin) {
-      return NextResponse.json({ error: 'Unauthorized: Star Power (Admin) required to purge chat storage.' }, { status: 403 })
+      return NextResponse.json({ error: 'Unauthorized: Admin privileges required to purge chat storage.' }, { status: 403 })
     }
 
     // Purge/Clear all DMs (Direct Messages) to save database storage

@@ -14,6 +14,7 @@ import {
   Flag, BarChart3, LayoutDashboard, Loader2, ExternalLink, Star,
   Database, CheckCircle2, AlertTriangle, Settings, Key, Link2, Sparkles,
   LifeBuoy, Phone, Mail, MessageSquare, AlertCircle, Clock, Check, X, Search,
+  Scale, ShieldAlert, Radio, Globe, Trash2, Eye, Send,
 } from 'lucide-react'
 import {
   Dialog,
@@ -27,7 +28,7 @@ import { DEFAULT_FEES, FeeConfig } from '@/lib/fees'
 import { MockListing, formatNaira, PROPERTY_TYPE_LABELS } from '@/lib/mock-data'
 import { MOCK_LISTINGS } from '@/lib/mock-data'
 
-type Tab = 'overview' | 'fees' | 'listings' | 'users' | 'reports' | 'analytics'
+type Tab = 'overview' | 'fees' | 'listings' | 'users' | 'reports' | 'analytics' | 'appeals' | 'chats'
 
 interface AdminDashboardProps {
   adminEmail: string
@@ -36,6 +37,19 @@ interface AdminDashboardProps {
 export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
   const [tab, setTab] = useState<Tab>('overview')
   const [openComplaintsCount, setOpenComplaintsCount] = useState<number>(0)
+  const [pendingAppealsCount, setPendingAppealsCount] = useState<number>(0)
+
+  const loadAppealsCount = useCallback(() => {
+    fetch('/api/chat?action=appeals')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.appeals && Array.isArray(d.appeals)) {
+          const count = d.appeals.filter((a: any) => a.status === 'PENDING').length
+          setPendingAppealsCount(count)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const loadComplaintsCount = useCallback(() => {
     fetch('/api/admin/complaints')
@@ -63,7 +77,8 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
 
   useEffect(() => {
     loadComplaintsCount()
-  }, [loadComplaintsCount])
+    loadAppealsCount()
+  }, [loadComplaintsCount, loadAppealsCount])
 
   function logout() {
     fetch('/api/admin/logout', { method: 'POST' }).then(() => {
@@ -125,6 +140,17 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
                 icon: LifeBuoy,
                 badge: openComplaintsCount > 0 ? openComplaintsCount : null,
               },
+              {
+                id: 'appeals',
+                label: 'Group Appeals',
+                icon: Scale,
+                badge: pendingAppealsCount > 0 ? pendingAppealsCount : null,
+              },
+              {
+                id: 'chats',
+                label: 'Omni-Chat Vault',
+                icon: MessageSquare,
+              },
               { id: 'analytics', label: 'Analytics', icon: BarChart3 },
             ].map((item) => {
               const Icon = item.icon
@@ -166,6 +192,11 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
               id: 'reports',
               label: openComplaintsCount > 0 ? `Complaints (${openComplaintsCount})` : 'Complaints',
             },
+            {
+              id: 'appeals',
+              label: pendingAppealsCount > 0 ? `Appeals (${pendingAppealsCount})` : 'Appeals',
+            },
+            { id: 'chats', label: 'Omni-Chat' },
             { id: 'analytics', label: 'Analytics' },
           ].map((item) => (
             <button
@@ -191,6 +222,10 @@ export default function AdminDashboard({ adminEmail }: AdminDashboardProps) {
           {tab === 'reports' && (
             <ReportsTab onCountChange={setOpenComplaintsCount} />
           )}
+          {tab === 'appeals' && (
+            <AppealsTab onCountChange={setPendingAppealsCount} />
+          )}
+          {tab === 'chats' && <OmniChatVaultTab />}
           {tab === 'analytics' && <AnalyticsTab />}
         </main>
       </div>
@@ -1909,5 +1944,828 @@ function AnalyticsTab() {
         </p>
       </div>
     </ScrollArea>
+  )
+}
+
+
+/* ---------------- Group Appeals Tab ---------------- */
+
+interface GroupAppealItem {
+  appealId: string
+  channelId: string
+  channelName: string
+  channelType: 'group' | 'channel'
+  ownerId: string
+  ownerName: string
+  ownerEmail: string
+  ownerPhone?: string
+  sanctionType: 'SUSPENDED' | 'BANNED' | 'DELETED'
+  sanctionReason: string
+  explanation: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  adminNotes?: string
+  resolvedAt?: string
+  resolvedBy?: string
+  createdAt: string
+}
+
+function AppealsTab({ onCountChange }: { onCountChange?: (count: number) => void }) {
+  const [appeals, setAppeals] = useState<GroupAppealItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedAppeal, setSelectedAppeal] = useState<GroupAppealItem | null>(null)
+  const [resolvingAction, setResolvingAction] = useState<'APPROVE' | 'REJECT' | null>(null)
+  const [resolutionNotes, setResolutionNotes] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const fetchAppeals = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/chat?action=appeals')
+      if (res.ok) {
+        const data = await res.json()
+        const list = data.appeals || []
+        setAppeals(list)
+        if (onCountChange) {
+          const pending = list.filter((a: any) => a.status === 'PENDING').length
+          onCountChange(pending)
+        }
+      }
+    } catch {
+      toast.error('Failed to load appeals')
+    } finally {
+      setLoading(false)
+    }
+  }, [onCountChange])
+
+  useEffect(() => {
+    fetchAppeals()
+  }, [fetchAppeals])
+
+  async function handleResolveAppeal(decision: 'APPROVE' | 'REJECT') {
+    if (!selectedAppeal) return
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'resolve-appeal',
+          appealId: selectedAppeal.appealId,
+          channelId: selectedAppeal.channelId,
+          decision,
+          adminNotes: resolutionNotes.trim() || undefined,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(decision === 'APPROVE' ? `Appeal approved: ${selectedAppeal.channelName} reinstated to Active!` : 'Appeal rejected.')
+        setResolvingAction(null)
+        setSelectedAppeal(null)
+        setResolutionNotes('')
+        fetchAppeals()
+      } else {
+        toast.error(data.error || 'Failed to resolve appeal')
+      }
+    } catch (err: any) {
+      toast.error('Error resolving appeal: ' + err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const filteredAppeals = appeals.filter((a) => {
+    if (filter !== 'ALL' && a.status !== filter) return false
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      a.channelName.toLowerCase().includes(q) ||
+      a.ownerName.toLowerCase().includes(q) ||
+      a.ownerEmail.toLowerCase().includes(q) ||
+      (a.ownerPhone && a.ownerPhone.includes(q)) ||
+      a.explanation.toLowerCase().includes(q)
+    )
+  })
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+            <Scale className="h-5 w-5 text-amber-500" />
+            Group & Channel Sanction Appeals
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Review appeals filed by group and broadcast channel owners whose channels were banned or suspended.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          onClick={fetchAppeals}
+          disabled={loading}
+          className="h-8 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold self-start sm:self-auto cursor-pointer flex items-center gap-1.5"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh Feed</span>
+        </Button>
+      </div>
+
+      {/* Metrics Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-[#0D1322] border border-slate-800 rounded-xl p-3 shadow-sm">
+          <span className="text-[10px] uppercase font-bold text-slate-400">Total Appeals</span>
+          <div className="text-lg font-bold text-slate-100 mt-0.5">{appeals.length}</div>
+        </div>
+        <div className="bg-amber-950/20 border border-amber-900/40 rounded-xl p-3 shadow-sm">
+          <span className="text-[10px] uppercase font-bold text-amber-400">Pending Review</span>
+          <div className="text-lg font-bold text-amber-300 mt-0.5">
+            {appeals.filter((a) => a.status === 'PENDING').length}
+          </div>
+        </div>
+        <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-3 shadow-sm">
+          <span className="text-[10px] uppercase font-bold text-emerald-400">Approved & Reinstated</span>
+          <div className="text-lg font-bold text-emerald-300 mt-0.5">
+            {appeals.filter((a) => a.status === 'APPROVED').length}
+          </div>
+        </div>
+        <div className="bg-rose-950/20 border border-rose-900/40 rounded-xl p-3 shadow-sm">
+          <span className="text-[10px] uppercase font-bold text-rose-400">Rejected</span>
+          <div className="text-lg font-bold text-rose-300 mt-0.5">
+            {appeals.filter((a) => a.status === 'REJECTED').length}
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#0D1322] border border-slate-800 rounded-xl p-3">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by group name, owner, phone, or statement..."
+            className="pl-8 h-8 text-xs bg-[#090D18] border-slate-700 text-slate-100 placeholder:text-slate-500 rounded-lg w-full"
+          />
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+          {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map((st) => (
+            <button
+              key={st}
+              onClick={() => setFilter(st)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                filter === st
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-[#090D18] border border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {st === 'ALL' ? 'All' : st}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Appeals List */}
+      <div className="space-y-3">
+        {filteredAppeals.map((appeal) => {
+          const isPending = appeal.status === 'PENDING'
+          return (
+            <div
+              key={appeal.appealId}
+              className="bg-[#0D1322] border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition space-y-3"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-amber-400">#{appeal.appealId}</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    appeal.status === 'APPROVED'
+                      ? 'bg-emerald-950 border border-emerald-800 text-emerald-300'
+                      : appeal.status === 'REJECTED'
+                      ? 'bg-rose-950 border border-rose-800 text-rose-300'
+                      : 'bg-amber-950 border border-amber-800 text-amber-300 animate-pulse'
+                  }`}>
+                    {appeal.status}
+                  </span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded">
+                    {appeal.sanctionType}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400">
+                  Filed on {new Date(appeal.createdAt).toLocaleDateString()} at{' '}
+                  {new Date(appeal.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 text-[11px]">Sanctioned Group:</span>
+                  <div className="font-bold text-slate-100 text-sm">{appeal.channelName}</div>
+                  <div className="text-[10px] font-mono text-slate-500 mt-0.5">ID: {appeal.channelId}</div>
+                  <div className="text-[11px] text-rose-400 mt-1">
+                    Sanction Reason: <span className="font-semibold text-rose-300">{appeal.sanctionReason}</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[11px]">Appellant (Group Owner):</span>
+                  <div className="font-semibold text-slate-200">{appeal.ownerName}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">{appeal.ownerEmail}</div>
+                  {appeal.ownerPhone && (
+                    <div className="text-[11px] font-mono text-amber-400 mt-0.5">{appeal.ownerPhone}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Statement */}
+              <div className="bg-[#090D18] border border-slate-800 rounded-lg p-3 text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                <span className="font-bold text-slate-200 block mb-1">Owner Appeal Statement:</span>
+                {appeal.explanation}
+              </div>
+
+              {/* Admin notes if resolved */}
+              {appeal.adminNotes && (
+                <div className={`p-2.5 rounded-lg border text-xs ${
+                  appeal.status === 'APPROVED'
+                    ? 'bg-emerald-950/30 border-emerald-800/60 text-emerald-300'
+                    : 'bg-rose-950/30 border-rose-800/60 text-rose-300'
+                }`}>
+                  <span className="font-bold block mb-0.5">Resolution Notes ({appeal.resolvedBy || 'Admin'}):</span>
+                  {appeal.adminNotes}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              {isPending && (
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/80">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setSelectedAppeal(appeal)
+                      setResolvingAction('REJECT')
+                      setResolutionNotes('')
+                    }}
+                    className="h-8 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 text-xs font-semibold cursor-pointer"
+                  >
+                    Reject Appeal
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setSelectedAppeal(appeal)
+                      setResolvingAction('APPROVE')
+                      setResolutionNotes('')
+                    }}
+                    className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Approve & Reinstate Group
+                  </Button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {filteredAppeals.length === 0 && !loading && (
+          <div className="bg-[#0D1322] border border-slate-800 rounded-xl p-12 text-center text-slate-400">
+            <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-2" />
+            <p className="text-sm font-bold text-slate-200">No Appeals Found</p>
+            <p className="text-xs text-slate-400 mt-1">There are no sanction appeals matching the current filter.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Resolution Confirmation Modal */}
+      {selectedAppeal && resolvingAction && (
+        <Dialog open={Boolean(selectedAppeal)} onOpenChange={() => { setSelectedAppeal(null); setResolvingAction(null) }}>
+          <DialogContent className="max-w-md bg-[#0D1322] border-slate-800 text-slate-100 rounded-2xl p-5 shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                {resolvingAction === 'APPROVE' ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <span>Approve Appeal & Reinstate &apos;{selectedAppeal.channelName}&apos;</span>
+                  </>
+                ) : (
+                  <>
+                    <X className="h-4 w-4 text-rose-500" />
+                    <span>Reject Appeal for &apos;{selectedAppeal.channelName}&apos;</span>
+                  </>
+                )}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-400">
+                {resolvingAction === 'APPROVE'
+                  ? 'This will immediately restore the group to Active status and notify the owner.'
+                  : 'This will uphold the ban/suspension and record the justification.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3.5 mt-2 text-xs">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  Resolution Notes (Visible to Group Owner):
+                </label>
+                <textarea
+                  rows={3}
+                  value={resolutionNotes}
+                  onChange={(e) => setResolutionNotes(e.target.value)}
+                  placeholder={
+                    resolvingAction === 'APPROVE'
+                      ? 'e.g. Corrective steps verified. Group reinstated with standard monitoring.'
+                      : 'e.g. Tenancy fee violations confirmed. Ban upheld.'
+                  }
+                  className="w-full p-2.5 rounded-xl bg-[#090D18] border border-slate-700 text-xs text-slate-100 placeholder:text-slate-500 focus:border-amber-500 outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { setSelectedAppeal(null); setResolvingAction(null) }}
+                  className="h-8 text-xs border-slate-700 text-slate-300 cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={submitting}
+                  onClick={() => handleResolveAppeal(resolvingAction)}
+                  className={`h-8 text-xs font-bold text-white shadow-sm cursor-pointer ${
+                    resolvingAction === 'APPROVE' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-rose-600 hover:bg-rose-500'
+                  }`}
+                >
+                  {submitting ? 'Processing…' : resolvingAction === 'APPROVE' ? 'Confirm Reinstatement' : 'Confirm Rejection'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  )
+}
+
+/* ---------------- Omni-Chat Surveillance Vault Tab ---------------- */
+
+interface ThreadItem {
+  channelId: string
+  type: 'world' | 'dm' | 'group' | 'channel'
+  title: string
+  subtitle: string
+  status: string
+  messageCount: number
+  lastMessage: string
+  lastSenderName: string
+  lastTime: string
+}
+
+function OmniChatVaultTab() {
+  const [threads, setThreads] = useState<ThreadItem[]>([])
+  const [metrics, setMetrics] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [typeFilter, setTypeFilter] = useState<'all' | 'dm' | 'group' | 'channel' | 'world'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null)
+  const [messages, setMessages] = useState<any[]>([])
+  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [purging, setPurging] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [modModalOpen, setModModalOpen] = useState(false)
+  const [modStatus, setModStatus] = useState<'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'DELETED'>('SUSPENDED')
+  const [modReason, setModReason] = useState('')
+  const [moderating, setModerating] = useState(false)
+
+  const fetchThreads = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/chat?action=all-threads')
+      if (res.ok) {
+        const data = await res.json()
+        setThreads(data.threads || [])
+        setMetrics(data.metrics || null)
+        if (!selectedThread && data.threads?.length > 0) {
+          setSelectedThread(data.threads[0])
+        }
+      }
+    } catch {
+      toast.error('Failed to load chat surveillance feed')
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedThread])
+
+  useEffect(() => {
+    fetchThreads()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchMessages = useCallback(async (channelId: string) => {
+    setLoadingMessages(true)
+    try {
+      const res = await fetch(`/api/chat?channelId=${encodeURIComponent(channelId)}&limit=200`)
+      if (res.ok) {
+        const data = await res.json()
+        setMessages(data.messages || [])
+      }
+    } catch {
+      toast.error('Failed to load thread messages')
+    } finally {
+      setLoadingMessages(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedThread?.channelId) {
+      fetchMessages(selectedThread.channelId)
+    }
+  }, [selectedThread, fetchMessages])
+
+  async function handleDeleteMessage(id: string) {
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/chat?id=${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Message deleted')
+        setMessages((prev) => prev.filter((m) => m.id !== id))
+        fetchThreads()
+      } else {
+        toast.error('Failed to delete message')
+      }
+    } catch {
+      toast.error('Error deleting message')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  async function handlePurgeThread() {
+    if (!selectedThread) return
+    if (!confirm(`Are you sure you want to permanently clear all messages in "${selectedThread.title}" to save database storage?`)) return
+    setPurging(true)
+    try {
+      const res = await fetch(`/api/chat?channelId=${encodeURIComponent(selectedThread.channelId)}&purge=true`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || 'Thread text purged successfully')
+        setMessages([])
+        fetchThreads()
+      } else {
+        toast.error(data.error || 'Failed to purge thread')
+      }
+    } catch {
+      toast.error('Error purging thread')
+    } finally {
+      setPurging(false)
+    }
+  }
+
+  async function handleModerateChannel() {
+    if (!selectedThread) return
+    setModerating(true)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'moderate-channel',
+          channelId: selectedThread.channelId,
+          status: modStatus,
+          reason: modReason.trim() || 'Trust & Safety enforcement',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`Group updated to ${modStatus}`)
+        setModModalOpen(false)
+        setSelectedThread((prev) => prev ? { ...prev, status: modStatus } : null)
+        fetchThreads()
+      } else {
+        toast.error(data.error || 'Failed to moderate channel')
+      }
+    } catch (err: any) {
+      toast.error('Error moderating channel: ' + err.message)
+    } finally {
+      setModerating(false)
+    }
+  }
+
+  const filteredThreads = threads.filter((t) => {
+    if (typeFilter !== 'all' && t.type !== typeFilter) return false
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return t.title.toLowerCase().includes(q) || t.channelId.toLowerCase().includes(q) || t.lastMessage.toLowerCase().includes(q)
+  })
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-amber-500" />
+            Omni-Chat Surveillance & Vault
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Real-time administrative watchtower over all platform DMs, community groups, channels, and forum chats.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          onClick={fetchThreads}
+          disabled={loading}
+          className="h-8 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold self-start sm:self-auto cursor-pointer flex items-center gap-1.5"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh Watchtower</span>
+        </Button>
+      </div>
+
+      {/* Metrics */}
+      {metrics && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="bg-[#0D1322] border border-slate-800 rounded-xl p-3 shadow-sm">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Total Messages</span>
+            <div className="text-lg font-bold text-slate-100 mt-0.5">{metrics.totalMessages}</div>
+          </div>
+          <div className="bg-[#0D1322] border border-slate-800 rounded-xl p-3 shadow-sm">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Total Threads</span>
+            <div className="text-lg font-bold text-slate-100 mt-0.5">{metrics.totalThreads}</div>
+          </div>
+          <div className="bg-amber-950/20 border border-amber-900/40 rounded-xl p-3 shadow-sm">
+            <span className="text-[10px] uppercase font-bold text-amber-400">Direct Messages</span>
+            <div className="text-lg font-bold text-amber-300 mt-0.5">{metrics.totalDMs}</div>
+          </div>
+          <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-3 shadow-sm">
+            <span className="text-[10px] uppercase font-bold text-emerald-400">Community Groups</span>
+            <div className="text-lg font-bold text-emerald-300 mt-0.5">{metrics.totalGroups}</div>
+          </div>
+          <div className="bg-cyan-950/20 border border-cyan-900/40 rounded-xl p-3 shadow-sm">
+            <span className="text-[10px] uppercase font-bold text-cyan-400">Broadcast Channels</span>
+            <div className="text-lg font-bold text-cyan-300 mt-0.5">{metrics.totalChannels}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Split Surveillance Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[650px] min-h-0">
+        {/* Left Column: Thread Browser (4 cols) */}
+        <div className="lg:col-span-4 flex flex-col bg-[#0D1322] border border-slate-800 rounded-2xl overflow-hidden min-h-0">
+          <div className="p-3 border-b border-slate-800/80 space-y-2.5">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search threads, names, or IDs..."
+                className="pl-8 h-8 text-xs bg-[#090D18] border-slate-700 text-slate-100 placeholder:text-slate-500 rounded-lg w-full"
+              />
+            </div>
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'dm', label: 'DMs' },
+                { id: 'group', label: 'Groups' },
+                { id: 'channel', label: 'Channels' },
+                { id: 'world', label: 'World' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setTypeFilter(tab.id as any)}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition cursor-pointer ${
+                    typeFilter === tab.id
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-[#090D18] text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 p-1.5 space-y-1">
+            {filteredThreads.map((thread) => {
+              const isSelected = selectedThread?.channelId === thread.channelId
+              return (
+                <div
+                  key={thread.channelId}
+                  onClick={() => setSelectedThread(thread)}
+                  className={`p-2.5 rounded-xl transition cursor-pointer flex flex-col gap-1 ${
+                    isSelected ? 'bg-slate-800/80 border border-amber-600/60 shadow-sm' : 'hover:bg-slate-800/40'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="font-bold text-xs text-slate-200 truncate">{thread.title}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 shrink-0">
+                      {thread.messageCount} msgs
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                    <span className="capitalize text-slate-500 font-semibold">{thread.type}</span>
+                    <span>·</span>
+                    <span className="truncate">{thread.subtitle}</span>
+                    {thread.status !== 'ACTIVE' && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-950 text-rose-300 ml-auto shrink-0">
+                        {thread.status}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 line-clamp-1 italic mt-0.5">
+                    &quot;{thread.lastMessage}&quot;
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Right Column: Live Message Transcript & Actions (8 cols) */}
+        <div className="lg:col-span-8 flex flex-col bg-[#0D1322] border border-slate-800 rounded-2xl overflow-hidden min-h-0">
+          {selectedThread ? (
+            <>
+              {/* Thread Context Header */}
+              <div className="p-3.5 border-b border-slate-800/80 flex items-center justify-between gap-3 bg-[#090D18]">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-slate-100 truncate">{selectedThread.title}</h2>
+                    {selectedThread.status !== 'ACTIVE' && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950 border border-rose-800 text-rose-300">
+                        {selectedThread.status}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">
+                    ID: {selectedThread.channelId} · {messages.length} messages loaded
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Channel Moderation for Groups/Channels */}
+                  {(selectedThread.type === 'group' || selectedThread.type === 'channel') && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setModStatus(selectedThread.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE')
+                        setModReason('')
+                        setModModalOpen(true)
+                      }}
+                      className="h-7 px-2.5 bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-200 text-xs font-semibold cursor-pointer flex items-center gap-1"
+                    >
+                      <ShieldAlert className="h-3 w-3 text-rose-400" />
+                      <span>Moderate</span>
+                    </Button>
+                  )}
+
+                  {/* Purge thread text button */}
+                  <Button
+                    size="sm"
+                    onClick={handlePurgeThread}
+                    disabled={purging || messages.length === 0}
+                    className="h-7 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold cursor-pointer flex items-center gap-1"
+                    title="Clear text in this thread to save database storage"
+                  >
+                    <Trash2 className="h-3 w-3 text-slate-400" />
+                    <span>Purge Text</span>
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => fetchMessages(selectedThread.channelId)}
+                    className="h-7 w-7 p-0 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg cursor-pointer"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${loadingMessages ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Message Transcript Stream */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#080C16]">
+                {loadingMessages && messages.length === 0 ? (
+                  <div className="text-center py-16 text-xs text-slate-500">Loading transcript…</div>
+                ) : messages.length === 0 ? (
+                  <div className="text-center py-16 text-xs text-slate-500">No messages in this thread.</div>
+                ) : (
+                  messages.map((m) => (
+                    <div
+                      key={m.id}
+                      className="p-3 rounded-xl bg-[#0D1322] border border-slate-800/80 space-y-1.5 group"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-200">{m.senderName}</span>
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-slate-800 text-slate-400">
+                            {m.senderRole}
+                          </span>
+                          <span className="text-[10px] text-slate-500">
+                            {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteMessage(m.id)}
+                          disabled={deletingId === m.id}
+                          className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-400 p-1 transition cursor-pointer text-[10px] flex items-center gap-1"
+                          title="Delete message from database"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-xs text-slate-500">
+              Select a thread from the left to view surveillance transcript.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Moderation Modal for Omni-Chat Vault */}
+      {modModalOpen && selectedThread && (
+        <Dialog open={modModalOpen} onOpenChange={setModModalOpen}>
+          <DialogContent className="max-w-md bg-[#0D1322] border-slate-800 text-slate-100 rounded-2xl p-5 shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-rose-500" />
+                <span>Moderate Channel: {selectedThread.title}</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-400">
+                Suspend, ban, or reinstate this group or channel across Mapstar.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3.5 mt-2 text-xs">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">Action to Apply:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'ACTIVE', label: 'Reinstate (Active)' },
+                    { id: 'SUSPENDED', label: 'Suspend Group' },
+                    { id: 'BANNED', label: 'Ban Group' },
+                    { id: 'DELETED', label: 'Delete Group' },
+                  ].map((act) => (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => setModStatus(act.id as any)}
+                      className={`p-2 rounded-xl border text-xs font-bold transition cursor-pointer text-left ${
+                        modStatus === act.id
+                          ? 'border-amber-500 bg-amber-950/40 text-amber-300'
+                          : 'bg-[#090D18] border-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  Reason for Action (Visible to Group Members & Owner):
+                </label>
+                <textarea
+                  rows={3}
+                  value={modReason}
+                  onChange={(e) => setModReason(e.target.value)}
+                  placeholder="e.g. Tenancy fee violations, unverified lodge listings, hate speech, or scam solicitation."
+                  className="w-full p-2.5 rounded-xl bg-[#090D18] border border-slate-700 text-xs text-slate-100 placeholder:text-slate-500 focus:border-amber-500 outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setModModalOpen(false)}
+                  className="h-8 text-xs border-slate-700 text-slate-300 cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={moderating}
+                  onClick={handleModerateChannel}
+                  className={`h-8 font-bold text-white text-xs rounded-xl shadow-xs cursor-pointer ${
+                    modStatus === 'ACTIVE'
+                      ? 'bg-emerald-600 hover:bg-emerald-500'
+                      : 'bg-rose-600 hover:bg-rose-500'
+                  }`}
+                >
+                  {moderating ? 'Saving…' : `Confirm ${modStatus}`}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
   )
 }

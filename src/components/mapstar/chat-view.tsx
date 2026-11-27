@@ -27,6 +27,10 @@ import {
   Lock,
   User,
   Loader2,
+  ShieldAlert,
+  Scale,
+  AlertTriangle,
+  Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -63,10 +67,15 @@ export interface UserGroup {
   category: string
   desc: string
   createdBy?: string
+  creatorId?: string
   createdAt: string
   membersCount: number
   lastMessage?: string
   lastTime?: string
+  status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'DELETED'
+  moderationReason?: string
+  moderatedAt?: string
+  hasJoined?: boolean
 }
 
 export interface UserChannel {
@@ -75,10 +84,16 @@ export interface UserChannel {
   badgeText: string
   desc: string
   createdBy?: string
+  creatorId?: string
   createdAt: string
   subscribers: string
+  subscribersCount?: number
   lastMessage?: string
   lastTime?: string
+  status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'DELETED'
+  moderationReason?: string
+  moderatedAt?: string
+  hasSubscribed?: boolean
 }
 
 export interface UserDM {
@@ -147,6 +162,18 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
   // Star Power / Admin cleanup modal state
   const [starPowerCleanOpen, setStarPowerCleanOpen] = useState(false)
   const [purging, setPurging] = useState(false)
+  // Appeal & Moderation states
+  const [appealModalOpen, setAppealModalOpen] = useState(false)
+  const [appealExplanation, setAppealExplanation] = useState('')
+  const [appealPhone, setAppealPhone] = useState('')
+  const [appealEmail, setAppealEmail] = useState('')
+  const [submittingAppeal, setSubmittingAppeal] = useState(false)
+
+  const [adminModModalOpen, setAdminModModalOpen] = useState(false)
+  const [adminModStatus, setAdminModStatus] = useState<'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'DELETED'>('SUSPENDED')
+  const [adminModReason, setAdminModReason] = useState('')
+  const [adminModerating, setAdminModerating] = useState(false)
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isAdmin = user?.role === 'ADMIN'
@@ -222,8 +249,13 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                 category: item.category || 'General',
                 desc: item.desc || 'Public community group',
                 createdBy: item.creatorName,
+                creatorId: item.creatorId,
                 createdAt: item.createdAt,
                 membersCount: item.membersCount || 1,
+                status: item.status || 'ACTIVE',
+                moderationReason: item.moderationReason,
+                moderatedAt: item.moderatedAt,
+                hasJoined: Boolean(item.hasJoined),
               })
             } else if (item.type === 'channel') {
               remoteChannels.push({
@@ -232,8 +264,13 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                 badgeText: item.badgeText || 'BROADCAST',
                 desc: item.desc || 'Official broadcast channel',
                 createdBy: item.creatorName,
+                creatorId: item.creatorId,
                 createdAt: item.createdAt,
-                subscribers: item.subscribers || '1 subscriber',
+                subscribers: item.subscribers || `${item.membersCount || 1} subscribers`,
+                status: item.status || 'ACTIVE',
+                moderationReason: item.moderationReason,
+                moderatedAt: item.moderatedAt,
+                hasSubscribed: Boolean(item.hasSubscribed),
               })
             }
           })
@@ -285,6 +322,149 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
       localStorage.setItem('mapstar_user_dms', JSON.stringify(dms))
     }
   }, [dms])
+
+    // Membership actions: Join Group
+  async function handleJoinGroup() {
+    if (!user) {
+      onOpenAuth('login')
+      return
+    }
+    if (!activeGroup) return
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'join', channelId: activeGroup.id }),
+      })
+      if (res.ok) {
+        toast.success(`Joined ${activeGroup.name}!`)
+        setActiveGroup((prev) => prev ? { ...prev, hasJoined: true, membersCount: prev.membersCount + 1 } : null)
+        setGroups((prev) => prev.map((g) => g.id === activeGroup.id ? { ...g, hasJoined: true, membersCount: g.membersCount + 1 } : g))
+      }
+    } catch {
+      toast.error('Failed to join group')
+    }
+  }
+
+  // Membership actions: Leave Group
+  async function handleLeaveGroup() {
+    if (!user || !activeGroup) return
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'leave', channelId: activeGroup.id }),
+      })
+      if (res.ok) {
+        toast.success(`Left ${activeGroup.name}`)
+        setActiveGroup((prev) => prev ? { ...prev, hasJoined: false, membersCount: Math.max(1, prev.membersCount - 1) } : null)
+        setGroups((prev) => prev.map((g) => g.id === activeGroup.id ? { ...g, hasJoined: false, membersCount: Math.max(1, g.membersCount - 1) } : g))
+      }
+    } catch {
+      toast.error('Failed to leave group')
+    }
+  }
+
+  // Subscription action: Subscribe or Unsubscribe from Broadcast Channel
+  async function handleToggleSubscribeChannel() {
+    if (!user) {
+      onOpenAuth('login')
+      return
+    }
+    if (!activeBroadcast) return
+    const isSubscribed = Boolean(activeBroadcast.hasSubscribed)
+    const action = isSubscribed ? 'leave' : 'join'
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, channelId: activeBroadcast.id }),
+      })
+      if (res.ok) {
+        toast.success(isSubscribed ? `Unsubscribed from ${activeBroadcast.name}` : `Subscribed to ${activeBroadcast.name}!`)
+        setActiveBroadcast((prev) => prev ? { ...prev, hasSubscribed: !isSubscribed } : null)
+        setChannels((prev) => prev.map((c) => c.id === activeBroadcast.id ? { ...c, hasSubscribed: !isSubscribed } : c))
+      }
+    } catch {
+      toast.error('Failed to update channel subscription')
+    }
+  }
+
+  // Owner action: Submit appeal for banned or suspended group
+  async function handleSubmitAppeal(e: React.FormEvent) {
+    e.preventDefault()
+    if (!activeGroup || !appealExplanation.trim()) {
+      toast.error('Please enter an explanation for your appeal.')
+      return
+    }
+    setSubmittingAppeal(true)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'submit-appeal',
+          channelId: activeGroup.id,
+          channelName: activeGroup.name,
+          channelType: 'group',
+          explanation: appealExplanation.trim(),
+          contactPhone: appealPhone.trim(),
+          contactEmail: appealEmail.trim(),
+          sanctionType: activeGroup.status || 'SUSPENDED',
+          sanctionReason: activeGroup.moderationReason || 'Policy review',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success('Appeal submitted successfully to the Admin Review Board!')
+        setAppealModalOpen(false)
+        setAppealExplanation('')
+      } else {
+        toast.error(data.error || 'Failed to submit appeal')
+      }
+    } catch (err: any) {
+      toast.error('Error submitting appeal: ' + err.message)
+    } finally {
+      setSubmittingAppeal(false)
+    }
+  }
+
+  // Admin action: Ban, Suspend, Reinstate, or Delete group
+  async function handleAdminModerate(targetStatus: 'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'DELETED') {
+    const targetId = activeGroup?.id || activeBroadcast?.id
+    if (!targetId) return
+    setAdminModerating(true)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'moderate-channel',
+          channelId: targetId,
+          status: targetStatus,
+          reason: adminModReason.trim() || 'Trust & Safety enforcement',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`Group set to ${targetStatus}`)
+        setAdminModModalOpen(false)
+        fetchPublicChannels()
+        if (activeGroup) {
+          setActiveGroup((prev) => prev ? { ...prev, status: targetStatus, moderationReason: adminModReason } : null)
+        }
+        if (activeBroadcast) {
+          setActiveBroadcast((prev) => prev ? { ...prev, status: targetStatus, moderationReason: adminModReason } : null)
+        }
+      } else {
+        toast.error(data.error || 'Failed to moderate channel')
+      }
+    } catch (err: any) {
+      toast.error('Error moderating channel: ' + err.message)
+    } finally {
+      setAdminModerating(false)
+    }
+  }
 
   // Synchronize current channel ID according to view
   useEffect(() => {
@@ -861,6 +1041,79 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
 
         {/* Right side actions */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Join / Leave Group button if in group view */}
+          {activeTab === 'groups' && activeGroup && (
+            <div className="flex items-center gap-1">
+              {activeGroup.hasJoined ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLeaveGroup}
+                  className="h-7 px-2 bg-emerald-50 text-emerald-800 border-emerald-300 text-xs font-bold rounded-lg cursor-pointer hover:bg-emerald-100 flex items-center gap-1"
+                  title="You are a member. Click to leave group."
+                >
+                  <Check className="h-3 w-3 text-emerald-600" />
+                  <span className="hidden sm:inline">Joined</span>
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={handleJoinGroup}
+                  className="h-7 px-2.5 bg-[#78350F] hover:bg-[#854D0E] text-white text-xs font-bold rounded-lg cursor-pointer shadow-xs flex items-center gap-1"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Join</span>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Subscribe / Unsubscribe Channel button if in channel view */}
+          {activeTab === 'channels' && activeBroadcast && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant={activeBroadcast.hasSubscribed ? 'outline' : 'default'}
+                size="sm"
+                onClick={handleToggleSubscribeChannel}
+                className={`h-7 px-2.5 text-xs font-bold rounded-lg cursor-pointer shadow-xs flex items-center gap-1 ${
+                  activeBroadcast.hasSubscribed
+                    ? 'bg-amber-50 text-[#78350F] border-amber-300 hover:bg-amber-100'
+                    : 'bg-[#78350F] hover:bg-[#854D0E] text-white'
+                }`}
+              >
+                {activeBroadcast.hasSubscribed ? (
+                  <>
+                    <Check className="h-3 w-3 text-[#78350F]" />
+                    <span className="hidden sm:inline">Subscribed</span>
+                  </>
+                ) : (
+                  <>
+                    <Radio className="h-3 w-3" />
+                    <span>Subscribe</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Admin Moderation Action: Ban, Suspend, Reinstate */}
+          {isAdmin && (activeGroup || activeBroadcast) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const cur = activeGroup?.status || activeBroadcast?.status || 'ACTIVE'
+                setAdminModStatus(cur === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE')
+                setAdminModReason('')
+                setAdminModModalOpen(true)
+              }}
+              className="h-7 px-2 border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-bold rounded-lg cursor-pointer flex items-center gap-1"
+              title="Admin: Ban, Suspend, Reinstate, or Delete group"
+            >
+              <ShieldAlert className="h-3 w-3 text-rose-600" />
+              <span className="hidden sm:inline">Moderate</span>
+            </Button>
+          )}
           {/* Direct call button if in DM with phone */}
           {activeTab === 'dms' && activeDM?.phone && (
             <a
@@ -1156,9 +1409,23 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <h4 className="text-xs font-bold text-[#271810] truncate">{grp.name}</h4>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
-                            <Globe className="h-2.5 w-2.5" /> Public
-                          </span>
+                          {grp.status === 'SUSPENDED' ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-0.5">
+                              <AlertTriangle className="h-2.5 w-2.5 text-amber-600" /> Suspended
+                            </span>
+                          ) : grp.status === 'BANNED' ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-0.5">
+                              <ShieldAlert className="h-2.5 w-2.5 text-rose-600" /> Banned
+                            </span>
+                          ) : grp.hasJoined ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
+                              <Check className="h-2.5 w-2.5 text-emerald-600" /> Joined
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
+                              <Globe className="h-2.5 w-2.5" /> Public
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5 text-[10px] text-[#78350F] mt-0.5">
                           <span className="font-semibold">{grp.category}</span>
@@ -1279,6 +1546,44 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
 
               {/* Messages Feed */}
               <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+                {/* Active Group Suspended / Banned Warning & Owner Appeal */}
+                {activeTab === 'groups' && activeGroup && (activeGroup.status === 'SUSPENDED' || activeGroup.status === 'BANNED') && (
+                  <div className="mx-auto max-w-md bg-rose-50 border border-rose-300 rounded-2xl p-4 text-center text-xs text-rose-900 shadow-2xs space-y-2 mb-3">
+                    <div className="flex items-center justify-center gap-1.5 font-bold text-sm text-rose-700">
+                      <ShieldAlert className="h-4 w-4" />
+                      <span>Group {activeGroup.status === 'BANNED' ? 'Permanently Banned' : 'Suspended'}</span>
+                    </div>
+                    <p className="text-xs text-rose-800 leading-relaxed">
+                      This group was {activeGroup.status.toLowerCase()} by Mapstar Trust & Safety.
+                      {activeGroup.moderationReason && (
+                        <span className="block mt-1 font-semibold text-rose-950">
+                          Sanction Reason: {activeGroup.moderationReason}
+                        </span>
+                      )}
+                    </p>
+                    {/* Owner Appeal action */}
+                    {(user && (user.role === 'ADMIN' || activeGroup.creatorId === user.id || activeGroup.createdBy === user.fullName || activeGroup.createdBy === user.email)) && (
+                      <div className="pt-2.5 mt-1 border-t border-rose-200 space-y-2">
+                        <p className="text-[11px] text-rose-700 font-medium">
+                          You are registered as the group owner. You can file an appeal to the Admin Review Board to lift this sanction.
+                        </p>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setAppealExplanation('')
+                            setAppealPhone(user.phone || '')
+                            setAppealEmail(user.email || '')
+                            setAppealModalOpen(true)
+                          }}
+                          className="h-8 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <Scale className="h-3.5 w-3.5" />
+                          <span>Submit Group Appeal</span>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* User-facing End-to-End Encryption Banner inside DMs */}
                 {activeTab === 'dms' && (
                   <div className="mx-auto max-w-sm bg-amber-50/90 border border-amber-200/90 rounded-2xl p-3 text-center text-[10px] text-[#78350F] shadow-2xs space-y-1 mb-3">
@@ -1471,8 +1776,31 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                   </div>
                 )}
 
-                {/* Main Form */}
-                <form onSubmit={handleSend} className="flex items-center gap-1.5 sm:gap-2">
+                {/* Locked composer if group is suspended/banned */}
+                {activeTab === 'groups' && activeGroup && (activeGroup.status === 'SUSPENDED' || activeGroup.status === 'BANNED') ? (
+                  <div className="p-3 bg-rose-50/80 border border-rose-200 rounded-xl text-center text-xs text-rose-800 font-semibold flex items-center justify-center gap-2">
+                    <Lock className="h-4 w-4 text-rose-600" />
+                    <span>Messaging locked: This group is currently {activeGroup.status.toLowerCase()}.</span>
+                  </div>
+                ) : activeTab === 'groups' && activeGroup && !activeGroup.hasJoined ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3 text-xs text-[#78350F]">
+                    <span className="font-medium truncate">Join this group to send messages and connect with other students and residents.</span>
+                    <Button
+                      size="sm"
+                      onClick={handleJoinGroup}
+                      className="h-8 px-4 bg-[#78350F] hover:bg-[#854D0E] text-white font-bold text-xs rounded-lg cursor-pointer shrink-0"
+                    >
+                      Join Group
+                    </Button>
+                  </div>
+                ) : activeTab === 'channels' && activeBroadcast && (!user || (user.role !== 'ADMIN' && activeBroadcast.creatorId !== user.id)) ? (
+                  <div className="p-3 bg-[#FAF7F2] border border-[#E5DAC8] rounded-xl text-center text-xs text-[#7C6859] font-medium flex items-center justify-center gap-2">
+                    <Radio className="h-4 w-4 text-[#78350F]" />
+                    <span>Broadcast Channel: Only verified channel managers can post announcements.</span>
+                  </div>
+                ) : (
+                  /* Main Form */
+                  <form onSubmit={handleSend} className="flex items-center gap-1.5 sm:gap-2">
                   <Button
                     type="button"
                     variant="ghost"
@@ -1525,6 +1853,7 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                     </Button>
                   )}
                 </form>
+                )}
               </div>
             </>
           )}
@@ -1935,6 +2264,184 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
           </div>
         </DialogContent>
       </Dialog>
+      {/* =========================================================================
+          MODAL: Submit Group Appeal to Admin Review Board
+         ========================================================================= */}
+      {appealModalOpen && activeGroup && (
+        <Dialog open={appealModalOpen} onOpenChange={setAppealModalOpen}>
+          <DialogContent className="max-w-md bg-white border-[#E5DAC8] text-[#271810] rounded-2xl p-5 shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                <Scale className="h-4 w-4 text-[#78350F]" />
+                <span>Appeal Sanction for &apos;{activeGroup.name}&apos;</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-[#7C6859]">
+                Submit your case to the Mapstar Admin Review Board. Reinstatement will be evaluated within 12 to 24 hours.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmitAppeal} className="space-y-3.5 mt-2 text-xs">
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 space-y-1">
+                <div className="font-bold text-rose-900">Current Sanction: {activeGroup.status}</div>
+                <div className="text-[11px] text-rose-700">
+                  Reason: {activeGroup.moderationReason || 'Policy compliance investigation'}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#271810] block mb-1">
+                  Appeal Explanation & Corrective Actions Taken:
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={appealExplanation}
+                  onChange={(e) => setAppealExplanation(e.target.value)}
+                  placeholder="Explain why this group should be reinstated, steps taken to resolve violations, or why this sanction was issued in error..."
+                  className="w-full p-2.5 rounded-xl bg-[#FAF7F2] border border-[#E5DAC8] text-xs text-[#271810] placeholder:text-[#7C6859] focus:border-[#78350F] outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[11px] font-bold text-[#271810] block mb-1">WhatsApp / Phone:</label>
+                  <Input
+                    value={appealPhone}
+                    onChange={(e) => setAppealPhone(e.target.value)}
+                    placeholder="+234 803 123 4567"
+                    className="h-8 text-xs bg-[#FAF7F2] border-[#E5DAC8] rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#271810] block mb-1">Email Address:</label>
+                  <Input
+                    type="email"
+                    value={appealEmail}
+                    onChange={(e) => setAppealEmail(e.target.value)}
+                    placeholder="owner@gmail.com"
+                    className="h-8 text-xs bg-[#FAF7F2] border-[#E5DAC8] rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAppealModalOpen(false)}
+                  className="h-8 text-xs cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={submittingAppeal}
+                  className="h-8 bg-[#78350F] hover:bg-[#854D0E] text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
+                >
+                  {submittingAppeal ? 'Submitting…' : 'Submit Appeal to Admin'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* =========================================================================
+          MODAL: Admin Group & Channel Moderation (Ban / Suspend / Delete / Reinstate)
+         ========================================================================= */}
+      {adminModModalOpen && (activeGroup || activeBroadcast) && (
+        <Dialog open={adminModModalOpen} onOpenChange={setAdminModModalOpen}>
+          <DialogContent className="max-w-md bg-white border-[#E5DAC8] text-[#271810] rounded-2xl p-5 shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-rose-600" />
+                <span>Admin Moderation: {activeGroup?.name || activeBroadcast?.name}</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-[#7C6859]">
+                Enforce platform safety, community guidelines, and tenancy regulations.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3.5 mt-2 text-xs">
+              <div>
+                <label className="text-xs font-bold text-[#271810] block mb-1.5">Action to Apply:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'ACTIVE', label: 'Reinstate (Active)', color: 'border-emerald-300 text-emerald-800 bg-emerald-50' },
+                    { id: 'SUSPENDED', label: 'Suspend Group', color: 'border-amber-300 text-amber-900 bg-amber-50' },
+                    { id: 'BANNED', label: 'Ban Group', color: 'border-rose-300 text-rose-900 bg-rose-50' },
+                    { id: 'DELETED', label: 'Delete Group', color: 'border-red-400 text-red-950 bg-red-100' },
+                  ].map((act) => (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => setAdminModStatus(act.id as any)}
+                      className={`p-2 rounded-xl border text-xs font-bold transition cursor-pointer text-left ${
+                        adminModStatus === act.id
+                          ? 'ring-2 ring-[#78350F] ' + act.color
+                          : 'bg-[#FAF7F2] border-[#E5DAC8] text-[#7C6859]'
+                      }`}
+                    >
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#271810] block mb-1">
+                  Reason for Action (Visible to Group Members & Owner):
+                </label>
+                <textarea
+                  rows={3}
+                  value={adminModReason}
+                  onChange={(e) => setAdminModReason(e.target.value)}
+                  placeholder="e.g. Tenancy fee violations, unverified lodge listings, hate speech, or scam solicitation."
+                  className="w-full p-2.5 rounded-xl bg-[#FAF7F2] border border-[#E5DAC8] text-xs text-[#271810] placeholder:text-[#7C6859] focus:border-[#78350F] outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAdminModModalOpen(false)}
+                  className="h-8 text-xs cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={adminModerating}
+                  onClick={() => handleAdminModerate(adminModStatus)}
+                  className={`h-8 font-bold text-white text-xs rounded-xl shadow-xs cursor-pointer ${
+                    adminModStatus === 'ACTIVE'
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
+                >
+                  {adminModerating ? 'Saving…' : `Confirm ${adminModStatus}`}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
     </div>
   )
 }
+<span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
+                            <Globe className="h-2.5 w-2.5" /> Public
+                          </span>
+                          {chan.status === 'SUSPENDED' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">Suspended</span>
+                          )}
+                          {chan.status === 'BANNED' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-900">Banned</span>
+                          )}
+                          {chan.hasSubscribed && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Subscribed ✓</span>
+                          )}
