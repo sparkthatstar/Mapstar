@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
-    const channelId = searchParams.get('channelId') || 'student-lodges'
+    const channelId = searchParams.get('channelId') || 'world-square'
 
     const messages = await db.chatMessage.findMany({
       where: { channelId },

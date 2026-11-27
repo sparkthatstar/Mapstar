@@ -372,7 +372,7 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="flex-1 min-h-0 relative flex flex-col overflow-hidden">
-        {/* TAB 1: Real-time Community Chat */}
+        {/* TAB 1: Real-time Property Socials & Community Hub */}
         {bottomTab === 'chat' && (
           <ChatView
             user={user}
@@ -380,6 +380,7 @@ export default function Home() {
               setAuthMode(mode || 'login')
               setAuthOpen(true)
             }}
+            onOpenListingDetail={openListing}
           />
         )}
 
