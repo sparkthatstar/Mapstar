@@ -1481,6 +1481,15 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
                             <Globe className="h-2.5 w-2.5" /> Public
                           </span>
+                          {chan.status === 'SUSPENDED' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">Suspended</span>
+                          )}
+                          {chan.status === 'BANNED' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-900">Banned</span>
+                          )}
+                          {chan.hasSubscribed && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Subscribed ✓</span>
+                          )}
                         </div>
                         <p className="text-[10px] text-[#7C6859] mt-0.5">{chan.subscribers}</p>
                         <p className="text-[11px] text-[#7C6859] truncate mt-1">{chan.desc}</p>
@@ -2433,15 +2442,3 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
     </div>
   )
 }
-<span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
-                            <Globe className="h-2.5 w-2.5" /> Public
-                          </span>
-                          {chan.status === 'SUSPENDED' && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">Suspended</span>
-                          )}
-                          {chan.status === 'BANNED' && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-900">Banned</span>
-                          )}
-                          {chan.hasSubscribed && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Subscribed ✓</span>
-                          )}
