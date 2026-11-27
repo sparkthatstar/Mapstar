@@ -24,6 +24,7 @@ export const PIN_THEMES: Record<
     border: string
     glow: string
     starFill: string
+    buildingColor: string
     pulseColor: string
     label: string
   }
@@ -31,34 +32,40 @@ export const PIN_THEMES: Record<
   AVAILABLE: {
     bgGradient: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
     border: '#047857',
-    glow: 'rgba(16, 185, 129, 0.5)',
+    glow: 'rgba(16, 185, 129, 0.55)',
     starFill: '#FFFFFF',
+    buildingColor: '#064E3B',
     pulseColor: '#34D399',
     label: 'Available',
   },
   COMING_SOON: {
     bgGradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
     border: '#B45309',
-    glow: 'rgba(245, 158, 11, 0.5)',
+    glow: 'rgba(245, 158, 11, 0.55)',
     starFill: '#FFFFFF',
+    buildingColor: '#78350F',
     pulseColor: '#FBBF24',
     label: 'Coming Soon',
   },
   UNAVAILABLE: {
     bgGradient: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
     border: '#991B1B',
-    glow: 'rgba(239, 68, 68, 0.5)',
+    glow: 'rgba(239, 68, 68, 0.55)',
     starFill: '#FFFFFF',
+    buildingColor: '#7F1D1D',
     pulseColor: '#F87171',
     label: 'Unavailable',
   },
 }
 
 /**
- * Creates a clean, elegant Mapstar Star Listing Pin.
- * - Pure visual icon: Crowned Mapstar Star with a signpost stem pointing to the ground.
- * - Color-coded: 🟢 Green for Available, 🟠 Orange for Coming Soon, 🔴 Red for Unavailable.
- * - Price and text labels removed for a minimalist, ultra-fast and uncluttered map view.
+ * Creates a circular Mapstar Star + Building Pin Element.
+ * Specifications:
+ * 1. Fixed Real-World Positioning: Anchors precisely at [longitude, latitude] by its bottom needle point.
+ * 2. Round Design: Modern circular disc badge with luminous outer ring.
+ * 3. Inscribed Star: A golden or crisp white 5-point star inscribed in the circle.
+ * 4. Transparent Buildings Showing Through: Architectural residential building silhouette
+ *    elegantly visible within the star geometry.
  */
 export function buildStarPinElement({
   status,
@@ -86,24 +93,24 @@ export function buildStarPinElement({
     align-items: center;
     transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     transform-origin: bottom center;
-    ${selected ? 'transform: scale(1.28); z-index: 9999;' : 'z-index: 10;'}
+    ${selected ? 'transform: scale(1.3); z-index: 9999;' : 'z-index: 10;'}
   `
 
   const ringStyle = featured
-    ? `box-shadow: 0 0 0 3px #FDE047, 0 0 16px rgba(250, 204, 21, 0.85), 0 4px 14px ${theme.glow};`
+    ? `box-shadow: 0 0 0 3px #FDE047, 0 0 16px rgba(250, 204, 21, 0.9), 0 4px 14px ${theme.glow};`
     : selected
     ? `box-shadow: 0 0 0 3px #FFFFFF, 0 0 20px ${theme.pulseColor}, 0 6px 18px rgba(0,0,0,0.5);`
     : `box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35), 0 1px 4px ${theme.glow};`
 
-  // 5-point Star SVG Path
-  const starPath =
-    'M12 2 L14.7 8.2 L21.4 8.7 L16.3 13.1 L17.9 19.6 L12 16.1 L6.1 19.6 L7.7 13.1 L2.6 8.7 L9.3 8.2 Z'
-
+  // 36px Round Disc containing:
+  // - Outer round badge in theme gradient
+  // - 5-point Inscribed Star with subtle inner depth
+  // - Building silhouette showing through inside the star
   container.innerHTML = `
-    <!-- Star Head Circle -->
+    <!-- Round Head Disc -->
     <div style="
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       background: ${theme.bgGradient};
       border: 2px solid ${theme.border};
@@ -112,13 +119,49 @@ export function buildStarPinElement({
       justify-content: center;
       ${ringStyle}
       transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
     ">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="${theme.starFill}">
-        <path d="${starPath}" />
+      <svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- Star Clip Path so the buildings show through the star -->
+          <clipPath id="star-clip-${pinState}">
+            <path d="M16 2 L20.2 11.2 L30.2 12.1 L22.8 18.7 L24.9 28.5 L16 23.3 L7.1 28.5 L9.2 18.7 L1.8 12.1 L11.8 11.2 Z" />
+          </clipPath>
+        </defs>
+
+        <!-- Star Base Outline / Fill -->
+        <path
+          d="M16 2 L20.2 11.2 L30.2 12.1 L22.8 18.7 L24.9 28.5 L16 23.3 L7.1 28.5 L9.2 18.7 L1.8 12.1 L11.8 11.2 Z"
+          fill="#FFFFFF"
+          stroke="rgba(0,0,0,0.12)"
+          stroke-width="0.8"
+        />
+
+        <!-- Buildings Showing Through Inside the Star Silhouette -->
+        <g clip-path="url(#star-clip-${pinState})">
+          <!-- Back taller building -->
+          <rect x="15" y="11" width="7" height="18" fill="${theme.buildingColor}" opacity="0.9" />
+          <line x1="17" y1="13" x2="17" y2="24" stroke="#FFFFFF" stroke-width="0.75" opacity="0.7" stroke-dasharray="1 1.5" />
+          <line x1="20" y1="13" x2="20" y2="24" stroke="#FFFFFF" stroke-width="0.75" opacity="0.7" stroke-dasharray="1 1.5" />
+
+          <!-- Main center residential lodge building -->
+          <rect x="10" y="14" width="8" height="15" fill="${theme.buildingColor}" opacity="0.96" />
+          <!-- Windows grid -->
+          <rect x="11.5" y="16" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
+          <rect x="14.5" y="16" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
+          <rect x="11.5" y="19" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
+          <rect x="14.5" y="19" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
+          <rect x="11.5" y="22" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
+          <rect x="14.5" y="22" width="1.5" height="1.8" fill="#FFFFFF" opacity="0.85" />
+
+          <!-- Entrance door -->
+          <rect x="13" y="25" width="2" height="4" fill="#FFFFFF" opacity="0.9" />
+        </g>
       </svg>
     </div>
 
-    <!-- Signpost Pointer Needle -->
+    <!-- Signpost Pointer Tip (Anchors precisely to physical GPS coordinates) -->
     <div style="
       width: 0;
       height: 0;
@@ -129,12 +172,12 @@ export function buildStarPinElement({
       filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
     "></div>
 
-    <!-- Contact Shadow Dot on Ground -->
+    <!-- Precise Contact Point Shadow -->
     <div style="
       width: 6px;
       height: 3px;
       border-radius: 50%;
-      background: rgba(0,0,0,0.4);
+      background: rgba(0,0,0,0.45);
       margin-top: 1px;
     "></div>
   `
