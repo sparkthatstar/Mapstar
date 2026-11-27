@@ -572,6 +572,69 @@ export default function Home() {
                   </span>
                 </div>
               </div>
+
+              {/* Quick Filter Tag Chips (Visible in both List and Map views) */}
+              <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-[#E5DAC8]/60 dark:border-[#382618]/70 overflow-x-auto text-[11px]">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] uppercase font-bold text-[#78350F] dark:text-[#E0904E] mr-1 shrink-0 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" /> Quick filters:
+                  </span>
+                  <button
+                    onClick={() => patchFilters({ verifiedOnly: !filters.verifiedOnly })}
+                    className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                      filters.verifiedOnly
+                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                    }`}
+                  >
+                    🛡️ Verified Only
+                  </button>
+                  <button
+                    onClick={() => patchFilters({ fairPriceOnly: !filters.fairPriceOnly })}
+                    className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                      filters.fairPriceOnly
+                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                    }`}
+                  >
+                    ⚖️ Fair Price
+                  </button>
+                  <button
+                    onClick={() => patchFilters({ hasBorehole: !filters.hasBorehole })}
+                    className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                      filters.hasBorehole
+                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                    }`}
+                  >
+                    💧 Borehole Water
+                  </button>
+                  <button
+                    onClick={() => patchFilters({ hasPrepaidMeter: !filters.hasPrepaidMeter })}
+                    className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                      filters.hasPrepaidMeter
+                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                    }`}
+                  >
+                    ⚡ Prepaid NEPA
+                  </button>
+                  <button
+                    onClick={() => patchFilters({ hasWiFi: !filters.hasWiFi })}
+                    className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                      filters.hasWiFi
+                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                    }`}
+                  >
+                    📶 WiFi Ready
+                  </button>
+                </div>
+
+                <div className="shrink-0 text-[11px] text-[#7C6859] dark:text-[#B8A598] hidden sm:block">
+                  Showing <strong className="text-[#271810] dark:text-white font-bold">{filtered.length}</strong> {filtered.length === 1 ? 'lodge' : 'lodges'}
+                </div>
+              </div>
             </div>
 
             {/* Workspace Container: Full View (Listings Gallery OR Full Interactive Map) */}
@@ -582,69 +645,6 @@ export default function Home() {
                   view === 'list' ? 'flex' : 'hidden'
                 }`}
               >
-                {/* Quick Filter Tag Chips */}
-                <div className="shrink-0 bg-white/80 dark:bg-[#120C08]/90 px-4 py-2 border-b border-[#E5DAC8] dark:border-[#382618] flex items-center justify-between gap-2 overflow-x-auto text-[11px] backdrop-blur-md transition-colors">
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] uppercase font-bold text-[#78350F] dark:text-[#E0904E] mr-1 shrink-0 flex items-center gap-1">
-                      <Sparkles className="h-3 w-3" /> Quick filters:
-                    </span>
-                    <button
-                      onClick={() => patchFilters({ verifiedOnly: !filters.verifiedOnly })}
-                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
-                        filters.verifiedOnly
-                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
-                      }`}
-                    >
-                      🛡️ Verified Only
-                    </button>
-                    <button
-                      onClick={() => patchFilters({ fairPriceOnly: !filters.fairPriceOnly })}
-                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
-                        filters.fairPriceOnly
-                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
-                      }`}
-                    >
-                      ⚖️ Fair Price
-                    </button>
-                    <button
-                      onClick={() => patchFilters({ hasBorehole: !filters.hasBorehole })}
-                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
-                        filters.hasBorehole
-                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
-                      }`}
-                    >
-                      💧 Borehole Water
-                    </button>
-                    <button
-                      onClick={() => patchFilters({ hasPrepaidMeter: !filters.hasPrepaidMeter })}
-                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
-                        filters.hasPrepaidMeter
-                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
-                      }`}
-                    >
-                      ⚡ Prepaid NEPA
-                    </button>
-                    <button
-                      onClick={() => patchFilters({ hasWiFi: !filters.hasWiFi })}
-                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
-                        filters.hasWiFi
-                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
-                      }`}
-                    >
-                      📶 WiFi Ready
-                    </button>
-                  </div>
-
-                  <div className="shrink-0 text-[11px] text-[#7C6859] dark:text-[#B8A598] hidden sm:block">
-                    Showing <strong className="text-[#271810] dark:text-white font-bold">{filtered.length}</strong> {filtered.length === 1 ? 'lodge' : 'lodges'}
-                  </div>
-                </div>
-
                 {/* Scrollable Listings Feed */}
                 <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 relative">
                   <div className="max-w-7xl mx-auto space-y-4 pb-20">
@@ -692,6 +692,8 @@ export default function Home() {
                   onSelect={openListing}
                   center={mapCenter}
                   zoom={13}
+                  onResetFilters={resetFilters}
+                  isVisible={view === 'map'}
                 />
 
                 {/* Floating Action Pill to Switch to List */}

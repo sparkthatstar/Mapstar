@@ -22,6 +22,8 @@ interface MapViewProps {
   onSelect: (id: string | null) => void
   center: [number, number]
   zoom?: number
+  onResetFilters?: () => void
+  isVisible?: boolean
 }
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ''
@@ -144,6 +146,8 @@ export default function MapView({
   onSelect,
   center,
   zoom = 13,
+  onResetFilters,
+  isVisible = true,
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -750,30 +754,90 @@ export default function MapView({
     }
   }, [geojson, mapLoaded])
 
-  // Fly to selected property or pan to center
+  // Auto-center or fit bounds to filtered listings or fly to selected lodge
   useEffect(() => {
-    if (!mapRef.current) return
+    if (!mapRef.current || !mapLoaded) return
+    const map = mapRef.current
 
+    // Trigger map canvas resize to match container
+    map.resize()
+
+    // 1. If a specific listing is selected, fly directly to it
     if (selectedId) {
       const selected = listings.find((l) => l.id === selectedId)
       if (selected?.latitude && selected?.longitude) {
-        mapRef.current.flyTo({
+        map.flyTo({
           center: [selected.longitude, selected.latitude],
-          zoom: Math.max(mapRef.current.getZoom(), 15),
+          zoom: Math.max(map.getZoom(), 15.5),
           essential: true,
-          duration: 1200,
+          duration: 1100,
         })
         setCardDismissed(false)
         return
       }
     }
 
-    mapRef.current.easeTo({
-      center: [center[1], center[0]],
-      zoom,
-      duration: 1000,
-    })
-  }, [selectedId, center, listings, zoom])
+    // 2. Go to the location of the filtered lodge(s)
+    const validListings = listings.filter((l) => Boolean(l.latitude && l.longitude))
+
+    if (validListings.length === 1) {
+      // Exactly 1 filtered lodge: fly smoothly directly to it
+      const target = validListings[0]
+      map.flyTo({
+        center: [target.longitude, target.latitude],
+        zoom: 15.5,
+        essential: true,
+        duration: 1100,
+      })
+    } else if (validListings.length > 1) {
+      // Multiple filtered lodges: fit bounds to encompass ALL of them nicely
+      const bounds = new mapboxgl.LngLatBounds()
+      validListings.forEach((l) => bounds.extend([l.longitude, l.latitude]))
+      map.fitBounds(bounds, {
+        padding: { top: 90, bottom: 90, left: 60, right: 60 },
+        maxZoom: 15.5,
+        duration: 1100,
+        essential: true,
+      })
+    } else {
+      // 0 filtered lodges: ease back to general city center
+      map.easeTo({
+        center: [center[1], center[0]],
+        zoom,
+        duration: 800,
+      })
+    }
+  }, [selectedId, listings, center, zoom, mapLoaded, isVisible])
+
+  // Ensure map is properly resized and framed when toggled into view
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded) return
+    if (isVisible) {
+      const timer = setTimeout(() => {
+        if (!mapRef.current) return
+        mapRef.current.resize()
+        const validListings = listings.filter((l) => Boolean(l.latitude && l.longitude))
+        if (validListings.length === 1) {
+          mapRef.current.flyTo({
+            center: [validListings[0].longitude, validListings[0].latitude],
+            zoom: 15.5,
+            essential: true,
+            duration: 800,
+          })
+        } else if (validListings.length > 1) {
+          const bounds = new mapboxgl.LngLatBounds()
+          validListings.forEach((l) => bounds.extend([l.longitude, l.latitude]))
+          mapRef.current.fitBounds(bounds, {
+            padding: { top: 90, bottom: 90, left: 60, right: 60 },
+            maxZoom: 15.5,
+            duration: 800,
+            essential: true,
+          })
+        }
+      }, 60)
+      return () => clearTimeout(timer)
+    }
+  }, [isVisible, mapLoaded])
 
   return (
     <div className="relative h-full w-full flex flex-col bg-[#FAF7F2] dark:bg-[#120C08] overflow-hidden select-none">
@@ -928,6 +992,27 @@ export default function MapView({
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/95 dark:bg-[#1A120B]/95 text-[#78350F] dark:text-[#E0904E] text-[11px] font-semibold shadow-md border border-[#E5DAC8] dark:border-[#382618] backdrop-blur-md">
               <Compass className="w-3.5 h-3.5" />
               <span>{locationNotice}</span>
+            </div>
+          </div>
+        )}
+
+        {/* -----------------------------------------------------------------------
+            EMPTY FILTER STATE NOTICE (Shows when filtered listings have 0 results)
+           ----------------------------------------------------------------------- */}
+        {listings.length === 0 && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-25 pointer-events-auto animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-white/95 dark:bg-[#1A120B]/95 text-[#78350F] dark:text-[#E0904E] text-xs font-semibold shadow-xl border border-[#E5DAC8] dark:border-[#382618] backdrop-blur-md">
+              <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span>No lodges match selected filters in this area</span>
+              {onResetFilters && (
+                <button
+                  type="button"
+                  onClick={onResetFilters}
+                  className="px-2.5 py-0.5 rounded-full bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] text-white text-[10px] font-bold shadow-2xs transition cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              )}
             </div>
           </div>
         )}
