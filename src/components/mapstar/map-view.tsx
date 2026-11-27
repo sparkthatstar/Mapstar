@@ -64,13 +64,13 @@ const ENLARGED_SCAN_ICON_SIZE: any = [
   ['linear'],
   ['zoom'],
   9,
-  0.85,
+  0.95,
   12,
-  1.15,
+  1.3,
   14,
-  1.45,
+  1.65,
   17,
-  1.85,
+  2.1,
 ]
 
 const GLOW_CIRCLE_RADIUS: any = [
@@ -78,13 +78,13 @@ const GLOW_CIRCLE_RADIUS: any = [
   ['linear'],
   ['zoom'],
   9,
-  18,
-  12,
   28,
+  12,
+  44,
   14,
-  38,
+  60,
   17,
-  54,
+  86,
 ]
 
 export default function MapView({
@@ -209,11 +209,11 @@ export default function MapView({
     setScanWaves((prev) => [...prev, { id: waveId, x: waveX!, y: waveY! }])
     setTimeout(() => {
       setScanWaves((prev) => prev.filter((w) => w.id !== waveId))
-    }, 3200)
+    }, 1800)
 
-    // Activate 10-second scan state
+    // Activate 30-second scan state
     setIsScanning(true)
-    setScanCountdown(10)
+    setScanCountdown(30)
 
     scanIntervalRef.current = setInterval(() => {
       setScanCountdown((prev) => {
@@ -227,7 +227,7 @@ export default function MapView({
 
     scanTimerRef.current = setTimeout(() => {
       setIsScanning(false)
-    }, 10000)
+    }, 30000)
   }, [])
 
   // =========================================================================
@@ -457,8 +457,8 @@ export default function MapView({
           source: 'listings-source',
           paint: {
             'circle-radius': GLOW_CIRCLE_RADIUS,
-            'circle-color': '#F59E0B',
-            'circle-blur': 0.85,
+            'circle-color': '#FBBF24',
+            'circle-blur': 0.7,
             'circle-opacity': 0,
             'circle-opacity-transition': { duration: 350 },
           },
@@ -575,7 +575,7 @@ export default function MapView({
       map.setPaintProperty(
         'listings-glow-layer',
         'circle-opacity',
-        isScanning ? 0.9 : 0
+        isScanning ? 1.0 : 0
       )
     }
   }, [isScanning, mapLoaded])
@@ -618,9 +618,9 @@ export default function MapView({
           source: 'listings-source',
           paint: {
             'circle-radius': GLOW_CIRCLE_RADIUS,
-            'circle-color': '#F59E0B',
-            'circle-blur': 0.85,
-            'circle-opacity': isScanning ? 0.9 : 0,
+            'circle-color': '#FBBF24',
+            'circle-blur': 0.7,
+            'circle-opacity': isScanning ? 1.0 : 0,
             'circle-opacity-transition': { duration: 350 },
           },
         })
@@ -686,14 +686,14 @@ export default function MapView({
             transform: translate(-50%, -50%) scale(0.04);
             opacity: 0.95;
           }
-          35% {
-            opacity: 0.78;
+          30% {
+            opacity: 0.75;
           }
-          70% {
-            opacity: 0.35;
+          65% {
+            opacity: 0.3;
           }
           100% {
-            transform: translate(-50%, -50%) scale(2.6);
+            transform: translate(-50%, -50%) scale(2.7);
             opacity: 0;
           }
         }
@@ -701,12 +701,12 @@ export default function MapView({
           position: absolute;
           border-radius: 9999px;
           pointer-events: none;
-          animation: radarWavePulse 2.8s cubic-bezier(0.12, 0.45, 0.25, 1) forwards;
-          border: 2.5px solid rgba(245, 158, 11, 0.85);
-          background: radial-gradient(circle, rgba(245, 158, 11, 0.22) 0%, rgba(217, 119, 6, 0.12) 45%, rgba(255, 255, 255, 0.05) 75%, transparent 100%);
-          box-shadow: 0 0 45px rgba(245, 158, 11, 0.45), inset 0 0 25px rgba(255, 255, 255, 0.35);
-          backdrop-filter: blur(2.5px);
-          -webkit-backdrop-filter: blur(2.5px);
+          animation: radarWavePulse 1.25s cubic-bezier(0.1, 0.75, 0.25, 1) forwards;
+          border: 2px solid rgba(186, 230, 253, 0.8);
+          background: radial-gradient(circle, rgba(186, 230, 253, 0.16) 0%, rgba(125, 211, 252, 0.08) 45%, rgba(255, 255, 255, 0.03) 75%, transparent 100%);
+          box-shadow: 0 0 35px rgba(186, 230, 253, 0.45), inset 0 0 25px rgba(255, 255, 255, 0.5);
+          backdrop-filter: blur(3px);
+          -webkit-backdrop-filter: blur(3px);
         }
       `}</style>
 
@@ -793,7 +793,7 @@ export default function MapView({
                 top: wave.y,
                 width: '440px',
                 height: '440px',
-                animationDelay: '280ms',
+                animationDelay: '140ms',
               }}
             />
             <div
@@ -803,21 +803,21 @@ export default function MapView({
                 top: wave.y,
                 width: '440px',
                 height: '440px',
-                animationDelay: '580ms',
+                animationDelay: '280ms',
               }}
             />
           </div>
         ))}
 
         {/* -----------------------------------------------------------------------
-            RADAR ACTIVE HUD PILL (Appears during the 10-second highlight)
+            RADAR ACTIVE HUD PILL (Appears during the 30-second highlight)
            ----------------------------------------------------------------------- */}
         {isScanning && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-25 pointer-events-none animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/95 dark:bg-amber-600/95 text-white text-xs font-bold shadow-lg backdrop-blur-md border border-amber-300/40">
-              <Radio className="w-3.5 h-3.5 animate-pulse text-amber-100" />
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 dark:bg-black/90 text-sky-200 text-xs font-bold shadow-xl backdrop-blur-md border border-sky-400/40">
+              <Radio className="w-3.5 h-3.5 animate-pulse text-sky-400" />
               <span>Scanning Lodges In Range ({scanCountdown}s)</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-ping" />
             </div>
           </div>
         )}
@@ -897,20 +897,20 @@ export default function MapView({
             </div>
           </button>
 
-          {/* 2. Radar Scan Tool (Sends glassy transparent waves & highlights lodges for 10s) */}
+          {/* 2. Radar Scan Tool (Sends glassy transparent waves & highlights lodges for 30s) */}
           <button
             type="button"
             onClick={() => triggerScan()}
-            title="Radar Scan: Send glassy waves & highlight lodges for 10s (or long-press/right-click map)"
+            title="Radar Scan: Send glassy waves & highlight lodges for 30s (or long-press/right-click map)"
             className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-md cursor-pointer ${
               isScanning
-                ? 'bg-amber-500 text-white ring-4 ring-amber-400/40 animate-pulse'
+                ? 'bg-sky-600 text-white ring-4 ring-sky-400/40 animate-pulse'
                 : 'bg-white dark:bg-[#2A1810] text-[#78350F] dark:text-[#E0904E] hover:bg-[#FAF7F2] dark:hover:bg-[#341F14] border border-[#E5DAC8] dark:border-[#382618] active:scale-95'
             }`}
           >
             <Radio className="w-5 h-5" />
             {isScanning && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-[9px] font-black text-white rounded-full flex items-center justify-center shadow-xs">
+              <span className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-sky-600 text-[9px] font-black text-white rounded-full flex items-center justify-center shadow-xs">
                 {scanCountdown}
               </span>
             )}
