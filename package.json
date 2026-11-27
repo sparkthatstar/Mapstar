@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "node -e \"if(!process.env.DATABASE_URL)process.env.DATABASE_URL='postgresql://postgres:postgres@localhost:5432/postgres';require('child_process').execSync('prisma generate',{stdio:'inherit',env:process.env})\" && next build",
-    "postinstall": "node -e \"if(!process.env.DATABASE_URL)process.env.DATABASE_URL='postgresql://postgres:postgres@localhost:5432/postgres';try{require('child_process').execSync('prisma generate',{stdio:'inherit',env:process.env})}catch(e){console.warn('Prisma generate postinstall warning:',e.message)}\"",
+    "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint .",
     "db:push": "prisma db push --accept-data-loss",
