@@ -91,10 +91,25 @@ export default function MapView({
     // Navigation Controls (zoom + compass)
     map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right')
 
-    // Automatically trigger resize as soon as loaded and on container resize
+    // Dynamic zoom-based pin scaling function:
+    // Keeps pin needle anchored to real coordinates while adjusting size subtly with zoom level
+    const updatePinZoomScale = () => {
+      const currentZoom = map.getZoom()
+      // Smooth scaling: from 0.8 at distant zoom (z<=11) up to 1.15 at street close-up (z>=16)
+      const scale = Math.min(Math.max(0.75 + (currentZoom - 10) * 0.08, 0.75), 1.25)
+      if (mapContainerRef.current) {
+        mapContainerRef.current.style.setProperty('--pin-zoom-scale', scale.toFixed(2))
+      }
+    }
+
+    // Automatically trigger resize and initial scale on load
     map.on('load', () => {
       map.resize()
+      updatePinZoomScale()
     })
+
+    // Listen to zoom events to seamlessly scale pin markers
+    map.on('zoom', updatePinZoomScale)
 
     // Observe container size changes (e.g. split view toggles, sidebar collapses, screen rotations)
     const resizeObserver = new ResizeObserver(() => {
@@ -107,6 +122,7 @@ export default function MapView({
     mapRef.current = map
 
     return () => {
+      map.off('zoom', updatePinZoomScale)
       resizeObserver.disconnect()
       map.remove()
     }

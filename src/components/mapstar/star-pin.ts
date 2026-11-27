@@ -63,9 +63,11 @@ export const PIN_THEMES: Record<
  * Specifications:
  * 1. Fixed Real-World Positioning: Anchors precisely at [longitude, latitude] by its bottom needle point.
  * 2. Round Design: Modern circular disc badge with luminous outer ring.
- * 3. Inscribed Star: A golden or crisp white 5-point star inscribed in the circle.
+ * 3. Inscribed Star: A crisp white 5-point star inscribed in the circle.
  * 4. Transparent Buildings Showing Through: Architectural residential building silhouette
  *    elegantly visible within the star geometry.
+ * 5. Zoom-Adaptive Scale: Adjusts size subtly as user zooms (scale: var(--pin-zoom-scale, 1))
+ *    while the transform-origin: bottom center ensures the pin tip remains 100% stuck to the exact map point.
  */
 export function buildStarPinElement({
   status,
@@ -84,6 +86,8 @@ export function buildStarPinElement({
 
   const container = document.createElement('div')
   container.className = 'mapstar-star-listing-pin'
+  
+  // Notice: transform-origin: bottom center ensures scaling in/out occurs around the exact anchor point!
   container.style.cssText = `
     position: relative;
     cursor: pointer;
@@ -91,9 +95,10 @@ export function buildStarPinElement({
     display: flex;
     flex-direction: column;
     align-items: center;
-    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     transform-origin: bottom center;
-    ${selected ? 'transform: scale(1.3); z-index: 9999;' : 'z-index: 10;'}
+    transform: scale(calc(var(--pin-zoom-scale, 1) * ${selected ? 1.25 : 1}));
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    ${selected ? 'z-index: 9999;' : 'z-index: 10;'}
   `
 
   const ringStyle = featured
@@ -102,7 +107,7 @@ export function buildStarPinElement({
     ? `box-shadow: 0 0 0 3px #FFFFFF, 0 0 20px ${theme.pulseColor}, 0 6px 18px rgba(0,0,0,0.5);`
     : `box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35), 0 1px 4px ${theme.glow};`
 
-  // 36px Round Disc containing:
+  // Round Disc containing:
   // - Outer round badge in theme gradient
   // - 5-point Inscribed Star with subtle inner depth
   // - Building silhouette showing through inside the star
@@ -172,13 +177,13 @@ export function buildStarPinElement({
       filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
     "></div>
 
-    <!-- Precise Contact Point Shadow -->
+    <!-- Precise Contact Point Shadow (Zero height contact baseline) -->
     <div style="
-      width: 6px;
-      height: 3px;
+      width: 4px;
+      height: 2px;
       border-radius: 50%;
       background: rgba(0,0,0,0.45);
-      margin-top: 1px;
+      margin-top: 0px;
     "></div>
   `
 
