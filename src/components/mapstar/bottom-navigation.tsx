@@ -1,8 +1,8 @@
 'use client'
 
-import { Building2, MessageSquare, User, Settings, Users } from 'lucide-react'
+import { Building2, MessageSquare, User, Settings, Users, LifeBuoy } from 'lucide-react'
 
-export type NavTab = 'listings' | 'chat' | 'star_power' | 'me' | 'settings'
+export type NavTab = 'listings' | 'chat' | 'support' | 'star_power' | 'me' | 'settings'
 
 interface BottomNavigationProps {
   currentTab: NavTab
@@ -31,6 +31,12 @@ export default function BottomNavigation({
       label: 'Socials',
       icon: Users,
       badge: unreadChatCount > 0 ? unreadChatCount : undefined,
+      isStarPower: false,
+    },
+    {
+      id: 'support' as NavTab,
+      label: 'Support',
+      icon: LifeBuoy,
       isStarPower: false,
     },
   ]

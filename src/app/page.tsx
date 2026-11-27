@@ -45,6 +45,7 @@ import BottomNavigation, { NavTab } from '@/components/mapstar/bottom-navigation
 import ChatView from '@/components/mapstar/chat-view'
 import MeView from '@/components/mapstar/me-view'
 import StarPowerView from '@/components/mapstar/star-power-view'
+import CustomerServiceView from '@/components/mapstar/customer-service-view'
 import SettingsDialog from '@/components/mapstar/settings-dialog'
 import MapstarAppIcon from '@/components/mapstar/app-icon'
 import { MOCK_LISTINGS, MockListing, formatNaira } from '@/lib/mock-data'
@@ -375,6 +376,18 @@ export default function Home() {
         {/* TAB 1: Real-time Property Socials & Community Hub */}
         {bottomTab === 'chat' && (
           <ChatView
+            user={user}
+            onOpenAuth={(mode) => {
+              setAuthMode(mode || 'login')
+              setAuthOpen(true)
+            }}
+            onOpenListingDetail={openListing}
+          />
+        )}
+
+        {/* TAB: Customer Service & Complaints Center */}
+        {bottomTab === 'support' && (
+          <CustomerServiceView
             user={user}
             onOpenAuth={(mode) => {
               setAuthMode(mode || 'login')

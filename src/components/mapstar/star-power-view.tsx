@@ -28,6 +28,7 @@ import {
   LogIn,
   MessageSquare,
   Radio,
+  ShieldAlert,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,7 +51,7 @@ interface StarPowerViewProps {
   onOpenListingDetail?: (id: string) => void
 }
 
-type StarPowerTab = 'users' | 'verifications' | 'listings' | 'database' | 'chats' | 'activity'
+type StarPowerTab = 'users' | 'verifications' | 'listings' | 'database' | 'chats' | 'complaints' | 'activity'
 
 export default function StarPowerView({
   user,
@@ -95,6 +96,11 @@ export default function StarPowerView({
   const [confirmPurgeAllChats, setConfirmPurgeAllChats] = useState(false)
   const [confirmPurgeChannelId, setConfirmPurgeChannelId] = useState<string | null>(null)
 
+  // Complaints / Customer Service state
+  const [complaints, setComplaints] = useState<any[]>([])
+  const [loadingComplaints, setLoadingComplaints] = useState(false)
+  const [resolvingTicketId, setResolvingTicketId] = useState<string | null>(null)
+
   // Fetch initial data when user is ADMIN
   useEffect(() => {
     if (user?.role === 'ADMIN') {
@@ -103,6 +109,7 @@ export default function StarPowerView({
       fetchVerifications()
       fetchListings()
       fetchChatStats()
+      fetchComplaints()
     }
   }, [user?.role])
 
@@ -438,6 +445,47 @@ export default function StarPowerView({
     }
   }
 
+  // 6. Fetch Customer Complaints
+  async function fetchComplaints() {
+    setLoadingComplaints(true)
+    try {
+      const res = await fetch('/api/support')
+      if (res.ok) {
+        const data = await res.json()
+        setComplaints(data.tickets || [])
+      }
+    } catch {
+      // fallback
+    } finally {
+      setLoadingComplaints(false)
+    }
+  }
+
+  // Action: Update complaint ticket status
+  async function handleUpdateComplaintStatus(ticketId: string, status: string, notes?: string) {
+    setResolvingTicketId(ticketId)
+    try {
+      const res = await fetch('/api/support', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId, status, resolutionNotes: notes }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || `Ticket #${ticketId} status updated to ${status}`)
+        setComplaints((prev) =>
+          prev.map((c) => (c.ticketId === ticketId ? { ...c, status, resolutionNotes: notes } : c))
+        )
+      } else {
+        toast.error(data.error || 'Failed to update ticket')
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error updating ticket')
+    } finally {
+      setResolvingTicketId(null)
+    }
+  }
+
   // Filtered users
   const filteredUsers = useMemo(() => {
     if (!userSearch.trim()) return usersList
@@ -537,6 +585,7 @@ export default function StarPowerView({
                 fetchUsers()
                 fetchListings()
                 fetchChatStats()
+                fetchComplaints()
                 toast.success('Database state synchronized!')
               }}
               disabled={loadingDb || loadingUsers || loadingListings}
@@ -641,6 +690,26 @@ export default function StarPowerView({
             {chatStats?.totalCount !== undefined && (
               <Badge className="bg-slate-800 text-slate-300 text-[10px] ml-1">
                 {chatStats.totalCount} msgs
+              </Badge>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('complaints')
+              fetchComplaints()
+            }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
+              activeTab === 'complaints'
+                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <ShieldAlert className="h-3.5 w-3.5 text-rose-400" />
+            <span>Customer Complaints</span>
+            {complaints.filter((c) => c.status === 'OPEN').length > 0 && (
+              <Badge className="bg-rose-500 text-white font-bold text-[10px] ml-1">
+                {complaints.filter((c) => c.status === 'OPEN').length} new
               </Badge>
             )}
           </button>
@@ -1465,6 +1534,155 @@ export default function StarPowerView({
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================================
+              TAB: CUSTOMER SERVICE & COMPLAINTS MANAGEMENT
+             ========================================================================= */}
+          {activeTab === 'complaints' && (
+            <div className="space-y-5">
+              {/* Complaints Header */}
+              <div className="bg-[#090D18] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4 text-rose-400" />
+                    Customer Complaints & Dispute Resolution Center
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Review filed reports on illegal fees (&gt;5%), fake lodges, caution deposits, and agent conduct.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={fetchComplaints}
+                    disabled={loadingComplaints}
+                    className="h-8 text-xs border-slate-700 bg-slate-900 text-slate-200"
+                  >
+                    <RefreshCw className={`h-3 w-3 mr-1 ${loadingComplaints ? 'animate-spin' : ''}`} /> Refresh Cases
+                  </Button>
+                </div>
+              </div>
+
+              {/* Complaints List */}
+              <div className="space-y-3">
+                {complaints.map((c) => (
+                  <div
+                    key={c.ticketId}
+                    className="bg-[#090D18] border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-amber-400">
+                          #{c.ticketId}
+                        </span>
+                        <Badge
+                          className={`text-[9px] font-bold ${
+                            c.status === 'OPEN'
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              : c.status === 'INVESTIGATING'
+                              ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                              : c.status === 'RESOLVED'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {c.status}
+                        </Badge>
+                        <Badge className="bg-rose-950/60 text-rose-300 border border-rose-800 text-[9px]">
+                          {c.urgency}
+                        </Badge>
+                      </div>
+
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {new Date(c.createdAt).toLocaleDateString()} · {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-bold text-white">{c.subject}</h4>
+                      <p className="text-xs text-slate-300 mt-1 leading-relaxed bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+                        {c.description}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-400 pt-1">
+                      <div>
+                        <span className="text-slate-500 block text-[10px]">Complainant:</span>
+                        <strong className="text-white">{c.userName}</strong> ({c.userPhone || c.userEmail})
+                      </div>
+                      {c.accusedPerson && (
+                        <div>
+                          <span className="text-slate-500 block text-[10px]">Accused Person / Agent:</span>
+                          <strong className="text-rose-400">{c.accusedPerson}</strong>
+                        </div>
+                      )}
+                      {c.disputedAmount && (
+                        <div>
+                          <span className="text-slate-500 block text-[10px]">Disputed Amount:</span>
+                          <strong className="text-amber-400">{formatNaira(c.disputedAmount)}</strong>
+                        </div>
+                      )}
+                    </div>
+
+                    {c.resolutionNotes && (
+                      <div className="p-2.5 bg-emerald-950/30 border border-emerald-800/50 rounded-xl text-xs text-emerald-300">
+                        <strong>Resolution Note:</strong> {c.resolutionNotes}
+                      </div>
+                    )}
+
+                    {/* Admin Action Buttons */}
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-800/80">
+                      {c.status !== 'INVESTIGATING' && c.status !== 'RESOLVED' && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleUpdateComplaintStatus(c.ticketId, 'INVESTIGATING', 'Dispute officer actively investigating with parties.')}
+                          disabled={resolvingTicketId === c.ticketId}
+                          className="h-7 text-xs bg-sky-600 hover:bg-sky-500 text-white font-semibold cursor-pointer"
+                        >
+                          Mark Investigating
+                        </Button>
+                      )}
+
+                      {c.status !== 'RESOLVED' && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleUpdateComplaintStatus(c.ticketId, 'RESOLVED', 'Dispute settled. Sanction applied & resolution enforced.')}
+                          disabled={resolvingTicketId === c.ticketId}
+                          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold cursor-pointer"
+                        >
+                          Resolve & Enforce
+                        </Button>
+                      )}
+
+                      {c.status !== 'DISMISSED' && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleUpdateComplaintStatus(c.ticketId, 'DISMISSED', 'Reviewed and dismissed as non-violating.')}
+                          disabled={resolvingTicketId === c.ticketId}
+                          className="h-7 text-xs text-slate-400 hover:text-rose-400 cursor-pointer"
+                        >
+                          Dismiss
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {complaints.length === 0 && !loadingComplaints && (
+                  <div className="bg-[#090D18] border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+                    <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500 mb-2" />
+                    <p className="text-sm font-semibold">No Customer Complaints Pending</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      All customer complaints submitted from the Customer Service Center will appear here for review.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
