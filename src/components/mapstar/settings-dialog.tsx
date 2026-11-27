@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Compass,
+  RefreshCw,
 } from 'lucide-react'
 import { AuthedUser } from '@/components/mapstar/login-signup-dialog'
 
@@ -46,6 +47,8 @@ export default function SettingsDialog({
   const [locationStatus, setLocationStatus] = useState<'granted' | 'prompt' | 'denied' | 'loading'>('loading')
   const [notificationStatus, setNotificationStatus] = useState<'granted' | 'default' | 'denied' | 'unsupported'>('default')
   const [permissionNotice, setPermissionNotice] = useState<string | null>(null)
+  const [showLocationHelp, setShowLocationHelp] = useState(false)
+  const [showNotificationHelp, setShowNotificationHelp] = useState(false)
 
   const checkPermissions = useCallback(async () => {
     // 1. Geolocation check
@@ -54,8 +57,10 @@ export default function SettingsDialog({
         try {
           const res = await navigator.permissions.query({ name: 'geolocation' })
           setLocationStatus(res.state as 'granted' | 'prompt' | 'denied')
+          if (res.state === 'granted') setShowLocationHelp(false)
           res.onchange = () => {
             setLocationStatus(res.state as 'granted' | 'prompt' | 'denied')
+            if (res.state === 'granted') setShowLocationHelp(false)
           }
         } catch {
           setLocationStatus('prompt')
@@ -69,7 +74,9 @@ export default function SettingsDialog({
 
     // 2. Notification check
     if (typeof window !== 'undefined' && 'Notification' in window) {
-      setNotificationStatus(Notification.permission)
+      const current = Notification.permission
+      setNotificationStatus(current)
+      if (current === 'granted') setShowNotificationHelp(false)
     } else {
       setNotificationStatus('unsupported')
     }
@@ -82,22 +89,35 @@ export default function SettingsDialog({
     }
   }, [open, checkPermissions])
 
+  // Automatically re-check permissions when user switches back to this tab/window after modifying site settings
+  useEffect(() => {
+    const handleFocus = () => {
+      checkPermissions()
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [checkPermissions])
+
   const requestLocation = () => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
       setPermissionNotice('Geolocation is not supported by your browser.')
       return
     }
-    setPermissionNotice('Locating your position...')
+    setPermissionNotice('Requesting location access...')
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocationStatus('granted')
+        setShowLocationHelp(false)
         setPermissionNotice(`Location granted! Accuracy: ~${Math.round(pos.coords.accuracy)}m`)
         setTimeout(() => setPermissionNotice(null), 4000)
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
           setLocationStatus('denied')
-          setPermissionNotice('Location permission was denied in your browser settings.')
+          setShowLocationHelp(true)
+          setPermissionNotice('Location was blocked in browser settings. Follow the unblock steps below.')
         } else {
           setPermissionNotice(`Unable to acquire location: ${err.message}`)
         }
@@ -112,9 +132,11 @@ export default function SettingsDialog({
       return
     }
     try {
+      setPermissionNotice('Requesting notification permission...')
       const perm = await Notification.requestPermission()
       setNotificationStatus(perm)
       if (perm === 'granted') {
+        setShowNotificationHelp(false)
         new Notification('Mapstar Alerts Enabled', {
           body: 'You will receive real-time updates for lodge inspections and new listings.',
           icon: '/favicon.ico',
@@ -122,9 +144,11 @@ export default function SettingsDialog({
         setPermissionNotice('Notifications active! Sent test welcome ping.')
         setTimeout(() => setPermissionNotice(null), 4000)
       } else if (perm === 'denied') {
-        setPermissionNotice('Notification permission was blocked in browser settings.')
+        setShowNotificationHelp(true)
+        setPermissionNotice('Notifications blocked in browser settings. Follow the unblock steps below.')
       }
     } catch {
+      setShowNotificationHelp(true)
       setPermissionNotice('Failed to request notification permission.')
     }
   }
@@ -213,98 +237,146 @@ export default function SettingsDialog({
 
             <div className="space-y-3">
               {/* Geolocation Row */}
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-white dark:bg-[#1A120B] border border-[#E5DAC8]/70 dark:border-[#382618]">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-[#78350F] dark:text-[#E0904E] shrink-0 mt-0.5">
-                    <Compass className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-[#271810] dark:text-[#FAF6F0]">
-                        GPS Location
-                      </span>
-                      {locationStatus === 'granted' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-3 w-3" /> Allowed
-                        </span>
-                      )}
-                      {locationStatus === 'denied' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 dark:text-rose-400">
-                          <AlertCircle className="h-3 w-3" /> Denied
-                        </span>
-                      )}
-                      {locationStatus === 'prompt' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                          Prompt on use
-                        </span>
-                      )}
+              <div className="p-2.5 rounded-xl bg-white dark:bg-[#1A120B] border border-[#E5DAC8]/70 dark:border-[#382618] space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-[#78350F] dark:text-[#E0904E] shrink-0 mt-0.5">
+                      <Compass className="h-4 w-4" />
                     </div>
-                    <p className="text-[10.5px] text-[#7C6859] dark:text-[#B8A598] leading-tight mt-0.5">
-                      Powers the spinning GPS map tool and live distance calculation.
-                    </p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-[#271810] dark:text-[#FAF6F0]">
+                          GPS Location
+                        </span>
+                        {locationStatus === 'granted' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" /> Allowed
+                          </span>
+                        )}
+                        {locationStatus === 'denied' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                            <AlertCircle className="h-3 w-3" /> Action Needed
+                          </span>
+                        )}
+                        {locationStatus === 'prompt' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                            Prompt on use
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10.5px] text-[#7C6859] dark:text-[#B8A598] leading-tight mt-0.5">
+                        Powers the spinning GPS map tool and live distance calculation.
+                      </p>
+                    </div>
                   </div>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={requestLocation}
+                    disabled={locationStatus === 'granted'}
+                    className={`h-7 px-2.5 text-[11px] font-semibold shrink-0 rounded-lg cursor-pointer transition ${
+                      locationStatus === 'granted'
+                        ? 'border-emerald-200 text-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300'
+                        : 'border-[#E5DAC8] dark:border-[#382618] text-[#78350F] dark:text-[#E0904E] hover:bg-[#FAF7F2] dark:hover:bg-[#24160E]'
+                    }`}
+                  >
+                    {locationStatus === 'granted' ? 'Allowed' : 'Enable'}
+                  </Button>
                 </div>
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={requestLocation}
-                  disabled={locationStatus === 'granted'}
-                  className={`h-7 px-2.5 text-[11px] font-semibold shrink-0 rounded-lg cursor-pointer transition ${
-                    locationStatus === 'granted'
-                      ? 'border-emerald-200 text-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300'
-                      : 'border-[#E5DAC8] dark:border-[#382618] text-[#78350F] dark:text-[#E0904E] hover:bg-[#FAF7F2] dark:hover:bg-[#24160E]'
-                  }`}
-                >
-                  {locationStatus === 'granted' ? 'Allowed' : locationStatus === 'denied' ? 'Retry' : 'Allow'}
-                </Button>
+                {/* Unblock Guidance if blocked by browser settings */}
+                {showLocationHelp && locationStatus === 'denied' && (
+                  <div className="p-2.5 rounded-lg bg-amber-50/90 dark:bg-[#251710] border border-amber-300 dark:border-amber-900/60 text-xs text-[#78350F] dark:text-[#E0904E] space-y-2 animate-in fade-in duration-200">
+                    <div className="flex items-start gap-2 text-[11px] leading-relaxed">
+                      <span className="text-sm">🔒</span>
+                      <div>
+                        <strong>To unblock in your browser:</strong> Click the <strong>lock / site settings icon</strong> on the left side of your browser URL bar, change <strong>Location</strong> to <strong>Allow</strong>, then tap below:
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        checkPermissions()
+                        requestLocation()
+                      }}
+                      className="w-full h-7 text-[11px] font-semibold bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] text-white cursor-pointer"
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1.5" /> Re-check & Enable Location
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Push Notifications Row */}
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-white dark:bg-[#1A120B] border border-[#E5DAC8]/70 dark:border-[#382618]">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-[#78350F] dark:text-[#E0904E] shrink-0 mt-0.5">
-                    <BellRing className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-[#271810] dark:text-[#FAF6F0]">
-                        Notifications
-                      </span>
-                      {notificationStatus === 'granted' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-3 w-3" /> Enabled
-                        </span>
-                      )}
-                      {notificationStatus === 'denied' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 dark:text-rose-400">
-                          <AlertCircle className="h-3 w-3" /> Blocked
-                        </span>
-                      )}
-                      {notificationStatus === 'default' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                          Disabled
-                        </span>
-                      )}
+              <div className="p-2.5 rounded-xl bg-white dark:bg-[#1A120B] border border-[#E5DAC8]/70 dark:border-[#382618] space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-[#78350F] dark:text-[#E0904E] shrink-0 mt-0.5">
+                      <BellRing className="h-4 w-4" />
                     </div>
-                    <p className="text-[10.5px] text-[#7C6859] dark:text-[#B8A598] leading-tight mt-0.5">
-                      Get instant alerts on price reductions and agent message replies.
-                    </p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-[#271810] dark:text-[#FAF6F0]">
+                          Notifications
+                        </span>
+                        {notificationStatus === 'granted' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" /> Enabled
+                          </span>
+                        )}
+                        {notificationStatus === 'denied' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                            <AlertCircle className="h-3 w-3" /> Action Needed
+                          </span>
+                        )}
+                        {notificationStatus === 'default' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                            Disabled
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10.5px] text-[#7C6859] dark:text-[#B8A598] leading-tight mt-0.5">
+                        Get instant alerts on price reductions and agent message replies.
+                      </p>
+                    </div>
                   </div>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={requestNotification}
+                    className={`h-7 px-2.5 text-[11px] font-semibold shrink-0 rounded-lg cursor-pointer transition ${
+                      notificationStatus === 'granted'
+                        ? 'border-emerald-200 text-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-100'
+                        : 'border-[#E5DAC8] dark:border-[#382618] text-[#78350F] dark:text-[#E0904E] hover:bg-[#FAF7F2] dark:hover:bg-[#24160E]'
+                    }`}
+                  >
+                    {notificationStatus === 'granted' ? 'Send Test' : 'Enable'}
+                  </Button>
                 </div>
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={requestNotification}
-                  className={`h-7 px-2.5 text-[11px] font-semibold shrink-0 rounded-lg cursor-pointer transition ${
-                    notificationStatus === 'granted'
-                      ? 'border-emerald-200 text-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-100'
-                      : 'border-[#E5DAC8] dark:border-[#382618] text-[#78350F] dark:text-[#E0904E] hover:bg-[#FAF7F2] dark:hover:bg-[#24160E]'
-                  }`}
-                >
-                  {notificationStatus === 'granted' ? 'Send Test' : notificationStatus === 'denied' ? 'Blocked' : 'Enable'}
-                </Button>
+                {/* Unblock Guidance if blocked by browser settings */}
+                {showNotificationHelp && notificationStatus === 'denied' && (
+                  <div className="p-2.5 rounded-lg bg-amber-50/90 dark:bg-[#251710] border border-amber-300 dark:border-amber-900/60 text-xs text-[#78350F] dark:text-[#E0904E] space-y-2 animate-in fade-in duration-200">
+                    <div className="flex items-start gap-2 text-[11px] leading-relaxed">
+                      <span className="text-sm">🔒</span>
+                      <div>
+                        <strong>To unblock in your browser:</strong> Click the <strong>lock / site settings icon</strong> on the left side of your browser URL bar, change <strong>Notifications</strong> to <strong>Allow</strong>, then tap below:
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        checkPermissions()
+                        requestNotification()
+                      }}
+                      className="w-full h-7 text-[11px] font-semibold bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] text-white cursor-pointer"
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1.5" /> Re-check & Enable Notifications
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {permissionNotice && (
