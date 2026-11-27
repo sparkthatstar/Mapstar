@@ -1577,36 +1577,55 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                       )}
                     </p>
 
-                    {/* Owner Appeal action */}
-                    <div className="pt-2.5 mt-1 border-t border-rose-200 space-y-2">
-                      <p className="text-[11px] text-rose-700 font-medium">
-                        Are you the group owner or manager? You can file an official appeal to the Admin Review Board to have this {activeGroup ? 'group' : 'channel'} reinstated.
-                      </p>
-                      {user ? (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setAppealExplanation('')
-                            setAppealPhone(user.phone || '')
-                            setAppealEmail(user.email || '')
-                            setAppealModalOpen(true)
-                          }}
-                          className="h-8 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer inline-flex items-center gap-1.5"
-                        >
-                          <Scale className="h-3.5 w-3.5" />
-                          <span>Submit Group Appeal</span>
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => onOpenAuth('login')}
-                          className="h-8 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer inline-flex items-center gap-1.5"
-                        >
-                          <LogIn className="h-3.5 w-3.5" />
-                          <span>Sign In to Submit Appeal</span>
-                        </Button>
-                      )}
-                    </div>
+                    {/* Creator Appeal Section: Strictly only the creator can appeal */}
+                    {(() => {
+                      const isCreator = Boolean(
+                        user && (
+                          user.role === 'ADMIN' ||
+                          (activeGroup && (
+                            activeGroup.creatorId === user.id ||
+                            activeGroup.createdBy === user.fullName ||
+                            activeGroup.createdBy === user.email
+                          )) ||
+                          (activeBroadcast && (
+                            activeBroadcast.creatorId === user.id ||
+                            activeBroadcast.createdBy === user.fullName ||
+                            activeBroadcast.createdBy === user.email
+                          ))
+                        )
+                      )
+
+                      if (isCreator) {
+                        return (
+                          <div className="pt-2.5 mt-1 border-t border-rose-200 space-y-2">
+                            <p className="text-[11px] text-rose-700 font-medium">
+                              You are recognized as the creator of this {activeGroup ? 'group' : 'channel'}. You can submit an official appeal to the Admin Review Board to have this sanction lifted.
+                            </p>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setAppealExplanation('')
+                                setAppealPhone(user?.phone || '')
+                                setAppealEmail(user?.email || '')
+                                setAppealModalOpen(true)
+                              }}
+                              className="h-8 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                            >
+                              <Scale className="h-3.5 w-3.5" />
+                              <span>Submit Creator Appeal</span>
+                            </Button>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="pt-2.5 mt-1 border-t border-rose-200">
+                          <p className="text-[11px] text-rose-800/80 font-medium">
+                            Only the original creator of this {activeGroup ? 'group' : 'channel'} can submit an appeal to the Admin Review Board.
+                          </p>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
                 {/* User-facing End-to-End Encryption Banner inside DMs */}

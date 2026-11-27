@@ -627,7 +627,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // 3. Owner Appeals: Submit an appeal for a banned or suspended group
+    // 3. Creator Appeals: Only the creator of the group can submit an appeal
     if (action === 'submit-appeal') {
       if (!user) {
         return NextResponse.json({ error: 'You must be signed in to submit an appeal.' }, { status: 401 })
@@ -635,6 +635,49 @@ export async function POST(req: NextRequest) {
       const { channelId, channelName, channelType, explanation, contactPhone, contactEmail, sanctionType, sanctionReason } = body
       if (!channelId || !explanation || !explanation.trim()) {
         return NextResponse.json({ error: 'Channel ID and appeal explanation are required.' }, { status: 400 })
+      }
+
+      // Verify that the user is the original creator of this group / channel
+      const channelMessages = await db.chatMessage.findMany({
+        where: {
+          channelId: 'channels-directory',
+          content: { contains: channelId },
+        },
+        take: 20,
+      }).catch(() => [])
+
+      let creatorId: string | null = null
+      let creatorEmail: string | null = null
+      let creatorName: string | null = null
+
+      for (const m of channelMessages) {
+        if (m.content.includes('[CHANNEL_META:')) {
+          const match = m.content.match(/\[CHANNEL_META:(.*?)\]/)
+          if (match && match[1]) {
+            try {
+              const meta = JSON.parse(match[1])
+              if (meta.channelId === channelId || meta.id === channelId) {
+                creatorId = meta.creatorId || m.senderId
+                creatorEmail = meta.creatorEmail || null
+                creatorName = meta.createdBy || m.senderName
+                break
+              }
+            } catch {}
+          }
+        }
+      }
+
+      const isVerifiedCreator =
+        user.role === 'ADMIN' ||
+        (creatorId ? creatorId === user.id : true) ||
+        (creatorEmail ? creatorEmail.toLowerCase() === user.email.toLowerCase() : false) ||
+        (creatorName ? creatorName.toLowerCase() === (user.fullName || '').toLowerCase() : false)
+
+      if (creatorId && !isVerifiedCreator) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Only the creator of this group can submit an appeal to the Admin Review Board.' },
+          { status: 403 }
+        )
       }
 
       const appealId = `app_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
