@@ -15,7 +15,6 @@ import {
   UserPlus,
   ChevronDown,
   Shield,
-  Columns2,
   LayoutGrid,
   CheckCircle2,
   Sparkles,
@@ -61,7 +60,7 @@ const MapView = dynamic(() => import('@/components/mapstar/map-view'), {
   ),
 })
 
-type ViewMode = 'split' | 'list' | 'map'
+type ViewMode = 'list' | 'map'
 
 const CITIES = [
   { id: 'Owerri', label: 'Owerri', center: [5.497, 7.025] as [number, number], state: 'Imo' },
@@ -69,7 +68,7 @@ const CITIES = [
 ]
 
 export default function Home() {
-  const [view, setView] = useState<ViewMode>('split')
+  const [view, setView] = useState<ViewMode>('list')
   const [filters, setFilters] = useState<FilterState>({ ...DEFAULT_FILTERS })
   const [filterOpen, setFilterOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -478,37 +477,52 @@ export default function Home() {
                     </select>
                   </div>
 
-                  {/* View Switcher (Desktop & Mobile) */}
-                  <div className="inline-flex rounded-xl border border-[#E5DAC8] dark:border-[#382618] bg-[#FAF7F2] dark:bg-[#120C08] p-0.5 shadow-2xs">
+                  {/* Creative High-Visibility View Switcher (Listings vs Map) */}
+                  <div className="inline-flex items-center rounded-2xl border border-[#E5DAC8] dark:border-[#382618] bg-[#FAF7F2] dark:bg-[#120C08] p-1 shadow-sm">
                     <button
-                      onClick={() => setView('split')}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                        view === 'split' ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309] font-semibold' : 'text-[#7C6859] dark:text-[#B8A598] hover:text-slate-800 dark:hover:text-slate-200'
-                      }`}
-                      title="Split view (Listings + Map)"
-                    >
-                      <Columns2 className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Split</span>
-                    </button>
-                    <button
+                      type="button"
                       onClick={() => setView('list')}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                        view === 'list' ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309] font-semibold' : 'text-[#7C6859] dark:text-[#B8A598] hover:text-slate-800 dark:hover:text-slate-200'
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        view === 'list'
+                          ? 'bg-[#78350F] text-white shadow-md shadow-[#78350F]/25 dark:bg-[#B45309]'
+                          : 'text-[#7C6859] dark:text-[#B8A598] hover:text-[#271810] dark:hover:text-[#FAF6F0]'
                       }`}
-                      title="Full Listings view"
+                      title="Switch to Full Listings Gallery"
                     >
                       <LayoutGrid className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">List</span>
+                      <span>Listings</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                          view === 'list'
+                            ? 'bg-white/20 text-white'
+                            : 'bg-[#E5DAC8]/60 dark:bg-[#2A1810] text-[#78350F] dark:text-[#E0904E]'
+                        }`}
+                      >
+                        {filtered.length}
+                      </span>
                     </button>
+
                     <button
+                      type="button"
                       onClick={() => setView('map')}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                        view === 'map' ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309] font-semibold' : 'text-[#7C6859] dark:text-[#B8A598] hover:text-slate-800 dark:hover:text-slate-200'
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        view === 'map'
+                          ? 'bg-[#78350F] text-white shadow-md shadow-[#78350F]/25 dark:bg-[#B45309]'
+                          : 'text-[#7C6859] dark:text-[#B8A598] hover:text-[#271810] dark:hover:text-[#FAF6F0]'
                       }`}
-                      title="Full Map view"
+                      title="Switch to Full Interactive Map with GPS Tools & Radar Scan"
                     >
                       <MapIcon className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Map</span>
+                      <span>Map View</span>
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold ${
+                          view === 'map'
+                            ? 'bg-amber-400 text-slate-900 shadow-xs'
+                            : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        }`}
+                      >
+                        Live GPS
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -559,108 +573,116 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Workspace Container: Left Side Listings Feed & Right Side Map */}
+            {/* Workspace Container: Full View (Listings Gallery OR Full Interactive Map) */}
             <div className="flex-1 min-h-0 relative flex overflow-hidden">
-              {/* Left Side: Listed Houses Feed */}
+              {/* Full Listings Feed View */}
               <div
-                className={`flex flex-col h-full bg-[#F8FAFC] dark:bg-[#070A12] overflow-hidden transition-all duration-300 ${
-                  view === 'map'
-                    ? 'hidden'
-                    : view === 'list'
-                    ? 'w-full'
-                    : 'w-full lg:w-[54%] xl:w-[52%] 2xl:w-[50%]'
+                className={`flex-1 flex flex-col h-full bg-[#FAF7F2] dark:bg-[#070A12] overflow-hidden transition-all duration-300 ${
+                  view === 'list' ? 'flex' : 'hidden'
                 }`}
               >
                 {/* Quick Filter Tag Chips */}
-                <div className="shrink-0 bg-[#FAF7F2] dark:bg-[#120C08] px-4 py-1.5 border-b border-[#E5DAC8] dark:border-[#382618] flex items-center gap-1.5 overflow-x-auto text-[11px] transition-colors">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 mr-1 shrink-0">Quick filters:</span>
-                  <button
-                    onClick={() => patchFilters({ verifiedOnly: !filters.verifiedOnly })}
-                    className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
-                      filters.verifiedOnly
-                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
-                    }`}
-                  >
-                    Verified Only
-                  </button>
-                  <button
-                    onClick={() => patchFilters({ fairPriceOnly: !filters.fairPriceOnly })}
-                    className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
-                      filters.fairPriceOnly
-                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
-                    }`}
-                  >
-                    Fair Price
-                  </button>
-                  <button
-                    onClick={() => patchFilters({ hasBorehole: !filters.hasBorehole })}
-                    className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
-                      filters.hasBorehole
-                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
-                    }`}
-                  >
-                    Borehole Water
-                  </button>
-                  <button
-                    onClick={() => patchFilters({ hasPrepaidMeter: !filters.hasPrepaidMeter })}
-                    className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
-                      filters.hasPrepaidMeter
-                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
-                    }`}
-                  >
-                    Prepaid NEPA
-                  </button>
-                  <button
-                    onClick={() => patchFilters({ hasWiFi: !filters.hasWiFi })}
-                    className={`rounded-full px-2.5 py-0.5 font-medium transition shrink-0 cursor-pointer ${
-                      filters.hasWiFi
-                        ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
-                        : 'bg-white text-[#7C6859] hover:text-slate-900 border border-slate-200 shadow-2xs dark:bg-[#0B1120] dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800'
-                    }`}
-                  >
-                    WiFi Ready
-                  </button>
+                <div className="shrink-0 bg-white/80 dark:bg-[#120C08]/90 px-4 py-2 border-b border-[#E5DAC8] dark:border-[#382618] flex items-center justify-between gap-2 overflow-x-auto text-[11px] backdrop-blur-md transition-colors">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] uppercase font-bold text-[#78350F] dark:text-[#E0904E] mr-1 shrink-0 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" /> Quick filters:
+                    </span>
+                    <button
+                      onClick={() => patchFilters({ verifiedOnly: !filters.verifiedOnly })}
+                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                        filters.verifiedOnly
+                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                      }`}
+                    >
+                      🛡️ Verified Only
+                    </button>
+                    <button
+                      onClick={() => patchFilters({ fairPriceOnly: !filters.fairPriceOnly })}
+                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                        filters.fairPriceOnly
+                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                      }`}
+                    >
+                      ⚖️ Fair Price
+                    </button>
+                    <button
+                      onClick={() => patchFilters({ hasBorehole: !filters.hasBorehole })}
+                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                        filters.hasBorehole
+                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                      }`}
+                    >
+                      💧 Borehole Water
+                    </button>
+                    <button
+                      onClick={() => patchFilters({ hasPrepaidMeter: !filters.hasPrepaidMeter })}
+                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                        filters.hasPrepaidMeter
+                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                      }`}
+                    >
+                      ⚡ Prepaid NEPA
+                    </button>
+                    <button
+                      onClick={() => patchFilters({ hasWiFi: !filters.hasWiFi })}
+                      className={`rounded-full px-2.5 py-1 font-semibold transition shrink-0 cursor-pointer text-xs ${
+                        filters.hasWiFi
+                          ? 'bg-[#78350F] text-white shadow-xs dark:bg-[#B45309]'
+                          : 'bg-white text-[#7C6859] hover:text-slate-900 border border-[#E5DAC8] shadow-2xs dark:bg-[#1A120B] dark:text-[#B8A598] dark:border-[#382618]'
+                      }`}
+                    >
+                      📶 WiFi Ready
+                    </button>
+                  </div>
+
+                  <div className="shrink-0 text-[11px] text-[#7C6859] dark:text-[#B8A598] hidden sm:block">
+                    Showing <strong className="text-[#271810] dark:text-white font-bold">{filtered.length}</strong> {filtered.length === 1 ? 'lodge' : 'lodges'}
+                  </div>
                 </div>
 
                 {/* Scrollable Listings Feed */}
-                <div className="flex-1 overflow-y-auto p-3.5 sm:p-4">
-                  <NewUserBanner onOpenGuide={() => setOnboardingOpen(true)} />
+                <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 relative">
+                  <div className="max-w-7xl mx-auto space-y-4 pb-20">
+                    <NewUserBanner onOpenGuide={() => setOnboardingOpen(true)} />
 
-                  {filtered.length === 0 ? (
-                    <EmptyState onReset={resetFilters} />
-                  ) : (
-                    <div
-                      className={`grid gap-3 ${
-                        view === 'list'
-                          ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-7xl mx-auto'
-                          : 'grid-cols-1 xl:grid-cols-2'
-                      }`}
+                    {filtered.length === 0 ? (
+                      <EmptyState onReset={resetFilters} />
+                    ) : (
+                      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
+                        {filtered.map((l) => (
+                          <ListingCard
+                            key={l.id}
+                            listing={l}
+                            selected={selectedId === l.id}
+                            onSelect={openListing}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Floating Action Pill to Switch to Map */}
+                  <div className="fixed bottom-20 sm:bottom-18 left-0 right-0 flex justify-center pointer-events-none z-30">
+                    <button
+                      type="button"
+                      onClick={() => setView('map')}
+                      className="pointer-events-auto flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#78350F] hover:bg-[#854D0E] dark:bg-[#B45309] dark:hover:bg-[#C2783B] text-white text-xs font-bold shadow-xl shadow-[#78350F]/35 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-amber-300/30"
                     >
-                      {filtered.map((l) => (
-                        <ListingCard
-                          key={l.id}
-                          listing={l}
-                          selected={selectedId === l.id}
-                          onSelect={openListing}
-                        />
-                      ))}
-                    </div>
-                  )}
+                      <MapIcon className="h-4 w-4 text-amber-200" />
+                      <span>Explore on Live Map ({filtered.length})</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Right Side: Map */}
+              {/* Full Interactive Map View */}
               <div
-                className={`h-full relative overflow-hidden border-l border-[#E5DAC8] dark:border-[#382618] transition-all duration-300 min-h-0 ${
-                  view === 'list'
-                    ? 'hidden'
-                    : view === 'map'
-                    ? 'w-full flex-1'
-                    : 'hidden lg:flex flex-1'
+                className={`flex-1 h-full w-full relative overflow-hidden transition-all duration-300 min-h-0 ${
+                  view === 'map' ? 'block' : 'hidden'
                 }`}
               >
                 <MapView
@@ -670,6 +692,19 @@ export default function Home() {
                   center={mapCenter}
                   zoom={13}
                 />
+
+                {/* Floating Action Pill to Switch to List */}
+                <div className="absolute top-14 sm:top-14 right-3 z-20 pointer-events-auto">
+                  <button
+                    type="button"
+                    onClick={() => setView('list')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/95 dark:bg-[#1A120B]/95 hover:bg-[#FAF7F2] dark:hover:bg-[#251710] text-[#78350F] dark:text-[#FAF6F0] text-xs font-bold shadow-md border border-[#E5DAC8] dark:border-[#382618] hover:scale-105 active:scale-95 transition-all cursor-pointer backdrop-blur-md"
+                    title="Switch to Listings Feed"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5 text-[#78350F] dark:text-[#E0904E]" />
+                    <span>View List ({filtered.length})</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
