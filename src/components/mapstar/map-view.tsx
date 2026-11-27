@@ -87,6 +87,57 @@ const GLOW_CIRCLE_RADIUS: any = [
   86,
 ]
 
+// Breathing animation frames for radar scanning state
+// Continuous rhythmic expansion and contraction (20 steps @ 100ms = 2.0s per breath cycle)
+const BREATHING_CYCLE_STEPS = 20
+const BREATHING_STEP_MS = 100
+
+interface BreathingFrame {
+  iconSize: any
+  haloRadius: any
+  circleOpacity: number
+  strokeOpacity: number
+}
+
+const BREATHING_FRAMES: BreathingFrame[] = Array.from({ length: BREATHING_CYCLE_STEPS }, (_, i) => {
+  const theta = (i / BREATHING_CYCLE_STEPS) * 2 * Math.PI
+  // Smooth sine wave progress (0 = fully contracted, 1 = fully expanded)
+  const progress = (Math.sin(theta - Math.PI / 2) + 1) / 2
+  const iconScale = 1.05 + 0.50 * progress
+  const haloScale = 0.90 + 0.40 * progress
+
+  return {
+    iconSize: [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      9,
+      Number((0.55 * iconScale).toFixed(2)),
+      12,
+      Number((0.75 * iconScale).toFixed(2)),
+      14,
+      Number((0.95 * iconScale).toFixed(2)),
+      17,
+      Number((1.25 * iconScale).toFixed(2)),
+    ],
+    haloRadius: [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      9,
+      Math.round(28 * haloScale),
+      12,
+      Math.round(44 * haloScale),
+      14,
+      Math.round(60 * haloScale),
+      17,
+      Math.round(86 * haloScale),
+    ],
+    circleOpacity: Number((0.35 + 0.25 * progress).toFixed(2)),
+    strokeOpacity: Number((0.50 + 0.30 * progress).toFixed(2)),
+  }
+})
+
 export default function MapView({
   listings,
   selectedId,
@@ -120,6 +171,8 @@ export default function MapView({
   const [scanWaves, setScanWaves] = useState<Array<{ id: number; x: number; y: number }>>([])
   const scanTimerRef = useRef<NodeJS.Timeout | null>(null)
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const breathingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const breathingStepRef = useRef<number>(0)
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null)
   const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
 
@@ -449,7 +502,7 @@ export default function MapView({
         })
       }
 
-      // 3. Add Glowing Radar Halo Layer (Rendered underneath pins)
+      // 3. Add Glowing Radar Halo Layer (Rendered underneath pins with subtle dark blue frame theme)
       if (!map.getLayer('listings-glow-layer')) {
         map.addLayer({
           id: 'listings-glow-layer',
@@ -457,10 +510,14 @@ export default function MapView({
           source: 'listings-source',
           paint: {
             'circle-radius': GLOW_CIRCLE_RADIUS,
-            'circle-color': '#FBBF24',
-            'circle-blur': 0.7,
+            'circle-color': '#1E3A5F',
+            'circle-blur': 0.35,
             'circle-opacity': 0,
-            'circle-opacity-transition': { duration: 350 },
+            'circle-opacity-transition': { duration: 250 },
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#38BDF8',
+            'circle-stroke-opacity': 0,
+            'circle-stroke-opacity-transition': { duration: 250 },
           },
         })
       }
@@ -550,6 +607,7 @@ export default function MapView({
     return () => {
       if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
       if (scanIntervalRef.current) clearInterval(scanIntervalRef.current)
+      if (breathingIntervalRef.current) clearInterval(breathingIntervalRef.current)
       if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
       resizeObserver.disconnect()
       map.remove()
@@ -557,26 +615,62 @@ export default function MapView({
   }, [])
 
   // =========================================================================
-  // REACTIVE LAYER ADJUSTMENT: Enlarge pins and glow when scanning
+  // REACTIVE LAYER ADJUSTMENT: Breathing icon expansion & subtle dark blue frame glow
   // =========================================================================
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return
     const map = mapRef.current
 
-    if (map.getLayer('listings-pins-layer')) {
-      map.setLayoutProperty(
-        'listings-pins-layer',
-        'icon-size',
-        isScanning ? ENLARGED_SCAN_ICON_SIZE : DEFAULT_ICON_SIZE
-      )
+    if (breathingIntervalRef.current) {
+      clearInterval(breathingIntervalRef.current)
+      breathingIntervalRef.current = null
     }
 
-    if (map.getLayer('listings-glow-layer')) {
-      map.setPaintProperty(
-        'listings-glow-layer',
-        'circle-opacity',
-        isScanning ? 1.0 : 0
-      )
+    if (isScanning) {
+      breathingStepRef.current = 0
+      const initialFrame = BREATHING_FRAMES[0]
+
+      if (map.getLayer('listings-pins-layer')) {
+        map.setLayoutProperty('listings-pins-layer', 'icon-size', initialFrame.iconSize)
+      }
+      if (map.getLayer('listings-glow-layer')) {
+        map.setPaintProperty('listings-glow-layer', 'circle-radius', initialFrame.haloRadius)
+        map.setPaintProperty('listings-glow-layer', 'circle-opacity', initialFrame.circleOpacity)
+        map.setPaintProperty('listings-glow-layer', 'circle-stroke-opacity', initialFrame.strokeOpacity)
+      }
+
+      // Smooth rhythmic breathing loop (100ms interval for fluid expansion & contraction)
+      breathingIntervalRef.current = setInterval(() => {
+        if (!mapRef.current) return
+        breathingStepRef.current = (breathingStepRef.current + 1) % BREATHING_CYCLE_STEPS
+        const frame = BREATHING_FRAMES[breathingStepRef.current]
+
+        if (map.getLayer('listings-pins-layer')) {
+          map.setLayoutProperty('listings-pins-layer', 'icon-size', frame.iconSize)
+        }
+        if (map.getLayer('listings-glow-layer')) {
+          map.setPaintProperty('listings-glow-layer', 'circle-radius', frame.haloRadius)
+          map.setPaintProperty('listings-glow-layer', 'circle-opacity', frame.circleOpacity)
+          map.setPaintProperty('listings-glow-layer', 'circle-stroke-opacity', frame.strokeOpacity)
+        }
+      }, BREATHING_STEP_MS)
+    } else {
+      // Revert to default standard stationary state
+      if (map.getLayer('listings-pins-layer')) {
+        map.setLayoutProperty('listings-pins-layer', 'icon-size', DEFAULT_ICON_SIZE)
+      }
+      if (map.getLayer('listings-glow-layer')) {
+        map.setPaintProperty('listings-glow-layer', 'circle-radius', GLOW_CIRCLE_RADIUS)
+        map.setPaintProperty('listings-glow-layer', 'circle-opacity', 0)
+        map.setPaintProperty('listings-glow-layer', 'circle-stroke-opacity', 0)
+      }
+    }
+
+    return () => {
+      if (breathingIntervalRef.current) {
+        clearInterval(breathingIntervalRef.current)
+        breathingIntervalRef.current = null
+      }
     }
   }, [isScanning, mapLoaded])
 
@@ -617,11 +711,15 @@ export default function MapView({
           type: 'circle',
           source: 'listings-source',
           paint: {
-            'circle-radius': GLOW_CIRCLE_RADIUS,
-            'circle-color': '#FBBF24',
-            'circle-blur': 0.7,
-            'circle-opacity': isScanning ? 1.0 : 0,
-            'circle-opacity-transition': { duration: 350 },
+            'circle-radius': isScanning ? (BREATHING_FRAMES[breathingStepRef.current]?.haloRadius || GLOW_CIRCLE_RADIUS) : GLOW_CIRCLE_RADIUS,
+            'circle-color': '#1E3A5F',
+            'circle-blur': 0.35,
+            'circle-opacity': isScanning ? 0.55 : 0,
+            'circle-opacity-transition': { duration: 250 },
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#38BDF8',
+            'circle-stroke-opacity': isScanning ? 0.75 : 0,
+            'circle-stroke-opacity-transition': { duration: 250 },
           },
         })
       }
@@ -636,7 +734,7 @@ export default function MapView({
             'icon-anchor': 'bottom',
             'icon-allow-overlap': true,
             'icon-ignore-placement': true,
-            'icon-size': isScanning ? ENLARGED_SCAN_ICON_SIZE : DEFAULT_ICON_SIZE,
+            'icon-size': isScanning ? (BREATHING_FRAMES[breathingStepRef.current]?.iconSize || DEFAULT_ICON_SIZE) : DEFAULT_ICON_SIZE,
           },
         })
       }
