@@ -390,10 +390,11 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
     }
   }
 
-  // Owner action: Submit appeal for banned or suspended group
+  // Owner action: Submit appeal for banned or suspended group / channel
   async function handleSubmitAppeal(e: React.FormEvent) {
     e.preventDefault()
-    if (!activeGroup || !appealExplanation.trim()) {
+    const target = activeGroup || activeBroadcast
+    if (!target || !appealExplanation.trim()) {
       toast.error('Please enter an explanation for your appeal.')
       return
     }
@@ -404,14 +405,14 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'submit-appeal',
-          channelId: activeGroup.id,
-          channelName: activeGroup.name,
-          channelType: 'group',
+          channelId: target.id,
+          channelName: target.name,
+          channelType: activeGroup ? 'group' : 'channel',
           explanation: appealExplanation.trim(),
           contactPhone: appealPhone.trim(),
           contactEmail: appealEmail.trim(),
-          sanctionType: activeGroup.status || 'SUSPENDED',
-          sanctionReason: activeGroup.moderationReason || 'Policy review',
+          sanctionType: target.status || 'SUSPENDED',
+          sanctionReason: target.moderationReason || 'Policy review',
         }),
       })
       const data = await res.json()
@@ -1555,27 +1556,33 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
 
               {/* Messages Feed */}
               <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
-                {/* Active Group Suspended / Banned Warning & Owner Appeal */}
-                {activeTab === 'groups' && activeGroup && (activeGroup.status === 'SUSPENDED' || activeGroup.status === 'BANNED') && (
+                {/* Active Group / Channel Suspended or Banned Warning & Owner Appeal */}
+                {((activeTab === 'groups' && activeGroup && (activeGroup.status === 'SUSPENDED' || activeGroup.status === 'BANNED')) ||
+                  (activeTab === 'channels' && activeBroadcast && (activeBroadcast.status === 'SUSPENDED' || activeBroadcast.status === 'BANNED'))) && (
                   <div className="mx-auto max-w-md bg-rose-50 border border-rose-300 rounded-2xl p-4 text-center text-xs text-rose-900 shadow-2xs space-y-2 mb-3">
                     <div className="flex items-center justify-center gap-1.5 font-bold text-sm text-rose-700">
                       <ShieldAlert className="h-4 w-4" />
-                      <span>Group {activeGroup.status === 'BANNED' ? 'Permanently Banned' : 'Suspended'}</span>
+                      <span>
+                        {(activeGroup?.status || activeBroadcast?.status) === 'BANNED'
+                          ? 'Permanently Banned'
+                          : 'Temporarily Suspended'}
+                      </span>
                     </div>
                     <p className="text-xs text-rose-800 leading-relaxed">
-                      This group was {activeGroup.status.toLowerCase()} by Mapstar Trust & Safety.
-                      {activeGroup.moderationReason && (
+                      This {activeGroup ? 'group' : 'channel'} was {(activeGroup?.status || activeBroadcast?.status)?.toLowerCase()} by Mapstar Trust & Safety.
+                      {(activeGroup?.moderationReason || activeBroadcast?.moderationReason) && (
                         <span className="block mt-1 font-semibold text-rose-950">
-                          Sanction Reason: {activeGroup.moderationReason}
+                          Sanction Reason: {activeGroup?.moderationReason || activeBroadcast?.moderationReason}
                         </span>
                       )}
                     </p>
+
                     {/* Owner Appeal action */}
-                    {(user && (user.role === 'ADMIN' || activeGroup.creatorId === user.id || activeGroup.createdBy === user.fullName || activeGroup.createdBy === user.email)) && (
-                      <div className="pt-2.5 mt-1 border-t border-rose-200 space-y-2">
-                        <p className="text-[11px] text-rose-700 font-medium">
-                          You are registered as the group owner. You can file an appeal to the Admin Review Board to lift this sanction.
-                        </p>
+                    <div className="pt-2.5 mt-1 border-t border-rose-200 space-y-2">
+                      <p className="text-[11px] text-rose-700 font-medium">
+                        Are you the group owner or manager? You can file an official appeal to the Admin Review Board to have this {activeGroup ? 'group' : 'channel'} reinstated.
+                      </p>
+                      {user ? (
                         <Button
                           size="sm"
                           onClick={() => {
@@ -1589,8 +1596,17 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                           <Scale className="h-3.5 w-3.5" />
                           <span>Submit Group Appeal</span>
                         </Button>
-                      </div>
-                    )}
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => onOpenAuth('login')}
+                          className="h-8 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <LogIn className="h-3.5 w-3.5" />
+                          <span>Sign In to Submit Appeal</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
                 {/* User-facing End-to-End Encryption Banner inside DMs */}
