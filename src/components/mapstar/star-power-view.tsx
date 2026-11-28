@@ -1877,9 +1877,7 @@ export default function StarPowerView({
 
               {/* CUSTOMER COMPLAINTS VIEW */}
               {moderationSubTab === 'complaints' && (
-
-              {/* Complaints List */}
-              <div className="space-y-3">
+                <div className="space-y-3">
                 {complaints.map((c) => (
                   <div
                     key={c.ticketId}
