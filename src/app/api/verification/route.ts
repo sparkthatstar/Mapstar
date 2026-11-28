@@ -47,13 +47,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { type = 'IDENTITY', nin, bvn, businessName, propertyOrOfficeAddress, notes } = body
 
-    if (type === 'IDENTITY' && !nin && !bvn) {
-      return NextResponse.json(
-        { error: 'Please provide either a National Identity Number (NIN) or Bank Verification Number (BVN).' },
-        { status: 400 }
-      )
-    }
-
     if (nin && !/^\d{11}$/.test(nin.replace(/\s+/g, ''))) {
       return NextResponse.json({ error: 'NIN must be an 11-digit number.' }, { status: 400 })
     }

@@ -10,7 +10,6 @@ import {
   LogOut,
   Mail,
   Phone,
-  AlertCircle,
   Clock,
   Send,
   Loader2,
@@ -50,8 +49,6 @@ export default function MeView({
   // Verification dialog state
   const [applyModalOpen, setApplyModalOpen] = useState(false)
   const [applyType, setApplyType] = useState<'IDENTITY' | 'LANDLORD' | 'AGENT'>('IDENTITY')
-  const [ninInput, setNinInput] = useState('')
-  const [bvnInput, setBvnInput] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [propertyAddress, setPropertyAddress] = useState('')
   const [applyNotes, setApplyNotes] = useState('')
@@ -78,48 +75,56 @@ export default function MeView({
     e.preventDefault()
     if (!user) return
 
-    if (applyType === 'IDENTITY' && !ninInput.trim() && !bvnInput.trim()) {
-      toast.error('Please enter at least your 11-digit NIN or BVN.')
-      return
-    }
-
-    if (ninInput.trim() && ninInput.replace(/\s+/g, '').length !== 11) {
-      toast.error('NIN must be exactly 11 digits.')
-      return
-    }
-
-    if (bvnInput.trim() && bvnInput.replace(/\s+/g, '').length !== 11) {
-      toast.error('BVN must be exactly 11 digits.')
-      return
-    }
-
     setSubmitting(true)
     try {
-      const res = await fetch('/api/verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: applyType,
-          nin: ninInput,
-          bvn: bvnInput,
-          businessName,
-          propertyOrOfficeAddress: propertyAddress,
-          notes: applyNotes,
-        }),
-      })
+      if (applyType === 'IDENTITY') {
+        const res = await fetch('/api/verification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'IDENTITY',
+            notes: applyNotes || 'Persona Identity Verification requested to boost tenant credibility',
+          }),
+        })
 
-      const data = await res.json()
-      if (res.ok && data.success) {
-        toast.success('Verification application submitted! Mapstar admin will review it.')
-        setApplyModalOpen(false)
-        setNinInput('')
-        setBvnInput('')
-        setBusinessName('')
-        setPropertyAddress('')
-        setApplyNotes('')
-        fetchMyApplications()
+        const data = await res.json()
+        if (res.ok && data.success) {
+          toast.success('Identity verification initiated via Persona! Your credibility badge is being processed.')
+          setApplyModalOpen(false)
+          setApplyNotes('')
+          fetchMyApplications()
+        } else {
+          toast.error(data.error || 'Failed to initiate verification.')
+        }
       } else {
-        toast.error(data.error || 'Failed to submit application.')
+        if (!propertyAddress.trim()) {
+          toast.error('Please provide a property or office address.')
+          setSubmitting(false)
+          return
+        }
+
+        const res = await fetch('/api/verification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: applyType,
+            businessName,
+            propertyOrOfficeAddress: propertyAddress,
+            notes: applyNotes,
+          }),
+        })
+
+        const data = await res.json()
+        if (res.ok && data.success) {
+          toast.success('Application to list properties submitted! Mapstar team will review it.')
+          setApplyModalOpen(false)
+          setBusinessName('')
+          setPropertyAddress('')
+          setApplyNotes('')
+          fetchMyApplications()
+        } else {
+          toast.error(data.error || 'Failed to submit application.')
+        }
       }
     } catch {
       toast.error('Network error submitting application.')
@@ -140,7 +145,7 @@ export default function MeView({
             Log in to view your profile
           </h2>
           <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 mb-6 leading-relaxed">
-            Access your saved lodges, direct-from-landlord applications, verified tenancy agreements, and rental payment escrow history.
+            Access your saved lodges, direct-from-landlord applications, verified tenancy agreements, and direct landlord contact.
           </p>
 
           <div className="space-y-2.5">
@@ -170,10 +175,10 @@ export default function MeView({
       ? 'Landlord / Property Owner'
       : user.role === 'AGENT'
       ? 'Mapstar-Verified Agent'
-      : 'Student / Tenant'
+      : 'Tenant'
 
   const canPostListings = user.role === 'ADMIN' || user.role === 'LANDLORD' || user.role === 'AGENT'
-  const isFullyVerified = Boolean(user.ninVerified && user.bvnVerified)
+  const isVerifiedTenant = Boolean(user.ninVerified || user.bvnVerified)
   const pendingApplication = myApplications.find((a) => a.status === 'PENDING')
 
   return (
@@ -209,12 +214,12 @@ export default function MeView({
                 )}
               </div>
 
-              {/* Dynamic Real Verification Badges */}
+              {/* Dynamic Credibility & Verification Badges */}
               <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                {user.ninVerified ? (
+                {isVerifiedTenant ? (
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    NIN Verified
+                    Verified Tenant
                   </div>
                 ) : (
                   <button
@@ -224,32 +229,14 @@ export default function MeView({
                     }}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100 transition-colors cursor-pointer"
                   >
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                    NIN Unverified (Apply)
+                    <Shield className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                    Get Verified (Boost Credibility)
                   </button>
                 )}
 
-                {user.bvnVerified ? (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    BVN Verified
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setApplyType('IDENTITY')
-                      setApplyModalOpen(true)
-                    }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100 transition-colors cursor-pointer"
-                  >
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                    BVN Unverified (Apply)
-                  </button>
-                )}
-
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-[#2A1810]/40 text-[#78350F] dark:text-[#E0904E] border border-amber-200 dark:border-[#523018]/60">
-                  <Shield className="h-3.5 w-3.5 text-[#78350F] dark:text-[#E0904E]" />
-                  {isFullyVerified || user.role !== 'TENANT' ? 'Escrow Protected' : 'Standard Escrow (5% Cap)'}
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-50 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-slate-500" />
+                  Direct Landlord Contact
                 </div>
               </div>
             </div>
@@ -269,12 +256,12 @@ export default function MeView({
             ) : (
               <Button
                 onClick={() => {
-                  setApplyType('LANDLORD')
+                  setApplyType('IDENTITY')
                   setApplyModalOpen(true)
                 }}
-                className="h-10 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow-md shadow-amber-600/30 cursor-pointer"
+                className="h-10 bg-[#78350F] dark:bg-[#B45309] hover:bg-[#854D0E] dark:hover:bg-[#C2783B] text-white font-semibold text-xs shadow-md shadow-[#78350F]/25 cursor-pointer"
               >
-                <BadgeCheck className="h-4 w-4 mr-2" /> Apply to List Properties
+                <Shield className="h-4 w-4 mr-2" /> Get Verified on Mapstar
               </Button>
             )}
 
@@ -289,7 +276,7 @@ export default function MeView({
         </div>
 
         {/* Verification Status Banner / Application Hub */}
-        {(!user.ninVerified || !user.bvnVerified || !canPostListings) && (
+        {!isVerifiedTenant && (
           <div className="bg-white dark:bg-[#090D18] border border-amber-200/80 dark:border-amber-800/60 rounded-3xl p-6 shadow-sm">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -302,20 +289,23 @@ export default function MeView({
                   </h2>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md">
-                  New accounts require admin review to verify NIN & BVN, protect escrow, or gain property listing approval as a Landlord or Agent.
+                  Get verified to build trust, stand out, and appear credible to landlords, lodge owners, and roommates when inquiring or applying for apartments.
                 </p>
                 {pendingApplication && (
                   <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 mt-1">
-                    <Clock className="h-3.5 w-3.5" /> Application under review by administrators
+                    <Clock className="h-3.5 w-3.5" /> Verification under review
                   </div>
                 )}
               </div>
 
               <Button
-                onClick={() => setApplyModalOpen(true)}
+                onClick={() => {
+                  setApplyType('IDENTITY')
+                  setApplyModalOpen(true)
+                }}
                 className="w-full sm:w-auto h-10 px-4 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow-md shadow-amber-600/30 cursor-pointer shrink-0"
               >
-                <FileCheck className="h-4 w-4 mr-1.5" /> Apply for Verification
+                <FileCheck className="h-4 w-4 mr-1.5" /> Get Verified
               </Button>
             </div>
           </div>
@@ -363,23 +353,48 @@ export default function MeView({
               <span className="font-semibold text-slate-800 dark:text-slate-200">{roleLabel}</span>
             </div>
             <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-              <span>NIN Status</span>
-              <span className={user.ninVerified ? 'text-emerald-600 font-bold' : 'text-amber-600 font-medium'}>
-                {user.ninVerified ? 'Verified' : 'Pending Verification'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-              <span>BVN Status</span>
-              <span className={user.bvnVerified ? 'text-emerald-600 font-bold' : 'text-amber-600 font-medium'}>
-                {user.bvnVerified ? 'Verified' : 'Pending Verification'}
+              <span>Identity Verification</span>
+              <span className={isVerifiedTenant ? 'text-emerald-600 font-bold' : 'text-amber-600 font-medium'}>
+                {isVerifiedTenant ? 'Verified Credibility' : 'Pending Verification'}
               </span>
             </div>
             <div className="flex items-center justify-between py-1">
-              <span>Security Guarantee</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Standard 5% Capped Agent Fees</span>
+              <span>Direct Inquiries</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Enabled & Protected</span>
             </div>
           </div>
         </div>
+
+        {/* Apply to List Properties Card (Positioned at bottom for Tenants) */}
+        {!canPostListings && (
+          <div className="bg-white dark:bg-[#090D18] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-xl bg-amber-50 dark:bg-[#2A1810]/80 border border-amber-200 dark:border-[#523018]/60 flex items-center justify-center text-[#78350F] dark:text-[#E0904E]">
+                    <Building className="h-4 w-4" />
+                  </div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Apply to List Properties
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md">
+                  Are you a lodge owner, landlord, or verified real estate agent? Apply for property listing access to publish lodges directly on Mapstar.
+                </p>
+              </div>
+
+              <Button
+                onClick={() => {
+                  setApplyType('LANDLORD')
+                  setApplyModalOpen(true)
+                }}
+                className="w-full sm:w-auto h-10 px-4 bg-[#78350F] dark:bg-[#B45309] hover:bg-[#854D0E] dark:hover:bg-[#C2783B] text-white font-semibold text-xs shadow-md shadow-[#78350F]/25 cursor-pointer shrink-0"
+              >
+                <BadgeCheck className="h-4 w-4 mr-1.5" /> Apply to List Properties
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Verification Application Modal */}
@@ -387,10 +402,12 @@ export default function MeView({
         <DialogContent className="max-w-md bg-white dark:bg-[#090D18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-3xl p-6 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Shield className="h-5 w-5 text-[#78350F]" /> Apply for Verification
+              <Shield className="h-5 w-5 text-[#78350F]" /> {applyType === 'IDENTITY' ? 'Get Verified on Mapstar' : 'Apply to List Properties'}
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-              Submit your verification details. Mapstar administrators verify identity and approve Landlords and Agents to list properties.
+              {applyType === 'IDENTITY'
+                ? 'Verify your identity securely to boost your credibility with landlords and lodge owners.'
+                : 'Submit your property or agency details to unlock listing privileges on Mapstar.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -405,7 +422,7 @@ export default function MeView({
                   onClick={() => setApplyType('IDENTITY')}
                   className="text-[11px] h-9"
                 >
-                  NIN / BVN
+                  Tenant Verification
                 </Button>
                 <Button
                   type="button"
@@ -428,35 +445,38 @@ export default function MeView({
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="nin-input" className="text-xs font-medium">
-                National Identity Number (NIN - 11 digits)
-              </Label>
-              <Input
-                id="nin-input"
-                placeholder="e.g. 12345678901"
-                maxLength={11}
-                value={ninInput}
-                onChange={(e) => setNinInput(e.target.value)}
-                className="mt-1 h-9 text-xs"
-              />
-            </div>
+            {applyType === 'IDENTITY' ? (
+              <div className="rounded-2xl border border-amber-200/80 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="h-8 w-8 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-[#78350F] dark:text-[#E0904E] flex items-center justify-center shrink-0 mt-0.5">
+                    <Shield className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                      Secure Verification (Powered by Persona)
+                    </h4>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                      Mapstar verifies identities seamlessly and securely through Persona. Stand out as a trustworthy tenant to lodge owners and landlords without sharing sensitive numbers.
+                    </p>
+                  </div>
+                </div>
 
-            <div>
-              <Label htmlFor="bvn-input" className="text-xs font-medium">
-                Bank Verification Number (BVN - 11 digits)
-              </Label>
-              <Input
-                id="bvn-input"
-                placeholder="e.g. 22345678901"
-                maxLength={11}
-                value={bvnInput}
-                onChange={(e) => setBvnInput(e.target.value)}
-                className="mt-1 h-9 text-xs"
-              />
-            </div>
-
-            {(applyType === 'LANDLORD' || applyType === 'AGENT') && (
+                <div className="space-y-1.5 pt-1 text-[11px] text-slate-600 dark:text-slate-300">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>Instant credibility badge on your inquiries</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>Bank-grade privacy & automated ID scanning</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>Priority response from verified lodge owners</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
               <>
                 <div>
                   <Label htmlFor="business-input" className="text-xs font-medium">
@@ -491,7 +511,7 @@ export default function MeView({
               </Label>
               <Textarea
                 id="notes-input"
-                placeholder="Provide any additional info for faster review..."
+                placeholder={applyType === 'IDENTITY' ? 'Any additional verification notes (optional)...' : 'Provide any additional info for faster review...'}
                 rows={2}
                 value={applyNotes}
                 onChange={(e) => setApplyNotes(e.target.value)}
@@ -521,7 +541,7 @@ export default function MeView({
                   </>
                 ) : (
                   <>
-                    <Send className="h-3.5 w-3.5 mr-1.5" /> Submit Application
+                    <Send className="h-3.5 w-3.5 mr-1.5" /> {applyType === 'IDENTITY' ? 'Start Persona Verification' : 'Submit Application'}
                   </>
                 )}
               </Button>
