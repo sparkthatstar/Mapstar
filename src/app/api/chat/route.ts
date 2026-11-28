@@ -99,9 +99,17 @@ export async function GET(req: NextRequest) {
             if (match && match[1]) {
               const mod = JSON.parse(match[1])
               if (mod.channelId && !moderationMap.has(mod.channelId)) {
+                let effectiveStatus = mod.status
+                if (effectiveStatus === 'SUSPENDED' && mod.suspendedUntil) {
+                  if (new Date(mod.suspendedUntil).getTime() <= Date.now()) {
+                    effectiveStatus = 'ACTIVE'
+                  }
+                }
                 moderationMap.set(mod.channelId, {
-                  status: mod.status,
+                  status: effectiveStatus,
+                  originalStatus: mod.status,
                   reason: mod.reason,
+                  suspendedUntil: mod.suspendedUntil || null,
                   moderatedBy: mod.moderatedBy,
                   moderatedAt: mod.moderatedAt || m.createdAt,
                 })
@@ -156,6 +164,7 @@ export async function GET(req: NextRequest) {
                   ...meta,
                   status: currentStatus,
                   moderationReason: mod.reason || null,
+                  suspendedUntil: mod.suspendedUntil || null,
                   moderatedAt: mod.moderatedAt || null,
                   isPublic: true,
                   createdAt: m.createdAt,
@@ -234,6 +243,65 @@ export async function GET(req: NextRequest) {
       })
 
       return NextResponse.json({ appeals: Array.from(appealsMap.values()), isAdmin })
+    }
+
+    // 3b. Channel Reports endpoint: Admin view of all reported channels
+    if (searchParams.get('action') === 'channel-reports') {
+      if (!isAdmin) {
+        return NextResponse.json({ error: 'Unauthorized: Admin privileges required.' }, { status: 403 })
+      }
+
+      const reportMessages = await db.chatMessage.findMany({
+        where: {
+          channelId: 'channels-directory',
+          OR: [
+            { content: { contains: '[CHANNEL_REPORT:' } },
+            { content: { contains: '[REPORT_RESOLUTION:' } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 300,
+        select: { content: true, createdAt: true },
+      })
+
+      const resolutions = new Map<string, any>()
+      reportMessages.forEach((m) => {
+        try {
+          if (m.content.includes('[REPORT_RESOLUTION:')) {
+            const match = m.content.match(/\[REPORT_RESOLUTION:(.*?)\]/)
+            if (match && match[1]) {
+              const res = JSON.parse(match[1])
+              if (res.reportId && !resolutions.has(res.reportId)) {
+                resolutions.set(res.reportId, res)
+              }
+            }
+          }
+        } catch {}
+      })
+
+      const reportsMap = new Map<string, any>()
+      reportMessages.forEach((m) => {
+        try {
+          if (m.content.includes('[CHANNEL_REPORT:')) {
+            const match = m.content.match(/\[CHANNEL_REPORT:(.*?)\]/)
+            if (match && match[1]) {
+              const rep = JSON.parse(match[1])
+              if (rep.reportId && !reportsMap.has(rep.reportId)) {
+                const res = resolutions.get(rep.reportId)
+                reportsMap.set(rep.reportId, {
+                  ...rep,
+                  status: res ? res.resolution : rep.status || 'OPEN',
+                  resolutionNotes: res?.notes || null,
+                  resolvedAt: res?.resolvedAt || null,
+                  resolvedBy: res?.resolvedBy || null,
+                })
+              }
+            }
+          }
+        } catch {}
+      })
+
+      return NextResponse.json({ reports: Array.from(reportsMap.values()) })
     }
 
     // 4. Omni-Chat Surveillance: Admin master oversight of EVERY chat, DM, group, and broadcast
@@ -530,7 +598,60 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ messages })
+    // Fetch channel metadata & moderation info if applicable
+    let channelMeta: any = null
+    if (channelId !== 'world-square' && !channelId.startsWith('dm-')) {
+      const channelDirectoryMsgs = await db.chatMessage.findMany({
+        where: {
+          channelId: 'channels-directory',
+          content: { contains: channelId },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: { content: true, senderId: true, senderName: true },
+      }).catch(() => [])
+
+      let status = 'ACTIVE'
+      let reason: string | null = null
+      let suspendedUntil: string | null = null
+      let creatorId: string | null = null
+      let channelType = channelId.startsWith('channel-') ? 'channel' : 'group'
+
+      for (const m of channelDirectoryMsgs) {
+        if (!reason && m.content.includes('[MODERATION_META:')) {
+          try {
+            const match = m.content.match(/\[MODERATION_META:(.*?)\]/)
+            if (match && match[1]) {
+              const mod = JSON.parse(match[1])
+              if (mod.channelId === channelId) {
+                if (mod.status === 'SUSPENDED' && mod.suspendedUntil && new Date(mod.suspendedUntil).getTime() <= Date.now()) {
+                  status = 'ACTIVE'
+                } else {
+                  status = mod.status
+                  reason = mod.reason
+                  suspendedUntil = mod.suspendedUntil || null
+                }
+              }
+            }
+          } catch {}
+        }
+        if (!creatorId && m.content.includes('[CHANNEL_META:')) {
+          try {
+            const match = m.content.match(/\[CHANNEL_META:(.*?)\]/)
+            if (match && match[1]) {
+              const metaData = JSON.parse(match[1])
+              if (metaData.channelId === channelId || metaData.id === channelId) {
+                creatorId = metaData.creatorId || m.senderId
+                channelType = metaData.type || (channelId.startsWith('channel-') ? 'channel' : 'group')
+              }
+            }
+          } catch {}
+        }
+      }
+      channelMeta = { status, reason, suspendedUntil, creatorId, channelType }
+    }
+
+    return NextResponse.json({ messages, channelMeta })
   } catch (error: any) {
     console.error('[API /api/chat GET error]', error)
     return NextResponse.json({ error: error.message || 'Failed to fetch messages' }, { status: 500 })
@@ -562,6 +683,41 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Channel ID is required' }, { status: 400 })
       }
 
+      // Check if channel is banned or suspended - interactions locked
+      const modCheck = await db.chatMessage.findMany({
+        where: {
+          channelId: 'channels-directory',
+          content: { contains: channelId },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { content: true },
+      }).catch(() => [])
+
+      for (const m of modCheck) {
+        if (m.content.includes('[MODERATION_META:')) {
+          try {
+            const match = m.content.match(/\[MODERATION_META:(.*?)\]/)
+            if (match && match[1]) {
+              const mod = JSON.parse(match[1])
+              if (mod.channelId === channelId) {
+                if (mod.status === 'BANNED') {
+                  return NextResponse.json({ error: 'This channel has been banned by Trust & Safety. Interactions are disabled.' }, { status: 403 })
+                }
+                if (mod.status === 'SUSPENDED') {
+                  if (!mod.suspendedUntil || new Date(mod.suspendedUntil).getTime() > Date.now()) {
+                    return NextResponse.json({ error: 'This channel is currently suspended. Interactions are disabled.' }, { status: 403 })
+                  }
+                }
+                if (mod.status === 'DELETED') {
+                  return NextResponse.json({ error: 'This channel has been deleted.' }, { status: 404 })
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+
       await db.chatMessage.create({
         data: {
           channelId: 'channels-directory',
@@ -591,9 +747,14 @@ export async function POST(req: NextRequest) {
       if (!isAdmin) {
         return NextResponse.json({ error: 'Unauthorized: Admin privileges required to moderate groups.' }, { status: 403 })
       }
-      const { channelId, status, reason } = body // status: 'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'DELETED'
+      const { channelId, status, reason, suspendedUntil, durationDays } = body // status: 'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'DELETED'
       if (!channelId || !status) {
         return NextResponse.json({ error: 'Channel ID and target status are required' }, { status: 400 })
+      }
+
+      let finalSuspendedUntil = suspendedUntil || null
+      if (status === 'SUSPENDED' && durationDays && !finalSuspendedUntil) {
+        finalSuspendedUntil = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
       }
 
       await db.chatMessage.create({
@@ -606,6 +767,7 @@ export async function POST(req: NextRequest) {
             channelId,
             status,
             reason: reason || 'Trust & Safety policy enforcement',
+            suspendedUntil: finalSuspendedUntil,
             moderatedBy: user?.email || 'admin',
             moderatedAt: new Date().toISOString(),
           })}]`,
@@ -768,12 +930,138 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // 4b. Channel Reporting System: Report a channel (Feature 3)
+    if (action === 'report-channel') {
+      if (!user) {
+        return NextResponse.json({ error: 'You must be signed in to report a channel.' }, { status: 401 })
+      }
+      const { channelId, channelName, reason, details } = body
+      if (!channelId || !reason) {
+        return NextResponse.json({ error: 'Channel ID and reason are required.' }, { status: 400 })
+      }
+
+      // Prevent spam / duplicate reports in last 24h
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      const existingReports = await db.chatMessage.findMany({
+        where: {
+          channelId: 'channels-directory',
+          senderId: user.id,
+          content: { contains: '[CHANNEL_REPORT:' },
+          createdAt: { gte: oneDayAgo },
+        },
+        take: 10,
+        select: { content: true },
+      }).catch(() => [])
+
+      const alreadyReported = existingReports.some((m) => {
+        try {
+          const match = m.content.match(/\[CHANNEL_REPORT:(.*?)\]/)
+          if (match && match[1]) {
+            const data = JSON.parse(match[1])
+            return data.channelId === channelId
+          }
+        } catch {}
+        return false
+      })
+
+      if (alreadyReported) {
+        return NextResponse.json(
+          { error: 'You have already submitted a report for this channel. Our moderation team is actively reviewing it.' },
+          { status: 429 }
+        )
+      }
+
+      const reportId = `rep_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+      await db.chatMessage.create({
+        data: {
+          channelId: 'channels-directory',
+          senderId: user.id,
+          senderName: user.fullName || user.email,
+          senderRole: user.role,
+          content: `[CHANNEL_REPORT:${JSON.stringify({
+            reportId,
+            channelId,
+            channelName: channelName || channelId,
+            reporterId: user.id,
+            reporterName: user.fullName || user.email,
+            reporterEmail: user.email,
+            reporterRole: user.role,
+            reason: reason.trim(),
+            details: (details || '').trim(),
+            status: 'OPEN',
+            createdAt: new Date().toISOString(),
+          })}]`,
+        },
+      })
+
+      return NextResponse.json({
+        success: true,
+        reportId,
+        message: 'Channel report submitted successfully. Mapstar Trust & Safety will review it promptly.',
+      })
+    }
+
+    // 4c. Admin Resolve Channel Report (Feature 3)
+    if (action === 'resolve-channel-report') {
+      if (!isAdmin) {
+        return NextResponse.json({ error: 'Unauthorized: Admin privileges required.' }, { status: 403 })
+      }
+      const { reportId, channelId, resolution, notes, banOrSuspend } = body
+      if (!reportId || !resolution) {
+        return NextResponse.json({ error: 'Report ID and resolution are required.' }, { status: 400 })
+      }
+
+      await db.chatMessage.create({
+        data: {
+          channelId: 'channels-directory',
+          senderId: user?.id || 'admin-system',
+          senderName: user?.fullName || 'Mapstar Trust & Safety',
+          senderRole: 'ADMIN',
+          content: `[REPORT_RESOLUTION:${JSON.stringify({
+            reportId,
+            channelId,
+            resolution,
+            notes: notes || '',
+            resolvedBy: user?.email || 'admin',
+            resolvedAt: new Date().toISOString(),
+          })}]`,
+        },
+      })
+
+      // If resolution involves banning or suspending the channel
+      if (channelId && (banOrSuspend === 'BANNED' || banOrSuspend === 'SUSPENDED' || resolution === 'BANNED' || resolution === 'SUSPENDED')) {
+        const targetStatus = banOrSuspend || resolution
+        await db.chatMessage.create({
+          data: {
+            channelId: 'channels-directory',
+            senderId: user?.id || 'admin-system',
+            senderName: user?.fullName || 'Mapstar Trust & Safety',
+            senderRole: 'ADMIN',
+            content: `[MODERATION_META:${JSON.stringify({
+              channelId,
+              status: targetStatus,
+              reason: `Action taken from report #${reportId}: ${notes || 'Policy violation'}`,
+              moderatedBy: user?.email || 'admin',
+              moderatedAt: new Date().toISOString(),
+            })}]`,
+          },
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        reportId,
+        resolution,
+        message: `Report ${reportId} marked as ${resolution}.`,
+      })
+    }
+
     // 5. Default Message Post
     if (!user) {
       return NextResponse.json({ error: 'You must be signed in to post in chat.' }, { status: 401 })
     }
 
-    const { channelId, content, meta } = body
+    const { channelId, content, meta, replyTo } = body
     if (!channelId || typeof channelId !== 'string') {
       return NextResponse.json({ error: 'Channel ID is required' }, { status: 400 })
     }
@@ -781,18 +1069,83 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message content cannot be empty' }, { status: 400 })
     }
 
-    // Check if channel is suspended or banned
-    if (!isAdmin && channelId !== 'world-square' && !channelId.startsWith('dm-')) {
-      const latestMod = await db.chatMessage.findFirst({
+    // 1. Check Channel Moderation Status (Bans & Suspensions apply to EVERYONE including creator)
+    if (channelId !== 'world-square' && !channelId.startsWith('dm-')) {
+      const channelModMsgs = await db.chatMessage.findMany({
         where: {
           channelId: 'channels-directory',
-          content: { contains: `"channelId":"${channelId}"` },
+          content: { contains: channelId },
         },
         orderBy: { createdAt: 'desc' },
-        select: { content: true },
-      })
-      if (latestMod && (latestMod.content.includes('"status":"SUSPENDED"') || latestMod.content.includes('"status":"BANNED"'))) {
-        return NextResponse.json({ error: 'This group is suspended or banned by Mapstar Trust & Safety.' }, { status: 403 })
+        take: 20,
+        select: { content: true, senderId: true },
+      }).catch(() => [])
+
+      let isBanned = false
+      let isSuspended = false
+      let suspensionMessage = 'This channel is currently suspended by Mapstar Trust & Safety.'
+      let isDeleted = false
+      let channelCreatorId: string | null = null
+      let channelType = channelId.startsWith('channel-') ? 'channel' : 'group'
+
+      for (const m of channelModMsgs) {
+        if (!isBanned && !isSuspended && !isDeleted && m.content.includes('[MODERATION_META:')) {
+          try {
+            const match = m.content.match(/\[MODERATION_META:(.*?)\]/)
+            if (match && match[1]) {
+              const mod = JSON.parse(match[1])
+              if (mod.channelId === channelId) {
+                if (mod.status === 'BANNED') {
+                  isBanned = true
+                  suspensionMessage = `This channel has been permanently banned by Mapstar Trust & Safety. Reason: ${mod.reason || 'Terms of Service violation'}`
+                } else if (mod.status === 'SUSPENDED') {
+                  if (mod.suspendedUntil && new Date(mod.suspendedUntil).getTime() <= Date.now()) {
+                    isSuspended = false // Suspension expired, automatically active!
+                  } else {
+                    isSuspended = true
+                    const untilText = mod.suspendedUntil ? ` until ${new Date(mod.suspendedUntil).toLocaleDateString()}` : ''
+                    suspensionMessage = `This channel is currently suspended${untilText} by Mapstar Trust & Safety. Reason: ${mod.reason || 'Pending review'}`
+                  }
+                } else if (mod.status === 'DELETED') {
+                  isDeleted = true
+                }
+              }
+            }
+          } catch {}
+        }
+
+        if (!channelCreatorId && m.content.includes('[CHANNEL_META:')) {
+          try {
+            const match = m.content.match(/\[CHANNEL_META:(.*?)\]/)
+            if (match && match[1]) {
+              const metaData = JSON.parse(match[1])
+              if (metaData.channelId === channelId || metaData.id === channelId) {
+                channelCreatorId = metaData.creatorId || m.senderId
+                channelType = metaData.type || (channelId.startsWith('channel-') ? 'channel' : 'group')
+              }
+            }
+          } catch {}
+        }
+      }
+
+      if (isBanned || isDeleted) {
+        return NextResponse.json({ error: suspensionMessage }, { status: 403 })
+      }
+      if (isSuspended) {
+        return NextResponse.json({ error: suspensionMessage }, { status: 403 })
+      }
+
+      // 2. Enforce Channel Messaging Permissions (Feature 1)
+      // Broadcast channels: ONLY the creator/owner can post announcements. Regular members/subscribers cannot.
+      const isBroadcast = channelType === 'channel' || channelId.startsWith('channel-')
+      if (isBroadcast) {
+        const isOwner = user.id === channelCreatorId
+        if (!isOwner && !isAdmin) {
+          return NextResponse.json(
+            { error: 'Broadcast Channel: Only the channel owner/creator is authorized to post announcements in this channel.' },
+            { status: 403 }
+          )
+        }
       }
     }
 
@@ -819,13 +1172,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Format message with WhatsApp-style reply reference (Feature 6)
+    let formattedContent = content.trim()
+    if (replyTo && typeof replyTo === 'object' && replyTo.id) {
+      const cleanSnippet = (replyTo.text || '').replace(/\[REPLY:.*?\]/g, '').slice(0, 150)
+      const replyMeta = {
+        id: replyTo.id,
+        senderName: replyTo.senderName || 'User',
+        text: cleanSnippet,
+      }
+      formattedContent = `[REPLY:${JSON.stringify(replyMeta)}]${formattedContent}`
+    }
+
     const message = await db.chatMessage.create({
       data: {
         channelId,
         senderId: user.id,
         senderName: user.fullName || user.email,
         senderRole: user.role,
-        content: content.trim(),
+        content: formattedContent,
       },
       select: {
         id: true,

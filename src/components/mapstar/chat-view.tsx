@@ -4,12 +4,14 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Users,
   MessageSquare,
+  MessageCircle,
   Send,
   Shield,
   Building,
   GraduationCap,
   Sparkles,
   Phone,
+  PhoneIncoming,
   Building2,
   X,
   Plus,
@@ -31,7 +33,16 @@ import {
   Scale,
   AlertTriangle,
   Check,
+  Bell,
+  Flag,
 } from 'lucide-react'
+import CallOverlay, { CallTarget } from '@/components/mapstar/call-overlay'
+import {
+  isThreadMuted,
+  toggleThreadMute,
+  dispatchAppNotification,
+  registerServiceWorker,
+} from '@/lib/notifications'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -174,6 +185,21 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
   const [adminModReason, setAdminModReason] = useState('')
   const [adminModerating, setAdminModerating] = useState(false)
 
+  // Message Replying state (Feature 6)
+  const [replyingToMessage, setReplyingToMessage] = useState<{ id: string; senderName: string; text: string } | null>(null)
+
+  // In-App Voice Calling state (Feature 5)
+  const [activeCallTarget, setActiveCallTarget] = useState<CallTarget | null>(null)
+
+  // Channel Reporting modal state (Feature 3)
+  const [reportModalOpen, setReportModalOpen] = useState(false)
+  const [reportReason, setReportReason] = useState('Spam or unauthorized advertising')
+  const [reportDetails, setReportDetails] = useState('')
+  const [submittingReport, setSubmittingReport] = useState(false)
+
+  // Notification mute state (Feature 4)
+  const [isMuted, setIsMuted] = useState(false)
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isAdmin = user?.role === 'ADMIN'
@@ -285,13 +311,21 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
     }
   }, [])
 
-  // Initial load: Fetch public channels and user DMs
+  // Initial load: Fetch public channels, register service worker and user DMs
   useEffect(() => {
     fetchPublicChannels()
+    registerServiceWorker().catch(() => {})
     if (user) {
       fetchMyDMs()
     }
   }, [fetchPublicChannels, fetchMyDMs, user])
+
+  // Sync mute state when conversation changes
+  useEffect(() => {
+    if (currentChannelId) {
+      setIsMuted(isThreadMuted(currentChannelId))
+    }
+  }, [currentChannelId])
 
   // Refresh data when switching tabs
   useEffect(() => {
@@ -570,6 +604,9 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
     }
     setMessages((prev) => [...prev, optimisticMsg])
 
+    const replyingPayload = replyingToMessage
+    setReplyingToMessage(null)
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -577,6 +614,7 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
         body: JSON.stringify({
           channelId: currentChannelId,
           content: formattedContent,
+          replyTo: replyingPayload,
         }),
       })
 
@@ -679,6 +717,45 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
       toast.error(err.message || 'Error purging old messages')
     } finally {
       setPurging(false)
+    }
+  }
+
+  // Channel Reporting action (Feature 3)
+  async function handleReportChannel(e: React.FormEvent) {
+    e.preventDefault()
+    if (!user) {
+      onOpenAuth('login')
+      return
+    }
+    const targetId = activeGroup?.id || activeBroadcast?.id
+    const targetName = activeGroup?.name || activeBroadcast?.name || targetId
+    if (!targetId) return
+
+    setSubmittingReport(true)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'report-channel',
+          channelId: targetId,
+          channelName: targetName,
+          reason: reportReason,
+          details: reportDetails.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Report submitted to Trust & Safety.')
+        setReportModalOpen(false)
+        setReportDetails('')
+      } else {
+        toast.error(data.error || 'Failed to submit report')
+      }
+    } catch (err: any) {
+      toast.error('Error submitting report: ' + err.message)
+    } finally {
+      setSubmittingReport(false)
     }
   }
 
@@ -922,16 +999,44 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
     }
   }
 
-  // Helper to parse lodge attachment from content
-  function parseLodgeId(content: string): { lodgeId?: string; cleanText: string } {
-    const match = content.match(/\[LODGE:(mock-[a-zA-Z0-9_-]+|custom-[a-zA-Z0-9_-]+)\]/)
-    if (match) {
-      return {
-        lodgeId: match[1],
-        cleanText: content.replace(match[0], '').trim(),
-      }
+  // Helper to parse lodge attachment, reply metadata, and call logs from content
+  function parseLodgeId(content: string): {
+    lodgeId?: string
+    replyMeta?: { id: string; senderName: string; text: string }
+    callLog?: { status: string; duration: number; callerName?: string }
+    cleanText: string
+  } {
+    let cleanText = content
+    let lodgeId: string | undefined = undefined
+    let replyMeta: { id: string; senderName: string; text: string } | undefined = undefined
+    let callLog: { status: string; duration: number; callerName?: string } | undefined = undefined
+
+    // Check for call log
+    const callMatch = cleanText.match(/\[CALL_LOG:(.*?)\]/)
+    if (callMatch && callMatch[1]) {
+      try {
+        callLog = JSON.parse(callMatch[1])
+        cleanText = cleanText.replace(callMatch[0], '').trim()
+      } catch {}
     }
-    return { cleanText: content }
+
+    // Check for reply metadata
+    const replyMatch = cleanText.match(/\[REPLY:(.*?)\]/)
+    if (replyMatch && replyMatch[1]) {
+      try {
+        replyMeta = JSON.parse(replyMatch[1])
+        cleanText = cleanText.replace(replyMatch[0], '').trim()
+      } catch {}
+    }
+
+    // Check for attached lodge
+    const lodgeMatch = cleanText.match(/\[LODGE:(mock-[a-zA-Z0-9_-]+|custom-[a-zA-Z0-9_-]+)\]/)
+    if (lodgeMatch) {
+      lodgeId = lodgeMatch[1]
+      cleanText = cleanText.replace(lodgeMatch[0], '').trim()
+    }
+
+    return { lodgeId, replyMeta, callLog, cleanText }
   }
 
   // Filtered mock listings for attachment dialog
@@ -1042,6 +1147,42 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
 
         {/* Right side actions */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Notification Mute / Unmute Toggle (Feature 4) */}
+          {currentChannelId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const next = toggleThreadMute(currentChannelId)
+                setIsMuted(next)
+                toast.info(next ? 'Notifications muted for this conversation' : 'Notifications unmuted')
+              }}
+              className={`h-7 px-2 text-xs font-semibold rounded-lg transition cursor-pointer border ${
+                isMuted
+                  ? 'bg-amber-100/80 border-amber-300 text-amber-900 hover:bg-amber-100'
+                  : 'bg-white border-[#E5DAC8] text-[#7C6859] hover:text-[#271810]'
+              }`}
+              title={isMuted ? 'Muted: Tap to unmute notifications' : 'Tap to mute notifications for this conversation'}
+            >
+              <Bell className={`h-3 w-3 ${isMuted ? 'text-amber-800 opacity-60' : ''}`} />
+              <span className="hidden sm:inline">{isMuted ? 'Muted' : 'Mute'}</span>
+            </Button>
+          )}
+
+          {/* Report Channel / Group button (Feature 3) */}
+          {(activeTab === 'groups' || activeTab === 'channels') && (activeGroup || activeBroadcast) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setReportModalOpen(true)}
+              className="h-7 px-2 border-slate-300 bg-white text-[#7C6859] hover:text-rose-600 hover:border-rose-300 text-xs font-semibold rounded-lg cursor-pointer flex items-center gap-1"
+              title="Report this channel to Mapstar Trust & Safety"
+            >
+              <Flag className="h-3 w-3 text-rose-500" />
+              <span className="hidden sm:inline">Report</span>
+            </Button>
+          )}
+
           {/* Join / Leave Group button if in group view */}
           {activeTab === 'groups' && activeGroup && (
             <div className="flex items-center gap-1">
@@ -1115,15 +1256,27 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
               <span className="hidden sm:inline">Moderate</span>
             </Button>
           )}
-          {/* Direct call button if in DM with phone */}
-          {activeTab === 'dms' && activeDM?.phone && (
-            <a
-              href={`tel:${activeDM.phone}`}
-              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition"
+
+          {/* Independent In-App WebRTC Voice Call button for Direct Messages (Feature 5) */}
+          {activeTab === 'dms' && activeDM && (
+            <Button
+              size="sm"
+              onClick={() => {
+                const parts = activeDM.channelId.replace('dm-', '').split('__')
+                const targetUserId = parts[0] === user?.id ? parts[1] : parts[0]
+                setActiveCallTarget({
+                  calleeId: targetUserId || activeDM.id,
+                  calleeName: activeDM.name,
+                  channelId: activeDM.channelId,
+                  calleeRole: activeDM.role,
+                })
+              }}
+              className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer shadow-xs flex items-center gap-1"
+              title="Start private in-app voice call"
             >
               <Phone className="h-3 w-3" />
-              <span className="hidden sm:inline">Call</span>
-            </a>
+              <span className="hidden sm:inline">Voice Call</span>
+            </Button>
           )}
 
           {/* Star Power (Admin) Storage Cleanup Action */}
@@ -1664,13 +1817,14 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                     const isMe = user ? msg.senderId === user.id : false
                     const canDelete = isMe || isAdmin
                     const isDeleting = deletingId === msg.id
-                    const { lodgeId, cleanText } = parseLodgeId(msg.content)
+                    const { lodgeId, replyMeta, callLog, cleanText } = parseLodgeId(msg.content)
                     const attachedListing = lodgeId ? MOCK_LISTINGS.find((l) => l.id === lodgeId) : null
 
                     return (
                       <div
                         key={msg.id}
-                        className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'} ${
+                        id={`msg-${msg.id}`}
+                        className={`flex flex-col group transition-all duration-300 rounded-xl ${isMe ? 'items-end' : 'items-start'} ${
                           isDeleting ? 'opacity-40 pointer-events-none' : ''
                         }`}
                       >
@@ -1684,11 +1838,22 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
 
+                          {/* WhatsApp-Style Reply Action Button (Feature 6) */}
+                          <button
+                            onClick={() => {
+                              setReplyingToMessage({ id: msg.id, senderName: msg.senderName, text: cleanText })
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-[#7C6859] hover:text-[#78350F] p-0.5 ml-1 transition cursor-pointer"
+                            title="Reply to message"
+                          >
+                            <MessageCircle className="h-3 w-3" />
+                          </button>
+
                           {/* Delete message to preserve database space */}
                           {canDelete && (
                             <button
                               onClick={() => handleDeleteMessage(msg.id)}
-                              className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-700 p-0.5 ml-1 transition cursor-pointer"
+                              className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-700 p-0.5 ml-0.5 transition cursor-pointer"
                               title="Delete message from database"
                             >
                               <Trash2 className="h-3 w-3" />
@@ -1704,6 +1869,57 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                               : 'bg-white text-[#271810] border border-[#E5DAC8] rounded-bl-xs'
                           }`}
                         >
+                          {/* Call Log Card Display (Feature 5) */}
+                          {callLog && (
+                            <div className={`flex items-center gap-2.5 p-2 mb-1.5 rounded-xl border ${
+                              isMe
+                                ? 'bg-amber-950/40 border-amber-600/40 text-amber-100'
+                                : 'bg-[#FAF7F2] border-[#E5DAC8] text-[#271810]'
+                            }`}>
+                              <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
+                                callLog.status === 'COMPLETED'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                <Phone className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs">
+                                  {callLog.status === 'COMPLETED'
+                                    ? `Voice call · ${Math.floor((callLog.duration || 0) / 60)}m ${(callLog.duration || 0) % 60}s`
+                                    : 'Missed voice call'}
+                                </div>
+                                <div className="text-[10px] opacity-75">End-to-End Encrypted Voice</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Quoted Message Preview with Click-To-Scroll (Feature 6) */}
+                          {replyMeta && (
+                            <div
+                              onClick={() => {
+                                const targetEl = document.getElementById(`msg-${replyMeta.id}`)
+                                if (targetEl) {
+                                  targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                  targetEl.classList.add('ring-2', 'ring-amber-500', 'bg-amber-100/60')
+                                  setTimeout(() => targetEl.classList.remove('ring-2', 'ring-amber-500', 'bg-amber-100/60'), 2200)
+                                }
+                              }}
+                              className={`mb-2 p-2 rounded-xl text-[11px] border-l-4 cursor-pointer transition select-none ${
+                                isMe
+                                  ? 'bg-amber-950/50 border-amber-400 text-amber-100 hover:bg-amber-950/70'
+                                  : 'bg-[#FAF7F2] border-[#78350F] text-[#7C6859] hover:bg-[#F3ECE0]'
+                              }`}
+                              title="Click to jump to quoted message"
+                            >
+                              <div className="font-bold flex items-center gap-1 text-[10px] text-amber-500">
+                                <MessageCircle className="h-2.5 w-2.5" />
+                                <span>{replyMeta.senderName}</span>
+                              </div>
+                              <p className="line-clamp-2 italic text-[10px] opacity-90 mt-0.5">{replyMeta.text}</p>
+                            </div>
+                          )}
+
                           {/* Attached Lodge Preview */}
                           {attachedListing && (
                             <div
@@ -1802,6 +2018,25 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                   </div>
                 )}
 
+                {/* WhatsApp-Style Quoting / Replying Preview Banner (Feature 6) */}
+                {replyingToMessage && (
+                  <div className="mb-2 px-3 py-1.5 bg-amber-50 border-l-4 border-[#78350F] rounded-r-xl flex items-center justify-between text-xs text-[#271810] shadow-2xs animate-in fade-in">
+                    <div className="min-w-0 pr-2">
+                      <span className="font-bold text-[10px] text-[#78350F] block">
+                        Replying to {replyingToMessage.senderName}
+                      </span>
+                      <p className="text-[11px] text-[#7C6859] truncate max-w-sm sm:max-w-md">{replyingToMessage.text}</p>
+                    </div>
+                    <button
+                      onClick={() => setReplyingToMessage(null)}
+                      className="p-1 text-[#7C6859] hover:text-[#271810] cursor-pointer"
+                      title="Cancel reply"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
                 {/* Selected Lodge Attachment Banner */}
                 {selectedLodgeToAttach && (
                   <div className="mb-2 p-2 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between text-xs">
@@ -1820,11 +2055,12 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                   </div>
                 )}
 
-                {/* Locked composer if group is suspended/banned */}
-                {activeTab === 'groups' && activeGroup && (activeGroup.status === 'SUSPENDED' || activeGroup.status === 'BANNED') ? (
-                  <div className="p-3 bg-rose-50/80 border border-rose-200 rounded-xl text-center text-xs text-rose-800 font-semibold flex items-center justify-center gap-2">
+                {/* Locked composer if channel or group is suspended/banned (Feature 2) */}
+                {((activeTab === 'groups' && activeGroup && (activeGroup.status === 'SUSPENDED' || activeGroup.status === 'BANNED')) ||
+                  (activeTab === 'channels' && activeBroadcast && (activeBroadcast.status === 'SUSPENDED' || activeBroadcast.status === 'BANNED'))) ? (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-center text-xs text-rose-800 font-semibold flex items-center justify-center gap-2">
                     <Lock className="h-4 w-4 text-rose-600" />
-                    <span>Messaging locked: This group is currently {activeGroup.status.toLowerCase()}.</span>
+                    <span>Messaging locked: This channel is currently {(activeGroup?.status || activeBroadcast?.status || 'suspended').toLowerCase()} by Trust & Safety.</span>
                   </div>
                 ) : activeTab === 'groups' && activeGroup && !activeGroup.hasJoined ? (
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3 text-xs text-[#78350F]">
@@ -1837,10 +2073,11 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
                       Join Group
                     </Button>
                   </div>
-                ) : activeTab === 'channels' && activeBroadcast && (!user || (user.role !== 'ADMIN' && activeBroadcast.creatorId !== user.id)) ? (
+                ) : activeTab === 'channels' && activeBroadcast && (!user || (user.role !== 'ADMIN' && activeBroadcast.creatorId !== user.id && activeBroadcast.createdBy !== user.fullName)) ? (
+                  /* Channel messaging permission restriction: Only creator can post (Feature 1) */
                   <div className="p-3 bg-[#FAF7F2] border border-[#E5DAC8] rounded-xl text-center text-xs text-[#7C6859] font-medium flex items-center justify-center gap-2">
                     <Radio className="h-4 w-4 text-[#78350F]" />
-                    <span>Broadcast Channel: Only verified channel managers can post announcements.</span>
+                    <span>Broadcast Channel: Only the channel creator/owner can post announcements. Subscribers receive drops and alerts.</span>
                   </div>
                 ) : (
                   /* Main Form */
@@ -2473,6 +2710,88 @@ export default function ChatView({ user, onOpenAuth, onOpenListingDetail }: Chat
           </DialogContent>
         </Dialog>
       )}
+
+      {/* In-App Voice Calling Overlay (Feature 5) */}
+      <CallOverlay
+        user={user}
+        activeCallTarget={activeCallTarget}
+        onCallClosed={() => setActiveCallTarget(null)}
+      />
+
+      {/* Channel Reporting Modal (Feature 3) */}
+      <Dialog open={reportModalOpen} onOpenChange={setReportModalOpen}>
+        <DialogContent className="max-w-md bg-[#FAF7F2] border-[#E5DAC8] text-[#271810]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#271810] flex items-center gap-2">
+              <Flag className="h-4 w-4 text-rose-600" />
+              Report Channel to Trust & Safety
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#7C6859]">
+              Help maintain Mapstar standards. Submissions are reviewed by the Trust & Safety team.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleReportChannel} className="space-y-4 pt-2">
+            <div>
+              <label className="text-xs font-bold text-[#78350F] block mb-1">
+                Reason for Report
+              </label>
+              <select
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                className="w-full h-9 rounded-xl border border-[#E5DAC8] bg-white px-3 text-xs text-[#271810] focus:outline-none focus:ring-1 focus:ring-[#78350F]"
+              >
+                <option value="Spam or unauthorized advertising">Spam or unauthorized advertising</option>
+                <option value="Fraudulent or scam property listing">Fraudulent or scam property listing</option>
+                <option value="Harassment, hate speech, or abuse">Harassment, hate speech, or abuse</option>
+                <option value="Misinformation or misleading claims">Misinformation or misleading claims</option>
+                <option value="Illegal activity or violation of laws">Illegal activity or violation of laws</option>
+                <option value="Other policy violation">Other policy violation</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-[#78350F] block mb-1">
+                Additional Details (Optional)
+              </label>
+              <Textarea
+                value={reportDetails}
+                onChange={(e) => setReportDetails(e.target.value)}
+                placeholder="Describe what happened or provide context to assist the review team…"
+                rows={3}
+                className="text-xs bg-white border-[#E5DAC8] rounded-xl focus:border-[#78350F]"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E5DAC8]">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setReportModalOpen(false)}
+                className="h-8 text-xs border-[#E5DAC8] text-[#7C6859]"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={submittingReport}
+                className="h-8 text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold"
+              >
+                {submittingReport ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    Submitting…
+                  </>
+                ) : (
+                  'Submit Report'
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
     </div>
   )

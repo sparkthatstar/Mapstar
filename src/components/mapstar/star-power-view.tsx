@@ -30,6 +30,7 @@ import {
   Radio,
   ShieldAlert,
   BadgeCheck,
+  Flag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -102,6 +103,12 @@ export default function StarPowerView({
   const [loadingComplaints, setLoadingComplaints] = useState(false)
   const [resolvingTicketId, setResolvingTicketId] = useState<string | null>(null)
 
+  // Channel Reports state (Feature 3)
+  const [channelReports, setChannelReports] = useState<any[]>([])
+  const [loadingChannelReports, setLoadingChannelReports] = useState(false)
+  const [moderationSubTab, setModerationSubTab] = useState<'complaints' | 'channels'>('channels')
+  const [resolvingReportId, setResolvingReportId] = useState<string | null>(null)
+
   // Fetch initial data when user is ADMIN
   useEffect(() => {
     if (user?.role === 'ADMIN') {
@@ -111,6 +118,7 @@ export default function StarPowerView({
       fetchListings()
       fetchChatStats()
       fetchComplaints()
+      fetchChannelReports()
     }
   }, [user?.role])
 
@@ -486,6 +494,51 @@ export default function StarPowerView({
     }
   }
 
+  // 6b. Fetch Channel Reports (Feature 3)
+  async function fetchChannelReports() {
+    setLoadingChannelReports(true)
+    try {
+      const res = await fetch('/api/chat?action=channel-reports')
+      if (res.ok) {
+        const data = await res.json()
+        setChannelReports(data.reports || [])
+      }
+    } catch {
+      toast.error('Failed to load channel reports')
+    } finally {
+      setLoadingChannelReports(false)
+    }
+  }
+
+  async function handleResolveChannelReport(reportId: string, channelId: string, resolution: string, banOrSuspend?: string) {
+    setResolvingReportId(reportId)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'resolve-channel-report',
+          reportId,
+          channelId,
+          resolution,
+          banOrSuspend,
+          notes: `Action ${resolution} taken from Star Power admin moderation board`,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || `Report ${resolution}`)
+        fetchChannelReports()
+      } else {
+        toast.error(data.error || 'Failed to update report')
+      }
+    } catch (err: any) {
+      toast.error('Error: ' + err.message)
+    } finally {
+      setResolvingReportId(null)
+    }
+  }
+
   // 6. Fetch Customer Complaints
   async function fetchComplaints() {
     setLoadingComplaints(true)
@@ -752,6 +805,7 @@ export default function StarPowerView({
             onClick={() => {
               setActiveTab('complaints')
               fetchComplaints()
+              fetchChannelReports()
             }}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
               activeTab === 'complaints'
@@ -760,10 +814,10 @@ export default function StarPowerView({
             }`}
           >
             <ShieldAlert className="h-3.5 w-3.5 text-rose-400" />
-            <span>Customer Complaints</span>
-            {complaints.filter((c) => c.status === 'OPEN').length > 0 && (
+            <span>Complaints & Moderation</span>
+            {(complaints.filter((c) => c.status === 'OPEN').length + channelReports.filter((r) => r.status === 'OPEN').length) > 0 && (
               <Badge className="bg-rose-500 text-white font-bold text-[10px] ml-1">
-                {complaints.filter((c) => c.status === 'OPEN').length} new
+                {complaints.filter((c) => c.status === 'OPEN').length + channelReports.filter((r) => r.status === 'OPEN').length} new
               </Badge>
             )}
           </button>
@@ -1644,7 +1698,7 @@ export default function StarPowerView({
           )}
 
           {/* =========================================================================
-              TAB: CUSTOMER SERVICE & COMPLAINTS MANAGEMENT
+              TAB: CUSTOMER SERVICE & COMPLAINTS & CHANNEL MODERATION MANAGEMENT
              ========================================================================= */}
           {activeTab === 'complaints' && (
             <div className="space-y-5">
@@ -1653,25 +1707,176 @@ export default function StarPowerView({
                 <div>
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     <ShieldAlert className="h-4 w-4 text-rose-400" />
-                    Customer Complaints & Dispute Resolution Center
+                    Trust & Safety Moderation & Dispute Center
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    Review filed reports on illegal fees (&gt;5%), fake lodges, caution deposits, and agent conduct.
+                    Review user complaints, reported public channels, illegal fee violations, and enforce sanctions.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button
+                      onClick={() => setModerationSubTab('channels')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                        moderationSubTab === 'channels'
+                          ? 'bg-[#78350F] text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Channel Reports ({channelReports.length})
+                    </button>
+                    <button
+                      onClick={() => setModerationSubTab('complaints')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                        moderationSubTab === 'complaints'
+                          ? 'bg-[#78350F] text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Customer Tickets ({complaints.length})
+                    </button>
+                  </div>
+
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={fetchComplaints}
-                    disabled={loadingComplaints}
+                    onClick={() => {
+                      fetchComplaints()
+                      fetchChannelReports()
+                    }}
+                    disabled={loadingComplaints || loadingChannelReports}
                     className="h-8 text-xs border-slate-700 bg-slate-900 text-slate-200"
                   >
-                    <RefreshCw className={`h-3 w-3 mr-1 ${loadingComplaints ? 'animate-spin' : ''}`} /> Refresh Cases
+                    <RefreshCw className={`h-3 w-3 mr-1 ${(loadingComplaints || loadingChannelReports) ? 'animate-spin' : ''}`} /> Refresh
                   </Button>
                 </div>
               </div>
+
+              {/* CHANNEL REPORTS VIEW (Feature 3) */}
+              {moderationSubTab === 'channels' && (
+                <div className="space-y-3">
+                  {channelReports.map((r) => (
+                    <div
+                      key={r.reportId}
+                      className="bg-[#090D18] border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-amber-400">
+                            #{r.reportId}
+                          </span>
+                          <Badge
+                            className={`text-[9px] font-bold ${
+                              r.status === 'OPEN'
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                : r.status === 'BANNED'
+                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                : r.status === 'SUSPENDED'
+                                ? 'bg-amber-600/20 text-amber-400 border-amber-600/30'
+                                : r.status === 'RESOLVED'
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {r.status}
+                          </Badge>
+                          <Badge className="bg-slate-900 text-slate-300 border border-slate-700 text-[9px]">
+                            Channel: {r.channelName}
+                          </Badge>
+                        </div>
+
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {new Date(r.createdAt).toLocaleDateString()} · {new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Flag className="h-3.5 w-3.5 text-rose-400" />
+                          <h4 className="text-sm font-bold text-white">Reason: {r.reason}</h4>
+                        </div>
+                        {r.details && (
+                          <p className="text-xs text-slate-300 mt-1 leading-relaxed bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+                            {r.details}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-400 pt-1">
+                        <div>
+                          <span className="text-slate-500 block text-[10px]">Reported Channel ID:</span>
+                          <span className="font-mono text-amber-200">{r.channelId}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[10px]">Submitted By:</span>
+                          <strong className="text-white">{r.reporterName}</strong> ({r.reporterRole})
+                        </div>
+                      </div>
+
+                      {r.resolutionNotes && (
+                        <div className="p-2.5 bg-emerald-950/30 border border-emerald-800/50 rounded-xl text-xs text-emerald-300">
+                          <strong>Admin Action Note:</strong> {r.resolutionNotes}
+                        </div>
+                      )}
+
+                      {/* Admin Moderation Actions */}
+                      <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-800/80">
+                        {r.status === 'OPEN' && (
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={() => handleResolveChannelReport(r.reportId, r.channelId, 'BANNED', 'BANNED')}
+                              disabled={resolvingReportId === r.reportId}
+                              className="h-7 text-xs bg-rose-700 hover:bg-rose-600 text-white font-semibold cursor-pointer"
+                            >
+                              Ban Channel
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleResolveChannelReport(r.reportId, r.channelId, 'SUSPENDED', 'SUSPENDED')}
+                              disabled={resolvingReportId === r.reportId}
+                              className="h-7 text-xs bg-amber-700 hover:bg-amber-600 text-white font-semibold cursor-pointer"
+                            >
+                              Suspend (7 Days)
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleResolveChannelReport(r.reportId, r.channelId, 'RESOLVED')}
+                              disabled={resolvingReportId === r.reportId}
+                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold cursor-pointer"
+                            >
+                              Resolve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleResolveChannelReport(r.reportId, r.channelId, 'DISMISSED')}
+                              disabled={resolvingReportId === r.reportId}
+                              className="h-7 text-xs text-slate-400 hover:text-slate-200 cursor-pointer"
+                            >
+                              Dismiss
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {channelReports.length === 0 && !loadingChannelReports && (
+                    <div className="bg-[#090D18] border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+                      <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500 mb-2" />
+                      <p className="text-sm font-semibold">No Channel Reports Pending</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Reports submitted by users against public channels and groups will appear here for review and enforcement.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* CUSTOMER COMPLAINTS VIEW */}
+              {moderationSubTab === 'complaints' && (
 
               {/* Complaints List */}
               <div className="space-y-3">
@@ -1789,6 +1994,7 @@ export default function StarPowerView({
                   </div>
                 )}
               </div>
+              )}
             </div>
           )}
 
