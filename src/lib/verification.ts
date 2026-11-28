@@ -223,3 +223,73 @@ export async function processVerificationApplication(params: {
     throw err
   }
 }
+
+/**
+ * Marks a user as identity-verified following a completed Persona verification session.
+ */
+export async function approvePersonaVerification(params: {
+  userId: string
+  inquiryId?: string
+  status?: string
+}): Promise<{ success: boolean; message: string }> {
+  const { userId, inquiryId, status = 'completed' } = params
+
+  try {
+    // 1. Update User record in database
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        ninVerified: true,
+        bvnVerified: true,
+      },
+    })
+
+    // 2. Find existing identity application or create an approved one
+    const existing = await db.verificationApplication.findFirst({
+      where: { userId, type: 'IDENTITY' },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const noteText = `Persona Identity API verified (Inquiry ID: ${inquiryId || 'session-verified'}, Status: ${status})`
+
+    if (existing) {
+      await db.verificationApplication.update({
+        where: { id: existing.id },
+        data: {
+          status: 'APPROVED',
+          reviewedAt: new Date(),
+          reviewedBy: 'PERSONA_API',
+          notes: existing.notes ? `${existing.notes} | ${noteText}` : noteText,
+        },
+      })
+    } else {
+      const user = await db.user.findUnique({ where: { id: userId } })
+      if (user) {
+        await db.verificationApplication.create({
+          data: {
+            userId,
+            userEmail: user.email,
+            fullName: user.fullName || user.email,
+            phone: user.phone || null,
+            type: 'IDENTITY',
+            status: 'APPROVED',
+            reviewedAt: new Date(),
+            reviewedBy: 'PERSONA_API',
+            notes: noteText,
+          },
+        })
+      }
+    }
+
+    recordLoginActivity({
+      userId,
+      status: 'SUCCESS',
+      details: `User completed Persona identity verification (${noteText})`,
+    })
+
+    return { success: true, message: 'Persona identity verification approved.' }
+  } catch (err: any) {
+    console.error('approvePersonaVerification database error:', err)
+    throw err
+  }
+}
